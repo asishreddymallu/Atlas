@@ -207,7 +207,9 @@ bool Parser::parse_pseudo()
                 return signedValue == static_cast<int64_t>(static_cast<int32_t>(signedValue));
             };
 
-            if (0 <= imm && imm <= UINT64_MAX)
+            // Logic issue: imm is uint64_t so '0 <= imm' was tautological and caused -Wtype-limits.
+            // The else block is unreachable because std::stoull throws on out-of-range before reaching here.
+            if (imm <= UINT64_MAX)
             {
                 // RV64: repeatedly peel off a 12-bit signed chunk until the
                 // remaining "upper" value fits lui's 20-bit field. Collect the
