@@ -1776,7 +1776,6 @@ std::string disassemble(uint32_t instruction)
         // fcvt from int
         if ((funct7 & ~1) == 0b1101000)
         {
-            static const char *fromInt[] = {"fcvt", "fcvt", "fcvt", "fcvt"};
             static const char *fromIntSrc[] = {".w.", ".wu.", ".l.", ".lu."};
             if (rs2 < 4)
                 return "fcvt" + suf + fromIntSrc[rs2] + (suf == ".s" ? "s" : "d") + // handled below
