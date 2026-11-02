@@ -326,6 +326,7 @@ TEST(FExt_MixedHazard_H_NF, mixed_gpr_fpr_hazard) {
     EXPECT_EQ(vm->registers_.ReadGpr(10), 16);
 }
 
+// Disabled: Fails assertion (x10 is 0, expected 16; GPR/FPR hazard forwarding issue in HF mode)
 #if 0
 TEST(FExt_MixedHazard_H_F, mixed_gpr_fpr_hazard) {
     auto vm = runHF("../examples/fd-extension/f_mixed_gpr_fpr_hazard.s");
@@ -369,6 +370,7 @@ TEST(FExt_CompareHazard_H_NF, compare_hazard) {
     EXPECT_EQ(vm->registers_.ReadGpr(13), 0);
 }
 
+// Disabled: Fails assertion (x13 is 1, expected 0; compare-after-compute hazard issue in HF mode)
 #if 0
 TEST(FExt_CompareHazard_H_F, compare_hazard) {
     auto vm = runHF("../examples/fd-extension/f_compare_hazard.s");
@@ -497,6 +499,7 @@ TEST(FExt_ConvertHazard_H_NF, convert_hazard) {
     EXPECT_EQ(vm->registers_.ReadGpr(11), 25);
 }
 
+// Disabled: Fails assertion (x10 is 0, expected 24; convert hazard issue in HF mode)
 #if 0
 TEST(FExt_ConvertHazard_H_F, convert_hazard) {
     auto vm = runHF("../examples/fd-extension/f_convert_hazard.s");

@@ -369,6 +369,7 @@ TEST_F(ReplacementPolicyTest, LRUEvictsLeastRecentlyUsed)
     EXPECT_EQ(cache.getMissCount(), misses_before + 1);
 }
 
+// Disabled: Fails assertion on 2-way FIFO hit count after eviction
 #if 0
 TEST_F(ReplacementPolicyTest, FIFOEvictsFirstInserted)
 {
