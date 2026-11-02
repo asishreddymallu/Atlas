@@ -145,6 +145,7 @@ protected:
     Kites::MainMemory ram;
 };
 
+// Disabled: Fails assertion on 3-way LRU hit count after eviction
 #if 0
 TEST_F(LRUTest, BasicEvictionOrder)
 {
@@ -170,6 +171,7 @@ TEST_F(LRUTest, BasicEvictionOrder)
 }
 #endif
 
+// Disabled: Fails assertion on LRU re-access hit count after eviction
 #if 0
 TEST_F(LRUTest, AccessPromotesToMostRecent)
 {
@@ -279,6 +281,7 @@ TEST_F(LRUTest, LRUWithMultipleSets)
     EXPECT_EQ(cache.getHitCount(), hits_before + 2);
 }
 
+// Disabled: Fails assertion on LRU multi-cycle aging hit count
 #if 0
 TEST_F(LRUTest, LRUAgeingAcrossManyCycles)
 {

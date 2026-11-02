@@ -8,6 +8,7 @@
 
 using namespace Kites;
 
+// Disabled: Fails assertion (x1 is 40 due to unhandled pipeline stall cycles, expected 15)
 // TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_1)
 // {
 //     setupVmStateDirectory();
@@ -17,21 +18,22 @@ using namespace Kites;
 //     AssembledProgram program = assemble("../examples/pipeline_test_code_1.s");
 //     vm.LoadProgram(program);
 //     vm.DebugRun();
-    
+//     
 //     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 15);
 // }
 
-// TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_2)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorNHNF vm;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code_2.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();    
+TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_2)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHNF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code_2.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();    
     
-//     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(4), 20);
-// }
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(4), 20);
+}
 
+// Disabled: Fails assertion (x1 is 120 after 12 addi instructions, expected 36)
 // TEST(FIVE_STAGE_VM_TEST,hazard_no_forwarding_test_1)
 // {
 //     setupVmStateDirectory();
@@ -43,6 +45,7 @@ using namespace Kites;
 //     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
 // }
 
+// Disabled: Missing test asset ../examples/pipeline_test_code.s
 // TEST(FIVE_STAGE_VM_TEST,no_hazard_forwarding_test)
 // {
 //     setupVmStateDirectory();
@@ -53,6 +56,7 @@ using namespace Kites;
     
 // }
 
+// Disabled: Missing test asset ../examples/pipeline_test_code.s
 // TEST(FIVE_STAGE_VM_TEST,harzard_no_forwarding_test)
 // {
 //     setupVmStateDirectory();
@@ -63,6 +67,7 @@ using namespace Kites;
     
 // }
 
+// Disabled: Missing test asset ../examples/pipeline_test_code.s
 // TEST(FIVE_STAGE_VM_TEST,harzard_forwarding_test)
 // {
 //     setupVmStateDirectory();

@@ -4,6 +4,7 @@
 // #include "utils/utils.h"
 #include "assembler/assembler.h"
 
+// Disabled: Does not compile (placed before namespace/includes, superseded by refactored tests below)
 // TEST(RV5S_NH_F_TEST,no_hazard_forwarding_test_1)
 // {
 //     setupVmStateDirectory();

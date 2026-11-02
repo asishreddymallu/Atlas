@@ -36,6 +36,7 @@ protected:
 	std::filesystem::path original_custom_pseudo_path_;
 };
 
+// Disabled: Does not compile (uses capitalized 'CustomPseudoManager' instead of namespace 'customPseudoManager')
 #if 0
 TEST_F(CustomPseudoManagerTest, AddPseudoInstructionAndExpandSingleLine)
 {
@@ -54,6 +55,7 @@ TEST_F(CustomPseudoManagerTest, AddPseudoInstructionAndExpandSingleLine)
 }
 #endif
 
+// Disabled: Does not compile (uses capitalized 'CustomPseudoManager' instead of namespace 'customPseudoManager')
 #if 0
 TEST_F(CustomPseudoManagerTest, ExpandPseudoInstructionWithMultipleExpansionLines)
 {
