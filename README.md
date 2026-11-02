@@ -1,5 +1,7 @@
 # KITES : RISC - V SIMULATOR
 
+Atlas is built on Kites by hghit-harshit
+
 Kites a is RISC V simulator and assembly code editor built for RISC V ISA.
 Kites support I,M,D and F extenstion in single cyle mod and I,M extension in 5 Stage pipelining mode.(D,F will be added in future releases).
 
