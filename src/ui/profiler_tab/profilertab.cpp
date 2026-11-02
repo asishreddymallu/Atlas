@@ -55,7 +55,7 @@ void ProfilerTab::updateLineInstructionType(const std::map<int, std::string> &li
     ui->plainTextEdit->setInstructionTypes(lineInstructionTypes);
 }
 
-void ProfilerTab::updateStatistics(const std::map<std::string, int> &statistics)
+void ProfilerTab::updateStatistics([[maybe_unused]] const std::map<std::string, int> &statistics)
 {
     
 }

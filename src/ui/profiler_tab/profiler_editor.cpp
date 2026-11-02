@@ -12,7 +12,7 @@
 namespace Kites
 {
 
-ProfilerEditor::ProfilerEditor(QWidget *parent, Profiler* profiler) : KitesEditor(parent)
+ProfilerEditor::ProfilerEditor(QWidget *parent, [[maybe_unused]] Profiler* profiler) : KitesEditor(parent)
 // m_lineStatsModel(new LineStatsModel(this, profiler))
 {
     m_syntaxHighlighter = new SyntaxHighlighter(this->document());

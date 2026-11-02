@@ -229,7 +229,7 @@ void CacheModel::updateCacheData(uint64_t address)
     emit dataChanged(index(0, 0), index(rowCount() - 1, columnCount() - 1));
 }
 
-void CacheModel::updateCacheConfig(CacheConfig newConfig)
+void CacheModel::updateCacheConfig([[maybe_unused]] CacheConfig newConfig)
 {
     beginResetModel();
     endResetModel();

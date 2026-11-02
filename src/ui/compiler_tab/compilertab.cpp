@@ -231,7 +231,7 @@ QString CompilerTab::cleanAssembly(const QString &rawAssembly)
     QStringList lines = rawAssembly.split('\n');
 
     // Track if we're inside a real code section
-    bool inTextSection = false;
+    [[maybe_unused]] bool inTextSection = false;
 
     for (QString line : lines)
     {

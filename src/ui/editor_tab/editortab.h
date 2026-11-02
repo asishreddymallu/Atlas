@@ -73,4 +73,4 @@ signals:
     void loadProgramSignal(std::string& sourceText); 
 };
 } // namespace Kites
-#endif EDITORTAB__H
+#endif // EDITORTAB__H

@@ -89,7 +89,7 @@ void Editor::paintEvent(QPaintEvent *event)
 
     painter.setRenderHint(QPainter::Antialiasing);
 
-    for (const auto [lineNumber, instructionStage] : m_LinesToHighlight)
+    for (const auto &[lineNumber, instructionStage] : m_LinesToHighlight)
     {
         if (lineNumber < 0 || lineNumber > this->blockCount() ||
             drawnLines.find(lineNumber) != drawnLines.end())
