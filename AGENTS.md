@@ -9,15 +9,19 @@
 - **Application Build**:
   ```bash
   cmake -S . -B build -G Ninja && cmake --build build
+  # Or use the helper script:
+  ./scripts/build.sh
   ```
   Binaries generated: `build/Kites` (GUI) and `build/kites-cli` (CLI).
 
 - **Test Build and Execution**:
   ```bash
   cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure
+  # Or use the helper script (prints: total / passed / failed):
+  ./scripts/test.sh
   ```
   Test binary: `build-tests/test/kites_test`.
-  > **Note**: Run tests via `ctest --test-dir build-tests`. Do not run `kites_test` directly from the repo root because tests load files via relative path `"../examples/..."` (~100 occurrences); CTest properly executes them with working directory `test/` configured by `gtest_discover_tests`.
+  > **Note**: Run tests via `ctest --test-dir build-tests` (or `./scripts/test.sh`). Do not run `kites_test` directly from the repo root because tests load files via relative path `"../examples/..."` (~100 occurrences); CTest properly executes them with working directory `test/` configured by `gtest_discover_tests`.
 
 ## Development Rules & Constraints
 1. **One feature per branch**: Keep logical changes isolated on designated topic branches.
