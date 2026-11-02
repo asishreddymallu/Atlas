@@ -109,7 +109,7 @@ protected:
         
     }
 
-    void mouseMoveEvent(QMouseEvent *event) override
+    void mouseMoveEvent([[maybe_unused]] QMouseEvent *event) override
     {
         // draw a faint circle on the line where the mouse is hovering
     }
