@@ -22,4 +22,4 @@ CMakeLists.txt.user
 .cph
 gtest_filter.
 .vs/
-gtest_filter.py
+gtest_filter.pytest/cmake_test_discovery_*.json
