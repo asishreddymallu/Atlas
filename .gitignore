@@ -23,3 +23,4 @@ CMakeLists.txt.user
 gtest_filter.
 .vs/
 gtest_filter.pytest/cmake_test_discovery_*.json
+test/cmake_test_discovery_*.json
