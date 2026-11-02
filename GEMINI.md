@@ -5,8 +5,8 @@ See [AGENTS.md](AGENTS.md) for primary instructions.
 ## Quick Summary
 - **Project**: Atlas (RISC-V architecture platform based on Kites v1.1.8 / commit `7ddb6f3`)
 - **Environment**: Fedora Linux, C++20, Qt6, CMake, Ninja, GCC 16
-- **Build**: `cmake -S . -B build -G Ninja && cmake --build build`
-- **Tests**: `cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure`
+- **Build**: `cmake -S . -B build -G Ninja && cmake --build build` (or `./scripts/build.sh`)
+- **Tests**: `cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure` (or `./scripts/test.sh`)
   - Always run tests via `ctest --test-dir build-tests` (tests open `../examples/...` and require working directory `test/`).
   - Active test baseline: **158/158 pass** under CTest.
 - **Core Rules**:
