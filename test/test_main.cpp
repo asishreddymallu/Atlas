@@ -2,18 +2,20 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#include <QApplication>
 #include <QLoggingCategory>
 
-int main(int argc, char *argv[]) 
+int main(int argc, char *argv[])
 {
-  #ifdef _WIN32
-    // Set console output code page to UTF-8 (65001)
-    SetConsoleOutputCP(65001);  
-  #endif
-  ::testing::InitGoogleTest(&argc, argv);
-  //qInstallMessageHandler([](QtMsgType, const QMessageLogContext&, const QString&) {});
-  //std::cout.setstate(std::ios_base::failbit);
+#ifdef _WIN32
+    SetConsoleOutputCP(65001);
+#endif
+    // Headless Qt: lets QGraphicsScene-based classes (circuit scenes) be
+    // constructed in tests without a display server.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+        qputenv("QT_QPA_PLATFORM", "offscreen");
 
-  return RUN_ALL_TESTS();
-
+    QApplication app(argc, argv);
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
