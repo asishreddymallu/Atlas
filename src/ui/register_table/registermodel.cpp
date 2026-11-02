@@ -157,6 +157,7 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
             {
                 return QString("");
             } // TODO : add floating point register support
+            break;
         }
         default:
             return QVariant{};
