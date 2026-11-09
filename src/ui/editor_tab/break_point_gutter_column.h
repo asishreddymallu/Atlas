@@ -13,10 +13,13 @@ public:
     explicit BreakPointGutterColumn(Editor* editor = nullptr)
     :GutterColumn(editor), m_mainEditor(editor)
     {
+        // needed for the hover indicator: without it mouseMoveEvent only
+        // arrives while a button is held down
+        setMouseTracking(true);
     }
     QSize sizeHint() const override
     {
-        return QSize(15, 0); 
+        return QSize(gutterWidth, 0);
     }
 protected:
     void paintEvent(QPaintEvent *event) override
@@ -34,15 +37,24 @@ protected:
         {
             if (block.isVisible() && bottom >= event->rect().top())
             {
-                // Draw breakpoint indicator if exists
-                if ( std::find(m_mainEditor->m_breakPoints.begin(), 
-                m_mainEditor->m_breakPoints.end(),
-                blockNumber + 1) != m_mainEditor->m_breakPoints.end())
+                const bool hasBreakpoint =
+                    std::find(m_mainEditor->m_breakPoints.begin(),
+                              m_mainEditor->m_breakPoints.end(),
+                              blockNumber + 1) != m_mainEditor->m_breakPoints.end();
+
+                // A faint ghost on the hovered line shows where a click would
+                // place a breakpoint; a solid dot marks one that exists.
+                if (hasBreakpoint || blockNumber == m_hoverLine)
                 {
-                    painter.setBrush(Qt::red);
+                    QColor dotColor = ThemeManager::getInstance().getEditorErrorColor();
+                    if (!hasBreakpoint)
+                        dotColor.setAlpha(ghostAlpha);
+
+                    painter.setBrush(dotColor);
                     painter.setPen(Qt::NoPen);
-                    int radius = 8;
-                    painter.drawEllipse(2, top + (fontMetrics().height() - radius) / 2, radius, radius);
+                    const int left = (gutterWidth - dotRadius) / 2;
+                    painter.drawEllipse(left, top + (fontMetrics().height() - dotRadius) / 2,
+                                        dotRadius, dotRadius);
                 }
             }
 
@@ -109,12 +121,46 @@ protected:
         
     }
 
-    void mouseMoveEvent([[maybe_unused]] QMouseEvent *event) override
+    void mouseMoveEvent(QMouseEvent *event) override
     {
-        // draw a faint circle on the line where the mouse is hovering
+        const int line = lineAt(event->position().toPoint());
+        if (line != m_hoverLine)
+        {
+            m_hoverLine = line;
+            update(); // only when the hovered line actually changes
+        }
+    }
+
+    void leaveEvent(QEvent *event) override
+    {
+        if (m_hoverLine != -1)
+        {
+            m_hoverLine = -1;
+            update();
+        }
+        GutterColumn::leaveEvent(event);
     }
 private:
-    Editor* m_mainEditor;
+    // 0-based block number under `pos`, or -1 when it is past the last line
+    int lineAt(const QPoint &pos) const
+    {
+        const QPoint editorPos = m_mainEditor->viewport()->mapFrom(
+            const_cast<BreakPointGutterColumn *>(this), pos);
+        const QTextBlock block = m_mainEditor->cursorForPosition(editorPos).block();
+        if (editorPos.y() < blockTop(block) ||
+            editorPos.y() > blockTop(block) + blockHeight(block))
+        {
+            return -1;
+        }
+        return block.blockNumber();
+    }
 
+    // slightly wider than the old 15px so the dot is comfortable to hit
+    static constexpr int gutterWidth = 20;
+    static constexpr int dotRadius   = 9;
+    static constexpr int ghostAlpha  = 70;
+
+    Editor* m_mainEditor;
+    int m_hoverLine = -1;
 };
 }//namespace Kites
