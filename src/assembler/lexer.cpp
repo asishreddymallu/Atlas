@@ -119,29 +119,29 @@ Token Lexer::identifier()
         {
             ++pos_;
             ++column_number_;
-            return {TokenType::INVALID, value, line_number_, start_column};
+            return {TokenType::INVALID, value, line_number_, start_column, column_number_};
         }
         ++pos_;
         ++column_number_;
-        return {TokenType::LABEL, value, line_number_, start_column};
+        return {TokenType::LABEL, value, line_number_, start_column, column_number_};
     }
 
     if (IsValidGeneralPurposeRegister(value))
     {
-        return {TokenType::GP_REGISTER, value, line_number_, start_column};
+        return {TokenType::GP_REGISTER, value, line_number_, start_column, column_number_};
     }
     if (IsValidFloatingPointRegister(value))
     {
-        return {TokenType::FP_REGISTER, value, line_number_, start_column};
+        return {TokenType::FP_REGISTER, value, line_number_, start_column, column_number_};
     }
     if (IsValidCsr(value))
     {
-        return {TokenType::CSR_REGISTER, value, line_number_, start_column};
+        return {TokenType::CSR_REGISTER, value, line_number_, start_column, column_number_};
     }
 
     if (isValidRoundingMode(value))
     {
-        return {TokenType::RM, value, line_number_, start_column};
+        return {TokenType::RM, value, line_number_, start_column, column_number_};
     }
 
     // An identifier in operand position (right after an opcode or a comma) is a label
@@ -151,16 +151,16 @@ Token Lexer::identifier()
     if (!tokens_.empty() && tokens_.back().line_number == line_number_ &&
         (tokens_.back().type == TokenType::COMMA || tokens_.back().type == TokenType::OPCODE))
     {
-        return {TokenType::LABEL_REF, value, line_number_, start_column};
+        return {TokenType::LABEL_REF, value, line_number_, start_column, column_number_};
     }
 
     if (instruction_set::isValidInstruction(value))
     {
-        return {TokenType::OPCODE, value, line_number_, start_column};
+        return {TokenType::OPCODE, value, line_number_, start_column, column_number_};
     }
 
     // Default case: invalid token
-    return {TokenType::INVALID, value, line_number_, start_column};
+    return {TokenType::INVALID, value, line_number_, start_column, column_number_};
 }
 
 Token Lexer::number()
@@ -202,30 +202,30 @@ Token Lexer::number()
     if (std::regex_match(value, hex_regex))
     {
         return {TokenType::NUM, parserUnsignedPrefixed(value, 16, 2), line_number_,
-                start_column};
+                start_column, column_number_};
     }
     else if (std::regex_match(value, binary_regex))
     {
         return {TokenType::NUM, parserUnsignedPrefixed(value, 2, 2), line_number_,
-                start_column};
+                start_column, column_number_};
     }
     else if (std::regex_match(value, octal_regex))
     {
         return {TokenType::NUM, parserUnsignedPrefixed(value, 8, 2), line_number_,
-                start_column};
+                start_column, column_number_};
     }
     else if (std::regex_match(value, decimal_regex))
     {
         return {TokenType::NUM, parserUnsignedPrefixed(value, 10, 0), line_number_,
-                start_column};
+                start_column, column_number_};
     }
     else if (std::regex_match(value, float_regex))
     {
 
-        return {TokenType::FLOAT, std::to_string(std::stod(value)), line_number_, start_column};
+        return {TokenType::FLOAT, std::to_string(std::stod(value)), line_number_, start_column, column_number_};
     }
 
-    return {TokenType::INVALID, "Invalid", line_number_, start_column};
+    return {TokenType::INVALID, "Invalid", line_number_, start_column, column_number_};
 
     /*
         The below code is for character by character parsing of numbers.
@@ -333,7 +333,7 @@ Token Lexer::directive()
         ++column_number_;
     }
     std::string value = current_line_.substr(start_pos, pos_ - start_pos);
-    return {TokenType::DIRECTIVE, value, line_number_, start_column};
+    return {TokenType::DIRECTIVE, value, line_number_, start_column, column_number_};
 }
 
 Token Lexer::stringLiteral()
@@ -356,13 +356,13 @@ Token Lexer::stringLiteral()
     if (pos_ == current_line_.size() || current_line_[pos_] != '"')
     {
         std::cerr << "Error: Unterminated string literal at line " << line_number_ << std::endl;
-        return {TokenType::INVALID, "", line_number_, start_column};
+        return {TokenType::INVALID, "", line_number_, start_column, column_number_};
     }
 
     std::string value = current_line_.substr(start_pos, pos_ - start_pos);
     ++pos_;
     ++column_number_;
-    return {TokenType::STRING, value, line_number_, start_column};
+    return {TokenType::STRING, value, line_number_, start_column, column_number_};
 }
 
 Token Lexer::getNextToken()
@@ -371,7 +371,7 @@ Token Lexer::getNextToken()
 
     if (pos_ >= current_line_.size())
     {
-        return {TokenType::EOF_, "", line_number_, static_cast<unsigned int>(pos_)};
+        return {TokenType::EOF_, "", line_number_, static_cast<unsigned int>(pos_), column_number_};
     }
 
     char current_char = current_line_[pos_];
@@ -388,7 +388,7 @@ Token Lexer::getNextToken()
     {
         ++pos_;
         ++column_number_;
-        return {TokenType::COMMA, ",", line_number_, column_number_ - 1};
+        return {TokenType::COMMA, ",", line_number_, column_number_ - 1, column_number_};
     }
     else if (current_char == '"')
     {
@@ -398,13 +398,13 @@ Token Lexer::getNextToken()
     {
         ++pos_;
         ++column_number_;
-        return {TokenType::LPAREN, "(", line_number_, column_number_ - 1};
+        return {TokenType::LPAREN, "(", line_number_, column_number_ - 1, column_number_};
     }
     else if (current_char == ')')
     {
         ++pos_;
         ++column_number_;
-        return {TokenType::RPAREN, ")", line_number_, column_number_ - 1};
+        return {TokenType::RPAREN, ")", line_number_, column_number_ - 1, column_number_};
     }
     else if (current_char == '.')
     {
@@ -418,7 +418,7 @@ Token Lexer::getNextToken()
     else
     {
         skipLine();
-        return {TokenType::INVALID, "", line_number_, column_number_ - 1};
+        return {TokenType::INVALID, "", line_number_, column_number_ - 1, column_number_};
     }
 }
 
@@ -442,7 +442,7 @@ std::vector<Token> Lexer::getTokenList()
         }
     }
 
-    tokens_.emplace_back(TokenType::EOF_, "", line_number_, column_number_);
+    tokens_.emplace_back(TokenType::EOF_, "", line_number_, column_number_, column_number_);
     return tokens_;
 }
 }// namespace Kites

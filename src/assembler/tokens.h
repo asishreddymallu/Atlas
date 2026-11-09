@@ -49,6 +49,13 @@ struct Token
     std::string value;          ///< The value of the token (e.g., the actual string or number)
     unsigned int line_number;   ///< Line number where the token appears
     unsigned int column_number; ///< Column number where the token appears
+    /// One past the last column this token occupies **in the source text**,
+    /// 1-based and exclusive (see common/diagnostic_severity.h). Taken from the
+    /// lexer's column counter after the token is consumed, so it stays correct
+    /// even where `value` is not the verbatim source: a hex literal 0x1F is
+    /// normalised to "31" but still spans 4 columns, and a string literal's
+    /// span covers its quotes. 0 = unknown.
+    unsigned int end_column;
 
     /**
      * @brief Constructs a Token object.
@@ -59,10 +66,12 @@ struct Token
      * @param value The value of the token (default is an empty string).
      * @param line The line number of the token (default is 0).
      * @param column The column number of the token (default is 0).
+     * @param end_column One past the token's last column (default is 0 = unknown).
      */
     Token(TokenType type = TokenType::INVALID, const std::string &value = "", unsigned int line = 0,
-          unsigned int column = 0)
-        : type(type), value(value), line_number(line), column_number(column)
+          unsigned int column = 0, unsigned int end_column = 0)
+        : type(type), value(value), line_number(line), column_number(column),
+          end_column(end_column)
     {
     }
 
