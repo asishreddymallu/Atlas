@@ -28,7 +28,12 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
     m_expandedView->setReadOnly(true);
     m_expandedView->setBreakpointInteractionEnabled(false);
     m_expandedView->setBreakpoints(m_editor->getBreakpoints());
-    m_editor->setPlaceholderText("Enter your code here...");
+    m_editor->setPlaceholderText(
+        "Write RISC-V assembly here, or press Ctrl+O to open a file.");
+    m_disassemblyView->setPlaceholderText(
+        "Disassembly appears here once you run the program (F5).");
+    m_expandedView->setPlaceholderText(
+        "Pseudo-instructions are expanded here when you run the program.");
     m_squiggleFormat.setUnderlineStyle(QTextCharFormat::WaveUnderline);
     m_squiggleFormat.setUnderlineColor(ThemeManager::getInstance().getEditorErrorColor());
     connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,

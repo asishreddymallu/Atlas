@@ -17,6 +17,10 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
     ui->instructionTypeCountTableView->horizontalHeader()->
     setSectionResizeMode(QHeaderView::Stretch);
     applyDataTableStyle(ui->instructionTypeCountTableView);
+    ui->plainTextEdit->setPlaceholderText(
+        "No profile yet.\n\n"
+        "Run a program (F5) to see per-line execution counts,\n"
+        "instruction types and an execution heat map.");
     if (m_profiler)
     {   
         InstructionTypeCountModel *model = new InstructionTypeCountModel(this, 

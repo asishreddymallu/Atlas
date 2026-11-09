@@ -64,7 +64,7 @@
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>
          </property>
-         <widget class="QWidget" name="layoutWidget">
+         <widget class="QWidget" name="layoutWidget_2">
           <layout class="QVBoxLayout" name="verticalLayout_2">
            <item>
             <widget class="CacheConfigWidget" name="L1Config" native="true"/>
@@ -99,7 +99,7 @@
          <property name="orientation">
           <enum>Qt::Orientation::Horizontal</enum>
          </property>
-         <widget class="QWidget" name="layoutWidget">
+         <widget class="QWidget" name="layoutWidget_3">
           <layout class="QVBoxLayout" name="verticalLayout_3">
            <item>
             <widget class="CacheConfigWidget" name="L2Config" native="true"/>

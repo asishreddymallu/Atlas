@@ -145,6 +145,17 @@ QPlainTextEdit#outputTextEdit[borderStyle="full"] {
     border: 2px solid {{accent}};
 }
 
+/* ── Pane titles ───────────────────────────────────────────────
+ * Small muted caption above a pane, set via a `paneTitle` dynamic property in
+ * the .ui files. Case is left to the string itself - QSS text-transform is not
+ * relied on. */
+QLabel[paneTitle="true"] {
+    color: {{mutedForeground}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 0;
+}
+
 /* ── Menus / menu bar ──────────────────────────────────────────── */
 QMenuBar {
     background-color: {{background}};

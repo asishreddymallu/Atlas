@@ -4,6 +4,7 @@
 #include "ui/theme/theme_manager.h"
 #include <QPainter>
 #include <QTextBlock>
+#include <QTextDocument>
 
 namespace Kites
 {
@@ -60,7 +61,10 @@ void KitesEditor::highlightCurrentLine()
 {
     m_currentLineSelections.clear();
 
-    if (!isReadOnly())
+    // An empty document has no meaningful "current line", and the full-width
+    // highlight would paint over the placeholder text that tells the user what
+    // to do with the pane.
+    if (!isReadOnly() && !document()->isEmpty())
     {
         QTextEdit::ExtraSelection selection;
 
