@@ -134,8 +134,50 @@ QMenu::item:selected {
 /* ── Toolbars ──────────────────────────────────────────────────── */
 QToolBar {
     background-color: {{background}};
+    border: none;
     border-bottom: 1px solid {{border}};
-    spacing: 4px;
+    padding: 6px 8px;   /* spacing scale: 8 outer, 6 vertical */
+    spacing: 2px;
+}
+QToolBar::separator {
+    background-color: {{border}};
+    width: 1px;
+    margin: 6px 8px;
+}
+/* Toolbar buttons are flat (Zed-style): no resting border or fill, state is
+ * carried by the hover/pressed tint alone. More specific than the generic
+ * QPushButton/QToolButton rule above so it wins there, without touching
+ * QToolButtons elsewhere (e.g. the collapsible section headers). */
+QToolBar QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-height: 20px;
+}
+QToolBar QToolButton:hover {
+    background-color: {{currentLine}};
+}
+QToolBar QToolButton:pressed,
+QToolBar QToolButton:checked {
+    background-color: {{selection}};
+}
+QToolBar QToolButton:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+}
+
+/* step-interval spinbox lives in the toolbar */
+QSpinBox {
+    background-color: {{surface}};
+    color: {{foreground}};
+    border: 1px solid {{border}};
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 20px;
+}
+QSpinBox:focus {
+    border-color: {{accent}};
 }
 
 /* ── Table / tree views ────────────────────────────────────────── */

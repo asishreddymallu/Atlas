@@ -26,6 +26,13 @@
 
 namespace Kites
 {
+namespace
+{
+// Chrome icon size in logical pixels, shared by the toolbar and the sidebar so
+// the two never disagree. IconManager's default matches it.
+constexpr int toolbarIconSize = 20;
+} // namespace
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 // ui(new Ui::MainWindow)
 {
@@ -142,6 +149,7 @@ void MainWindow::setUpToolBar()
     redoAction->setDisabled(true);
 
     // set toolbar icons (resources in :/icons)
+    processorAction->setIcon(IconManager::getInstance().getIcon(Icon::Processor));
     runAction->setIcon(IconManager::getInstance().getIcon(Icon::Play));
     pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
     undoAction->setIcon(IconManager::getInstance().getIcon(Icon::Undo));
@@ -156,8 +164,10 @@ void MainWindow::setUpToolBar()
     stepAction->setToolTip("Execute single step");
     undoAction->setToolTip("Undo last VM step");
     redoAction->setToolTip("Redo last VM step");
-    // optional: make icons a consistent size
-    toolbar->setIconSize(QSize(18, 18));
+    // one icon size for the whole chrome; the sidebar uses the same value
+    toolbar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
+    // single fixed toolbar: the drag handle is just visual noise
+    toolbar->setMovable(false);
 
     //------------Spinbox for setting execution speed----------------
     QSpinBox *spinbox = new QSpinBox(this);
@@ -169,14 +179,18 @@ void MainWindow::setUpToolBar()
 
     QWidgetAction *spinboxAction = new QWidgetAction(this);
     spinboxAction->setDefaultWidget(spinbox);
-    toolbar->addAction(processorAction);
-    toolbar->addAction(runAction);
+    // identical action order to before; the separators only group them visually
+    toolbar->addAction(processorAction);   // processor settings
+    toolbar->addSeparator();
+    toolbar->addAction(runAction);         // start / stop
     toolbar->addAction(debugAction);
-    toolbar->addAction(spinboxAction);
-    toolbar->addAction(pauseAction);
+    toolbar->addSeparator();
+    toolbar->addAction(spinboxAction);     // step interval
+    toolbar->addSeparator();
+    toolbar->addAction(pauseAction);       // transport
     toolbar->addAction(stepAction);
     toolbar->addSeparator();
-    toolbar->addAction(undoAction);
+    toolbar->addAction(undoAction);        // history
     toolbar->addAction(redoAction);
 
     connect(runAction, &QAction::triggered, this,
@@ -278,7 +292,7 @@ void MainWindow::setUpSidebar()
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Cache), "Cache"));
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Compiler), "Compiler"));
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Profiler), "Profiler"));
-    m_sidebar->setIconSize(QSize(20, 20));
+    m_sidebar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
     m_sidebar->setMinimumWidth(48);
     m_sidebar->setCurrentRow(0);
     // m_sidebar->setFocusPolicy(Qt::ClickFocus);
@@ -573,7 +587,11 @@ void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
     {
         for (QAction *action : toolbar->actions())
         {
-            if (action->text() == "Run")
+            if (action->text() == "Processor")
+            {
+                action->setIcon(IconManager::getInstance().getIcon(Icon::Processor));
+            }
+            else if (action->text() == "Run")
             {
                 action->setIcon(IconManager::getInstance().getIcon(Icon::Play));
             }

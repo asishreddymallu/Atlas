@@ -1,5 +1,6 @@
 #include "icon_manager.h"
 #include "theme_manager.h"
+#include <QApplication>
 #include <QPixmap>
 #include <QPainter>
 namespace Kites
@@ -21,10 +22,14 @@ QIcon IconManager::getIcon(Icon icon, QSize size) const
     const ThemeManager &themeManager = ThemeManager::getInstance();
     QColor iconColor = themeManager.getIconColor();
 
-    const QString cacheKey = QString("%1:%2x%3:%4")
+    // rasterise at the screen's real pixel density; `size` stays in logical px
+    const qreal devicePixelRatio = qApp ? qApp->devicePixelRatio() : 1.0;
+
+    const QString cacheKey = QString("%1:%2x%3:%4:%5")
                                   .arg(toIndex(icon))
                                   .arg(size.width())
                                   .arg(size.height())
+                                  .arg(devicePixelRatio)
                                   .arg(iconColor.name());
 
     auto cached = m_pixmapCache.constFind(cacheKey);
@@ -32,7 +37,7 @@ QIcon IconManager::getIcon(Icon icon, QSize size) const
         return QIcon(cached.value());
 
     QIcon baseIcon(m_iconPaths[toIndex(icon)]);
-    QPixmap pixmap = baseIcon.pixmap(size);
+    QPixmap pixmap = baseIcon.pixmap(size, devicePixelRatio);
     QPainter painter(&pixmap);
     painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
     painter.fillRect(pixmap.rect(), iconColor);
