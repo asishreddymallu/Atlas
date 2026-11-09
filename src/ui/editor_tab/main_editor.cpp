@@ -12,6 +12,7 @@
 #include <set>
 #include "ui/common/line_number_gutter_column.h"
 #include "ui/theme/font_manager.h"
+#include "ui/theme/theme_manager.h"
 #include "break_point_gutter_column.h"
 namespace Kites
 {
@@ -112,7 +113,7 @@ void Editor::paintEvent(QPaintEvent *event)
             QRectF textRect = blockRect.adjusted(0, 0, 0, -1);
             textRect.setWidth(viewport()->width() - 10);
 
-            painter.setPen(Qt::black);
+            painter.setPen(ThemeManager::getInstance().getEditorForegroundColor());
             painter.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, instructionStage.c_str());
         }
     }

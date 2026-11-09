@@ -58,7 +58,7 @@ void KitesEditor::updateGutterColumns(const QRect &rect, int dy)
 
 void KitesEditor::highlightCurrentLine()
 {
-    QList<QTextEdit::ExtraSelection> extraSelections;
+    m_currentLineSelections.clear();
 
     if (!isReadOnly())
     {
@@ -70,10 +70,32 @@ void KitesEditor::highlightCurrentLine()
         selection.format.setProperty(QTextFormat::FullWidthSelection, true);
         selection.cursor = textCursor();
         selection.cursor.clearSelection();
-        extraSelections.append(selection);
+        m_currentLineSelections.append(selection);
     }
 
-    setExtraSelections(extraSelections);
+    refreshExtraSelections();
+}
+
+void KitesEditor::setDiagnosticSelections(const QList<QTextEdit::ExtraSelection> &selections)
+{
+    m_diagnosticSelections = selections;
+    refreshExtraSelections();
+}
+
+void KitesEditor::clearDiagnosticSelections()
+{
+    m_diagnosticSelections.clear();
+    refreshExtraSelections();
+}
+
+void KitesEditor::refreshExtraSelections()
+{
+    // current line first, diagnostics second: where the two overlap Qt lets the
+    // later entry win on conflicting format properties, so the wave underline is
+    // never masked by the current-line background
+    QList<QTextEdit::ExtraSelection> merged = m_currentLineSelections;
+    merged.append(m_diagnosticSelections);
+    setExtraSelections(merged);
 }
 
 void KitesEditor::resizeEvent(QResizeEvent *event)

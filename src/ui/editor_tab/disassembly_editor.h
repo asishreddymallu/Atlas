@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/common/kites_editor.h"
+#include "ui/theme/theme_manager.h"
 #include <set>
 #include <QPainter>
 namespace Kites
@@ -58,7 +59,7 @@ protected:
                 QRectF textRect = blockRect.adjusted(0, 0, 0, -1);
                 textRect.setWidth(viewport()->width() - 10);
 
-                painter.setPen(Qt::black);
+                painter.setPen(ThemeManager::getInstance().getEditorForegroundColor());
                 painter.drawText(textRect, Qt::AlignRight | Qt::AlignVCenter, instructionStage.c_str());
             }
         }
