@@ -43,7 +43,7 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
                     ThemeManager::getInstance().getEditorErrorColor());
             });
 
-    connect(ui->expandedViewButton, &QRadioButton::toggled, this,
+    connect(ui->expandedViewButton, &QPushButton::toggled, this,
             &EditorTab::onExpandButtonClicked);
 
     m_languageService = new LanguageService(this);

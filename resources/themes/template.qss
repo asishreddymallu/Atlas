@@ -93,6 +93,40 @@ QPushButton:focus, QToolButton:focus {
     border-color: {{accent}};
 }
 
+/* ── Segmented control ─────────────────────────────────────────
+ * Checkable QPushButtons sharing a parent with autoExclusive, styled as one
+ * joined pill. `segmented` marks membership; `segmentPos` rounds the outer
+ * corners so the pair reads as a single control. */
+QPushButton[segmented="true"] {
+    background-color: transparent;
+    color: {{mutedForeground}};
+    border: 1px solid {{border}};
+    border-radius: 0;
+    padding: 3px 14px;
+    min-height: 18px;
+}
+QPushButton[segmented="true"]:hover {
+    color: {{foreground}};
+    background-color: {{currentLine}};
+}
+QPushButton[segmented="true"]:checked {
+    color: {{foreground}};
+    background-color: {{selection}};
+}
+QPushButton[segmented="true"]:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+}
+QPushButton[segmentPos="first"] {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-right: none;
+}
+QPushButton[segmentPos="last"] {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
 /* ── Text inputs / editors ────────────────────────────────────── */
 QLineEdit {
     background-color: {{surface}};
