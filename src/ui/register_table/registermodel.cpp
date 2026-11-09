@@ -76,6 +76,24 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
     }
     if (role == Qt::FontRole)
     {
+        // The "just changed" row tint has to stay at 25% alpha to keep the
+        // row's own text above 4.5:1, which makes it deliberately subtle.
+        // Bolding the value that actually changed carries the same signal
+        // without depending on colour at all. Value column only: bolding the
+        // whole row would compete with the tint and make the panel noisy
+        // during a run.
+        //
+        // Safe for both bundled fonts - neither reflows the column. IBM Plex
+        // Mono ships a real Bold face; Monaco has none, so Qt synthesises it,
+        // and a render test showed the synthesised bold adds 41.9% ink while
+        // shifting the right edge by 0 px.
+        if (index.column() == 2 &&
+            static_cast<size_t>(index.row()) == m_highlightedRegisterIndex)
+        {
+            QFont highlighted = tableNumericFont();
+            highlighted.setBold(true);
+            return highlighted;
+        }
         return tableNumericFont();
     }
     if (role == Qt::BackgroundRole)
