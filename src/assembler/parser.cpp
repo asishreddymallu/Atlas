@@ -119,9 +119,9 @@ void Parser::parseDataDirective()
             }
             else
             {
-                recordError(ParseError(currentToken().line_number,
+                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
                                        "Invalid directive: Expected .dword, .word, .halfword, "
-                                       ".byte, .float, .double, .string, .zero"));
+                                       ".byte, .float, .double, .string, .zero", DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
                 errors_.all_errors.emplace_back(errors::SyntaxError(
                     "Invalid directive",
                     "Expected .dword, .word, .halfword, .byte, .float, .double, .string, .zero",
@@ -255,8 +255,8 @@ void Parser::parseDataDirective()
                     else
                     {
                         recordError(
-                            ParseError(currentToken().line_number,
-                                       "Invalid zero directive: Expected a positive number"));
+                            ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
+                                       "Invalid zero directive: Expected a positive number", DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
                         errors_.all_errors.emplace_back(errors::SyntaxError(
                             "Invalid zero directive", "Expected a positive number", filename_,
                             currentToken().line_number, currentToken().column_number,
@@ -288,9 +288,9 @@ void Parser::parseDataDirective()
         }
         else
         {
-            recordError(ParseError(currentToken().line_number,
+            recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
                                    "Invalid directive: Expected .dword, .word, .halfword, .byte, "
-                                   ".string, .float, .double, .zero"));
+                                   ".string, .float, .double, .zero", DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
             errors_.all_errors.emplace_back(errors::SyntaxError(
                 "Invalid directive",
                 "Expected .dword, .word, .halfword, .byte, .string, .float, .double, .zero",
@@ -311,10 +311,9 @@ void Parser::parseTextDirective()
         {
             if (symbol_table_.find(currentToken().value) != symbol_table_.end())
             {
-                recordError(ParseError(
-                    currentToken().line_number,
+                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
                     "Label redefinition: already defined at line " +
-                        std::to_string(symbol_table_[currentToken().value].line_number)));
+                        std::to_string(symbol_table_[currentToken().value].line_number), DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::LabelRedefinitionError(
                     "Label redefinition",
                     "Label already defined at line " +
@@ -495,9 +494,9 @@ void Parser::parseTextDirective()
             if (!valid_syntax)
             {
                 recordError(
-                    ParseError(currentToken().line_number,
+                    ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
                                "Invalid syntax: Expected: " +
-                                   instruction_set::getExpectedSyntaxes(currentToken().value)));
+                                   instruction_set::getExpectedSyntaxes(currentToken().value), DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
                 errors_.all_errors.emplace_back(errors::SyntaxError(
                     "Syntax error",
                     "Expected: " + instruction_set::getExpectedSyntaxes(currentToken().value),
@@ -509,8 +508,8 @@ void Parser::parseTextDirective()
         }
         else
         {
-            recordError(ParseError(currentToken().line_number,
-                                   "Unexpected token: " + currentToken().value));
+            recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
+                                   "Unexpected token: " + currentToken().value, DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
             errors_.all_errors.emplace_back(errors::UnexpectedTokenError(
                 "Unexpected token", filename_, currentToken().line_number,
                 currentToken().column_number,
@@ -612,8 +611,8 @@ void Parser::parse()
 
         else
         {
-            recordError(ParseError(currentToken().line_number,
-                                   "Invalid token: Expected .data, .text, or <opcode> or <label>"));
+            recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
+                                   "Invalid token: Expected .data, .text, or <opcode> or <label>", DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
             errors_.all_errors.emplace_back(errors::SyntaxError(
                 "Invalid token", "Expected: .data, .text, or <opcode> or <label>", filename_,
                 currentToken().line_number, currentToken().column_number,
@@ -660,8 +659,8 @@ void Parser::parse()
         else
         {
             recordError(
-                ParseError(currentToken().line_number,
-                           "Invalid token: Expected .data, .text, .bss or <opcode> or <label>"));
+                ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
+                           "Invalid token: Expected .data, .text, .bss or <opcode> or <label>", DiagnosticSeverity::Error, DiagnosticCategory::Syntax));
             errors_.all_errors.emplace_back(errors::SyntaxError(
                 "Invalid token", "Expected: .data, .text, .bss or <opcode> or <label>", filename_,
                 currentToken().line_number, currentToken().column_number,

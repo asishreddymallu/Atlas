@@ -70,7 +70,7 @@ bool Parser::parse_pseudo()
             }
             else
             {
-                recordError(ParseError(currentToken().line_number, "Invalid label reference"));
+                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column, "Invalid label reference", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                     "Invalid label reference", "Expected: Label defined in .data section",
                     filename_, currentToken().line_number, currentToken().column_number,
@@ -242,7 +242,7 @@ bool Parser::parse_pseudo()
             }
             else
             {
-                recordError(ParseError(currentToken().line_number, "Immediate value out of range"));
+                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: -2^63 <= imm <= 2^63 - 1", filename_,
                     currentToken().line_number, currentToken().column_number,
@@ -911,7 +911,7 @@ bool Parser::parse_pseudo()
                 else
                 {
                     recordError(
-                        ParseError(peekToken(1).line_number, "Immediate value out of range"));
+                        ParseError(peekToken(1).line_number, peekToken(1).column_number, peekToken(1).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                         "Immediate value out of range", "Expected: -1048576 <= imm <= 1048575",
                         filename_, peekToken(1).line_number, peekToken(1).column_number,

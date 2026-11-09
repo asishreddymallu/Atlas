@@ -106,7 +106,7 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
                 else
                 {
                     recordError(
-                        ParseError(peekToken(5).line_number, "Immediate value out of range"));
+                        ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                         "Immediate value out of range", "Expected: 0 <= imm <= 63", filename_,
                         peekToken(5).line_number, peekToken(5).column_number,
@@ -124,7 +124,7 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
                 else
                 {
                     recordError(
-                        ParseError(peekToken(5).line_number, "Immediate value out of range"));
+                        ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                         "Immediate value out of range", "Expected: -2048 <= imm <= 2047", filename_,
                         peekToken(5).line_number, peekToken(5).column_number,
@@ -149,7 +149,7 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
                 }
                 else
                 {
-                    recordError(ParseError(peekToken(5).line_number, "Misaligned immediate value"));
+                    recordError(ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Misaligned immediate value", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::MisalignedImmediateError(
                         "Misaligned immediate value", "Expected: imm % 4 == 0", filename_,
                         peekToken(5).line_number, peekToken(5).column_number,
@@ -160,7 +160,7 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
             }
             else
             {
-                recordError(ParseError(peekToken(5).line_number, "Immediate value out of range"));
+                recordError(ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: -4096 <= imm <= 4095", filename_,
                     peekToken(5).line_number, peekToken(5).column_number,
@@ -206,7 +206,7 @@ bool Parser::parse_O_GPR_C_I()
             }
             else
             {
-                recordError(ParseError(peekToken(3).line_number, "Immediate value out of range"));
+                recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: 0 <= imm <= 1048575", filename_,
                     peekToken(3).line_number, peekToken(3).column_number,
@@ -228,7 +228,7 @@ bool Parser::parse_O_GPR_C_I()
                 }
                 else
                 {
-                    recordError(ParseError(peekToken(3).line_number, "Misaligned immediate value"));
+                    recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Misaligned immediate value", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::MisalignedImmediateError(
                         "Misaligned immediate value", "Expected: imm % 4 == 0", filename_,
                         peekToken(3).line_number, peekToken(3).column_number,
@@ -239,7 +239,7 @@ bool Parser::parse_O_GPR_C_I()
             }
             else
             {
-                recordError(ParseError(peekToken(3).line_number, "Immediate value out of range"));
+                recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: -1048576 <= imm <= 1048575",
                     filename_, peekToken(3).line_number, peekToken(3).column_number,
@@ -298,7 +298,7 @@ bool Parser::parse_O_GPR_C_GPR_C_IL()
                 else
                 {
                     recordError(
-                        ParseError(peekToken(5).line_number, "Immediate value out of range"));
+                        ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                         "Immediate value out of range", "Expected: -4096 <= imm <= 4095", filename_,
                         peekToken(5).line_number, peekToken(5).column_number,
@@ -365,7 +365,7 @@ bool Parser::parse_O_GPR_C_IL()
                 else
                 {
                     recordError(
-                        ParseError(peekToken(3).line_number, "Immediate value out of range"));
+                        ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                         "Immediate value out of range", "Expected: -1048576 <= imm <= 1048575",
                         filename_, peekToken(3).line_number, peekToken(3).column_number,
@@ -429,7 +429,7 @@ bool Parser::parse_O_GPR_C_DL()
 
         if (symbol_table_.find(label) == symbol_table_.end() || !symbol_table_[label].isData)
         {
-            recordError(ParseError(peekToken(3).line_number, "Invalid label reference"));
+            recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Invalid label reference", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
             errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                 "Invalid label reference", "Expected: Label defined in .data section", filename_,
                 peekToken(3).line_number, peekToken(3).column_number,
@@ -510,7 +510,7 @@ bool Parser::parse_O_GPR_C_I_LP_GPR_RP()
             }
             else
             {
-                recordError(ParseError(peekToken(3).line_number, "Immediate value out of range"));
+                recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: -2048 <= imm <= 2047", filename_,
                     peekToken(3).line_number, peekToken(3).column_number,
@@ -532,7 +532,7 @@ bool Parser::parse_O_GPR_C_I_LP_GPR_RP()
             }
             else
             {
-                recordError(ParseError(peekToken(3).line_number, "Immediate value out of range"));
+                recordError(ParseError(peekToken(3).line_number, peekToken(3).column_number, peekToken(3).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                     "Immediate value out of range", "Expected: -2048 <= imm <= 2047", filename_,
                     peekToken(3).line_number, peekToken(3).column_number,

@@ -81,7 +81,7 @@ bool Parser::parse_O_GPR_C_CSR_C_I()
         }
         else
         {
-            recordError(ParseError(peekToken(5).line_number, "Immediate value out of range"));
+            recordError(ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
             errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                 "Immediate value out of range", "Expected:0 <= imm <= 31", filename_,
                 peekToken(5).line_number, peekToken(5).column_number,

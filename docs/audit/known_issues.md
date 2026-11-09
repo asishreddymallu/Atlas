@@ -70,3 +70,78 @@ evidence. Nothing here is a guess; each entry names the lines it was read from.
   label was simply wrong and this is now resolved. Determining which requires
   reading the cache model's size accounting - simulator logic, out of scope
   for the UI pass.
+
+---
+
+## 4. Syntax errors underline the mnemonic, not the offending operand
+
+- **Where**: `src/assembler/parser.cpp:497` (`Invalid syntax: Expected: ...`)
+  and `:512` (`Unexpected token: ...`).
+- **What**: both report `currentToken()`, which at that point is the
+  instruction mnemonic. For `    addi x99, x0, 1` the span is columns 5..9
+  (`addi`), not 10..13 (`x99`); for `    addi t0, t1` it is again 5..9 rather
+  than the position where the third operand should have been.
+- **Evidence**: the message itself is built as
+  `getExpectedSyntaxes(currentToken().value)` and for that input returns
+  addi's syntax, so `currentToken().value == "addi"`. The rich error beside it
+  prints `:2:5:` with the caret under `addi`.
+- **Status**: accepted. The span is defensible - "this instruction is
+  malformed" - but it is not operand-level precision. The two tests covering
+  it are named `...SpansTheMnemonicNotTheOffendingOperand` and
+  `...SpansTheMnemonicNotTheGap` so they cannot be mistaken for a precision
+  guarantee. Advancing to the failing operand means changing the parser's
+  error-recovery position, not just the ParseError construction.
+
+## 5. Six second-pass sites report no column, and keep the default category
+
+- **Where**: `src/assembler/parser.cpp` lines 691, 702, 723, 743, 755, 767.
+- **What**: these run in the second resolution pass over `ICUnit` blocks,
+  after the token stream is gone. `ICUnit` exposes only `getLineNumber()`, so
+  they report `column = end_column = 0` (unknown) and consumers fall back to
+  highlighting the whole line.
+- **Second effect**: they also keep the two-argument `ParseError` constructor,
+  whose `category` defaults to `Syntax`. Semantically every one of them is an
+  `Assembler` problem (`Immediate value out of range`, `Invalid label
+  reference`). So an unknown branch label is reported as Syntax today. The
+  test `UnknownBranchLabelHasNoColumnAndKeepsTheDefaultCategory` pins this
+  current behaviour and says so.
+- **Why not fixed**: giving them real columns needs a column on `ICUnit` and
+  threading it through the code generator. Fixing only the category is a
+  six-line change and would be safe, but it was outside the approved scope of
+  stage 2b.
+
+## 6. Columns count bytes, not characters
+
+- **Where**: `src/assembler/lexer.cpp` - `column_number_` advances once per
+  `std::string` byte.
+- **What**: a UTF-8 multi-byte character costs as many columns as it has
+  bytes. For `    .string "caf<e-acute>", "x"` the second literal starts at byte
+  column 22, but a `QTextCursor`, which counts UTF-16 code units, puts the same
+  position at column 21.
+- **Scope**: non-ASCII can only appear in a string literal or a comment, so a
+  shifted column requires non-ASCII *earlier on the same line* as the error.
+  Rare, but real.
+- **Status**: the model deliberately stays in byte columns end to end. The
+  conversion to cursor offsets belongs at the UI boundary (stage 5), which
+  must map the leading bytes of the line to UTF-16 units and clamp to the
+  block length. Covered by
+  `LexerTokenSpanNonAscii.ColumnsCountBytesNotCharacters`.
+
+## 7. Two lexer column-accounting bugs, fixed
+
+Recorded because they changed reported columns on directive lines.
+
+- **`Lexer::directive()`** consumed the leading `.` with `++pos_` but never
+  advanced `column_number_`, so the counter ran one behind for the rest of the
+  line: the directive's own span was one short and every token after it on the
+  same line reported a column one too small (`    .word 1, 2, 3` gave operands
+  at 10/13/16 instead of 11/14/17). Fixed in `cabe69c`.
+- **`Lexer::stringLiteral()`** read its start column after consuming the
+  opening quote, so it pointed at the first character inside the literal. That
+  looked correct only because the directive desync cancelled it out. Fixed in
+  the same commit; the two changes are net-zero for a string on a directive
+  line.
+- Neither affects the 44 example programs, which contain no directives and no
+  string literals. Verified against a dedicated 8-program directive corpus:
+  machine code identical, failing set unchanged, and every token diff a
+  column-only change on a directive line.

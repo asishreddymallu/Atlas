@@ -24,6 +24,37 @@ namespace Kites
 /**
  * @brief Represents a parse error with a specific line number and error message.
  */
+/**
+ * @brief A problem the parser recorded, with the span of the offending token.
+ *
+ * ---------------------------------------------------------------------------
+ * CATEGORY RULE - which DiagnosticCategory each recordError() site uses
+ * ---------------------------------------------------------------------------
+ *   Syntax    the parser could not match the tokens to a grammar production
+ *   Assembler it parsed fine, but a value or symbol cannot be assembled
+ *
+ * Syntax (7 sites, all in parser.cpp):
+ *   122, 291  Invalid directive: Expected .dword, .word, ...
+ *   257       Invalid zero directive: Expected a positive number
+ *   497       Invalid syntax: Expected: <syntax of the mnemonic>
+ *   512       Unexpected token: <token>
+ *   615, 662  Invalid token: Expected .data, .text, ... or <opcode> or <label>
+ *
+ * Assembler (25 sites):
+ *   Immediate value out of range, Misaligned immediate value,
+ *   Invalid label reference, Label redefinition - across parser.cpp,
+ *   i_m_formats.cpp, f_d_formats.cpp, csr_formats.cpp and pseudo_formats.cpp.
+ *
+ * Runtime is never produced by the parser; it is reserved for faults raised
+ * while a program executes.
+ *
+ * 26 of the 32 sites carry a token span. The remaining 6 (parser.cpp 691, 702,
+ * 723, 743, 755, 767) run in the second resolution pass over ICUnit blocks,
+ * where no Token is in scope, so they leave column/end_column at 0 = unknown
+ * and consumers fall back to highlighting the whole line. See
+ * docs/audit/known_issues.md.
+ * ---------------------------------------------------------------------------
+ */
 struct ParseError
 {
     /// Line number where the error occurred, 1-based. 0 = unknown.
