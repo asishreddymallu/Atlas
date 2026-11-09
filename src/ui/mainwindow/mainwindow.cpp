@@ -31,6 +31,15 @@ namespace
 // Chrome icon size in logical pixels, shared by the toolbar and the sidebar so
 // the two never disagree. IconManager's default matches it.
 constexpr int toolbarIconSize = 20;
+
+// Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
+// at runtime (Run<->Stop, Pause<->Resume) cannot lose its key hint.
+void setActionHint(QAction *action, const QString &description)
+{
+    const QString keys = action->shortcut().toString(QKeySequence::NativeText);
+    action->setToolTip(keys.isEmpty() ? description
+                                      : QStringLiteral("%1  (%2)").arg(description, keys));
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -156,14 +165,24 @@ void MainWindow::setUpToolBar()
     setThemedIcon(redoAction, Icon::Redo);
     setThemedIcon(stepAction, Icon::Step);
     setThemedIcon(debugAction, Icon::Debug);
+    // Keyboard shortcuts. None of these collide with QPlainTextEdit's built-in
+    // bindings (Ctrl+C/X/V/Z/Y/A and friends) or with the keys Editor
+    // intercepts for the completer popup (Enter/Return/Escape/Tab/Backtab).
+    // Toolbar Undo/Redo are deliberately left unbound: they undo a VM step,
+    // not a text edit, and Ctrl+Z in the editor must stay text undo.
+    runAction->setShortcut(QKeySequence(Qt::Key_F5));
+    debugAction->setShortcut(QKeySequence(Qt::Key_F9));
+    pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
+    stepAction->setShortcut(QKeySequence(Qt::Key_F10));
+
     // tooltips for accessibility
-    processorAction->setToolTip("Processor settings");
-    runAction->setToolTip("Run program");
-    pauseAction->setToolTip("Pause execution");
-    debugAction->setToolTip("Start debug run");
-    stepAction->setToolTip("Execute single step");
-    undoAction->setToolTip("Undo last VM step");
-    redoAction->setToolTip("Redo last VM step");
+    setActionHint(processorAction, "Processor settings");
+    setActionHint(runAction, "Run program");
+    setActionHint(pauseAction, "Pause execution");
+    setActionHint(debugAction, "Start debug run");
+    setActionHint(stepAction, "Execute single step");
+    setActionHint(undoAction, "Undo last VM step");
+    setActionHint(redoAction, "Redo last VM step");
     // one icon size for the whole chrome; the sidebar uses the same value
     toolbar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
     // single fixed toolbar: the drag handle is just visual noise
@@ -203,7 +222,7 @@ void MainWindow::setUpToolBar()
                     pauseAction->setEnabled(true);
                     runAction->setText("Stop");
                     setThemedIcon(runAction, Icon::Stop);
-                    runAction->setToolTip("Stop execution");
+                    setActionHint(runAction, "Stop execution");
                     this->run();
                 }
                 else if (runAction->text() == "Stop")
@@ -211,7 +230,7 @@ void MainWindow::setUpToolBar()
                     // emit stopSignal();
                     runAction->setText("Run");
                     setThemedIcon(runAction, Icon::Play);
-                    runAction->setToolTip("Run program");
+                    setActionHint(runAction, "Run program");
                     m_processorManager->stop();
                 }
             });
@@ -225,11 +244,11 @@ void MainWindow::setUpToolBar()
                 // debug run starts paused, so the toolbar starts in the paused state
                 runAction->setText("Stop");
                 setThemedIcon(runAction, Icon::Stop);
-                runAction->setToolTip("Stop execution");
+                setActionHint(runAction, "Stop execution");
                 pauseAction->setEnabled(true);
                 pauseAction->setText("Resume");
                 setThemedIcon(pauseAction, Icon::Resume);
-                pauseAction->setToolTip("Resume execution");
+                setActionHint(pauseAction, "Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
                 redoAction->setEnabled(true);
@@ -248,7 +267,7 @@ void MainWindow::setUpToolBar()
                 {
                     pauseAction->setText("Resume");
                     setThemedIcon(pauseAction, Icon::Resume);
-                    pauseAction->setToolTip("Resume execution");
+                    setActionHint(pauseAction, "Resume execution");
                     stepAction->setEnabled(true);
                     undoAction->setEnabled(true);
                     redoAction->setEnabled(true);
@@ -258,7 +277,7 @@ void MainWindow::setUpToolBar()
                 {
                     pauseAction->setText("Pause");
                     setThemedIcon(pauseAction, Icon::Pause);
-                    pauseAction->setToolTip("Pause execution");
+                    setActionHint(pauseAction, "Pause execution");
                     stepAction->setDisabled(true);
                     undoAction->setDisabled(true);
                     redoAction->setDisabled(true);
@@ -272,7 +291,7 @@ void MainWindow::setUpToolBar()
             {
                 pauseAction->setText("Resume");
                 setThemedIcon(pauseAction, Icon::Resume);
-                pauseAction->setToolTip("Resume execution");
+                setActionHint(pauseAction, "Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
                 redoAction->setEnabled(true);
@@ -316,6 +335,11 @@ void MainWindow::setUpMenubar()
     QAction *aboutAction = new QAction("About", this);
     setThemedIcon(openAction, Icon::Open);
     setThemedIcon(saveAction, Icon::Save);
+    openAction->setShortcut(QKeySequence::Open);  // Ctrl+O
+    saveAction->setShortcut(QKeySequence::Save);  // Ctrl+S
+    setActionHint(openAction, "Open an assembly file");
+    setActionHint(saveAction, "Save the current program");
+    m_saveAction = saveAction;
     setThemedIcon(aboutAction, Icon::About);
 
     ///////////File Menu///////////////////
@@ -451,6 +475,9 @@ bool MainWindow::tryParseAndLoadProgram()
                                     //to show expanded pseudoinstructions
     editor->resetErrorLines();    // we reset previous error lines
     editor->setCanWrite(false);   // we disable writing in editor while vm is running
+    if (m_saveAction)
+        m_saveAction->setEnabled(false); // read-only editor: a disabled QAction also
+                                         // swallows its Ctrl+S shortcut
     m_processorManager->reset();
     try
     {
@@ -539,6 +566,8 @@ void MainWindow::runFinishedSlot()
 {
     auto *editor = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
     editor->setCanWrite(true); // re-enable writing in editor when vm stops
+    if (m_saveAction)
+        m_saveAction->setEnabled(true);
     editor->setExpandedLocked(false);
     editor->clearHighlights(); // we clear any highlights when processor stops
     // other we are not alble to move the cursor as the paint

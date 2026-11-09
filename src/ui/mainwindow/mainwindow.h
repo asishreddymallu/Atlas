@@ -4,6 +4,7 @@
 #include "ui/register_table/registercontainer.h"
 #include "ui/theme/theme_manager.h"
 #include "utils/to_index.h"
+#include <QAction>
 #include <QListWidget>
 #include <QMainWindow>
 #include <QStackedWidget>
@@ -61,6 +62,9 @@ private:
     Ui::MainWindow *ui;
 
     // QToolBar *m_mainToolbar = nullptr;
+    // held so Save can be disabled while the editor is read-only (i.e. while a
+    // program is running); a disabled QAction also swallows its shortcut
+    QAction           *m_saveAction        {nullptr};
     QListWidget       *m_sidebar           {nullptr};
     QStackedWidget    *m_stackedTabs       {nullptr};
     RegisterContainer *m_registerContainer {nullptr};
