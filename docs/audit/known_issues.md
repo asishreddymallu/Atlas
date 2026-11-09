@@ -92,23 +92,21 @@ evidence. Nothing here is a guess; each entry names the lines it was read from.
   guarantee. Advancing to the failing operand means changing the parser's
   error-recovery position, not just the ParseError construction.
 
-## 5. Six second-pass sites report no column, and keep the default category
+## 5. Six second-pass sites report no column
 
 - **Where**: `src/assembler/parser.cpp` lines 691, 702, 723, 743, 755, 767.
 - **What**: these run in the second resolution pass over `ICUnit` blocks,
   after the token stream is gone. `ICUnit` exposes only `getLineNumber()`, so
   they report `column = end_column = 0` (unknown) and consumers fall back to
   highlighting the whole line.
-- **Second effect**: they also keep the two-argument `ParseError` constructor,
-  whose `category` defaults to `Syntax`. Semantically every one of them is an
-  `Assembler` problem (`Immediate value out of range`, `Invalid label
-  reference`). So an unknown branch label is reported as Syntax today. The
-  test `UnknownBranchLabelHasNoColumnAndKeepsTheDefaultCategory` pins this
-  current behaviour and says so.
-- **Why not fixed**: giving them real columns needs a column on `ICUnit` and
-  threading it through the code generator. Fixing only the category is a
-  six-line change and would be safe, but it was outside the approved scope of
-  stage 2b.
+- **Category is correct**: they pass `DiagnosticCategory::Assembler`
+  explicitly, with an explicit `0, 0` span, so an unknown branch label is
+  categorised correctly even though it cannot be pointed at. Covered by
+  `UnknownBranchLabelHasNoColumnButIsCategorisedAssembler`.
+- **Why the column is not fixed**: giving them real columns needs a column on
+  `ICUnit` and threading it through the code generator - a change to the code
+  generator rather than to error reporting, and out of scope for this work
+  package.
 
 ## 6. Columns count bytes, not characters
 

@@ -130,23 +130,21 @@ TEST(ParserErrorColumn, TokenBasedLabelErrorSpansTheLabel)
 // the documented column-0 case
 // --------------------------------------------------------------------------
 
-TEST(ParserErrorColumn, UnknownBranchLabelHasNoColumnAndKeepsTheDefaultCategory)
+TEST(ParserErrorColumn, UnknownBranchLabelHasNoColumnButIsCategorisedAssembler)
 {
     //    "jal ra, nowhere" is resolved in the second pass over ICUnit blocks,
     //    where no Token is in scope (parser.cpp:767). It reports a line but no
     //    column, and consumers fall back to the whole line.
     //
-    //    It also still reports category Syntax rather than Assembler: those six
-    //    sites keep the two-argument ParseError constructor, whose category
-    //    defaults to Syntax. Semantically "label reference not found" is an
-    //    Assembler problem, so this assertion pins current behaviour rather
-    //    than desired behaviour. Both limits are in docs/audit/known_issues.md.
+    //    The category is correct even though the column is not: the six
+    //    second-pass sites pass DiagnosticCategory::Assembler explicitly with
+    //    an explicit 0 column. See docs/audit/known_issues.md.
     const auto errors = parseErrors("unknown_label", "main:\n    jal ra, nowhere\n");
     ASSERT_EQ(errors.size(), 1u);
     EXPECT_EQ(errors[0].line, 2u);
     EXPECT_EQ(errors[0].column, 0u);
     EXPECT_EQ(errors[0].end_column, 0u);
-    EXPECT_EQ(errors[0].category, DiagnosticCategory::Syntax); // see comment above
+    EXPECT_EQ(errors[0].category, DiagnosticCategory::Assembler);
 }
 
 // --------------------------------------------------------------------------

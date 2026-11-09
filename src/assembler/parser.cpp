@@ -688,7 +688,7 @@ void Parser::parse()
                     else
                     {
                         recordError(
-                            ParseError(block.getLineNumber(), "Immediate value out of range"));
+                            ParseError(block.getLineNumber(), 0, 0, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                         errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                             "Immediate value out of range", "Expected: -4096 <= imm <= 4095",
                             filename_, block.getLineNumber(), 0,
@@ -698,8 +698,8 @@ void Parser::parse()
                 }
                 else
                 {
-                    recordError(ParseError(block.getLineNumber(),
-                                           "Invalid label reference: Label references data"));
+                    recordError(ParseError(block.getLineNumber(), 0, 0,
+                                           "Invalid label reference: Label references data", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                         "Invalid label reference", "Label references data", filename_,
                         block.getLineNumber(), 0,
@@ -720,7 +720,7 @@ void Parser::parse()
                     else
                     {
                         recordError(
-                            ParseError(block.getLineNumber(), "Immediate value out of range"));
+                            ParseError(block.getLineNumber(), 0, 0, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                         errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                             "Immediate value out of range", "Expected: -1048576 <= imm <= 1048575",
                             filename_, block.getLineNumber(), 0,
@@ -740,7 +740,7 @@ void Parser::parse()
                     else
                     {
                         recordError(
-                            ParseError(block.getLineNumber(), "Immediate value out of range"));
+                            ParseError(block.getLineNumber(), 0, 0, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                         errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
                             "Immediate value out of range", "Expected: -1048576 <= imm <= 1048575",
                             filename_, block.getLineNumber(), 0,
@@ -751,8 +751,8 @@ void Parser::parse()
             }
             else
             {
-                recordError(ParseError(block.getLineNumber(),
-                                       "Invalid label reference: Label references data"));
+                recordError(ParseError(block.getLineNumber(), 0, 0,
+                                       "Invalid label reference: Label references data", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                     "Invalid label reference", "Label reference not found", filename_,
                     block.getLineNumber(), 0, GetLineFromFile(filename_, block.getLineNumber())));
@@ -763,8 +763,8 @@ void Parser::parse()
         }
         else
         {
-            recordError(ParseError(block.getLineNumber(),
-                                   "Invalid label reference: Label reference not found"));
+            recordError(ParseError(block.getLineNumber(), 0, 0,
+                                   "Invalid label reference: Label reference not found", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
             errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                 "Invalid label reference", "Label reference not found", filename_,
                 block.getLineNumber(), 0, GetLineFromFile(filename_, block.getLineNumber())));
