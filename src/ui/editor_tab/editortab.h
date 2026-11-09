@@ -65,6 +65,10 @@ private:
     QTextCursor m_userCursorPosition;
     // to save user cursor position when updating disassembly view
     bool m_expandedLocked = false;
+    // true while squiggles produced by a failed Run are on screen. Live
+    // diagnostics are suppressed until the next Run calls resetErrorLines(),
+    // otherwise the first keystroke would clear the build errors.
+    bool m_buildDiagnosticsActive = false;
     LanguageService *m_languageService = nullptr;
     QTimer *m_diagnosticsDebounceTimer = nullptr;
     // public slots:

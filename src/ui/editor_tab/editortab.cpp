@@ -48,6 +48,10 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
                 if (m_editor->isReadOnly())
                     return; // a Run started while this request was in flight; Run owns the
                             // squiggles now, don't clobber them with a stale live result
+                if (m_buildDiagnosticsActive)
+                    return; // build errors stay on screen until the next Run clears them;
+                            // live diagnostics are not implemented yet and would otherwise
+                            // wipe them with an empty result on the first keystroke
                 applyDiagnostics(diagnostics);
             });
 
@@ -137,7 +141,10 @@ void EditorTab::setRawText(const QString &text)
 
 void EditorTab::resetErrorLines()
 {
-    m_editor->setExtraSelections({});
+    m_buildDiagnosticsActive = false;
+    m_editor->clearDiagnosticSelections();
+    m_expandedView->clearDiagnosticSelections(); // applyDiagnostics() squiggles both panes,
+                                                 // so both have to be cleared here too
     m_editor->resetErrors();
 }
 
@@ -205,6 +212,7 @@ void EditorTab::setErrorLinesFromFile(const std::filesystem::path &filePath)
             Diagnostic{errorObj["line"].toInt(), 0, errorObj["message"].toString()});
     }
 
+    m_buildDiagnosticsActive = true;
     applyDiagnostics(diagnostics);
 }
 
@@ -236,7 +244,7 @@ void EditorTab::applyDiagnostics(const QVector<Diagnostic> &diagnostics)
         extraSelections.append(selection);
     }
 
-    m_editor->setExtraSelections(extraSelections);
-    m_expandedView->setExtraSelections(extraSelections);
+    m_editor->setDiagnosticSelections(extraSelections);
+    m_expandedView->setDiagnosticSelections(extraSelections);
 }
 } // namespace Kites
