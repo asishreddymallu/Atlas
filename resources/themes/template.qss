@@ -26,18 +26,25 @@ QListWidget {
     border: none;
     border-right: 1px solid {{border}};
     outline: 0;
+    padding: 8px 6px;   /* spacing scale */
 }
 QListWidget::item {
-    padding: 8px 6px;
-    border-radius: 4px;
-    margin: 2px 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 2px 0;
+    color: {{mutedForeground}};
+    /* 2px accent indicator, transparent until the item is current. Reserving
+     * the space at rest means selecting an item cannot shift the label. */
+    border-left: 2px solid transparent;
+}
+QListWidget::item:hover:!selected {
+    background-color: {{currentLine}};
+    color: {{foreground}};
 }
 QListWidget::item:selected {
     background-color: {{selection}};
     color: {{foreground}};
-}
-QListWidget::item:hover:!selected {
-    background-color: {{currentLine}};
+    border-left: 2px solid {{accent}};
 }
 
 /* ── Tab widgets ───────────────────────────────────────────────── */
