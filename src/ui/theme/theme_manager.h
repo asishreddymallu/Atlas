@@ -95,6 +95,8 @@ public:
 
     // Semantic status colors. Use these instead of literal reds/greens so a
     // status reads the same way in every theme.
+    QColor getCacheHitColor() const;
+    QColor getCacheMissColor() const;
     QColor getSuccessColor() const;
     QColor getWarningColor() const;
     QColor getErrorColor() const;

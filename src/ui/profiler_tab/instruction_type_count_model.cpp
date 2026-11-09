@@ -1,4 +1,5 @@
 #include "instruction_type_count_model.h"
+#include "ui/common/table_font.h"
 #include "utils/to_index.h"
 namespace Kites
 { 
@@ -47,10 +48,28 @@ QVariant InstructionTypeCountModel::headerData(int section, Qt::Orientation orie
 
 QVariant InstructionTypeCountModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || role != Qt::DisplayRole)
+    if (!index.isValid())
     {
         return QVariant();
     }
+
+    if (role == Qt::TextAlignmentRole)
+    {
+        return static_cast<Column>(index.column()) == Column::InstructionCount
+                   ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter))
+                   : QVariant(int(Qt::AlignLeft | Qt::AlignVCenter));
+    }
+
+    if (role == Qt::FontRole)
+    {
+        return tableNumericFont();
+    }
+
+    if (role != Qt::DisplayRole)
+    {
+        return QVariant();
+    }
+
     Column column = static_cast<Column>(index.column());
     if (column == Column::InstructionType)
     {

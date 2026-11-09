@@ -1,4 +1,6 @@
 #include "registermodel.h"
+#include "ui/common/table_font.h"
+#include "ui/theme/theme_manager.h"
 #include "common/register_names.h"
 #include <QApplication>
 #include <QBrush>
@@ -66,13 +68,27 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
 
     if (role == Qt::TextAlignmentRole)
     {
-        return Qt::AlignCenter;
+        // identifiers read left, the numeric value reads right so a column of
+        // hex can be scanned down its digits
+        return index.column() == 2
+                   ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter))
+                   : QVariant(int(Qt::AlignLeft | Qt::AlignVCenter));
+    }
+    if (role == Qt::FontRole)
+    {
+        return tableNumericFont();
     }
     if (role == Qt::BackgroundRole)
     {
         if (static_cast<size_t>(index.row()) == m_highlightedRegisterIndex)
         {
-            return QBrush(QColor("#b13232fd")); // Highlight color for the updated register
+            // "this register just changed" tint. Was a hard-coded #b13232fd
+            // (ARGB: 69% over a blue); the info token carries the same meaning
+            // and 25% keeps the row's text above 4.5:1 in every theme, which
+            // 69% did not (1.89:1 in tokyo_night_storm).
+            QColor highlight = ThemeManager::getInstance().getInfoColor();
+            highlight.setAlpha(64);
+            return QBrush(highlight);
         }
     }
     if (role == Qt::DisplayRole || role == Qt::ToolTipRole)

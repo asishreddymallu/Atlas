@@ -1,4 +1,5 @@
 #include "profiler_editor.h"
+#include "ui/theme/theme_manager.h"
 #include <QFontDatabase>
 #include <QPainter>
 #include <QResizeEvent>
@@ -98,7 +99,12 @@ QColor ProfilerEditor::heatBackgroundColor(int hitCount) const
         return Qt::transparent;
     double t = (double)hitCount / m_maxExecutionCount;
     int alpha = static_cast<int>(12 + t * 40);
-    return QColor(216, 90, 48, alpha);
+    // execution heat is a "hot path" signal: the warning token. The alpha ramp
+    // (12..52) is unchanged, so which lines are tinted and how strongly is
+    // exactly as before.
+    QColor heat = ThemeManager::getInstance().getWarningColor();
+    heat.setAlpha(alpha);
+    return heat;
 }
 
 void ProfilerEditor::incrementLineExecutionCountSlot(int lineNumber)
