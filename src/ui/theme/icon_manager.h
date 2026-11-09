@@ -5,6 +5,9 @@
 #include <QPixmap>
 #include <array>
 #include "utils/to_index.h"
+
+class QAction;
+
 namespace Kites
 {
 enum class Icon
@@ -49,4 +52,14 @@ private:
     // HiDPI one and the icon comes back soft
     mutable QHash<QString, QPixmap> m_pixmapCache;
 };
+
+// Tags `action` with `icon` and applies the tinted pixmap. Prefer this over
+// QAction::setIcon(): it lets the icon be re-tinted on a theme change by
+// reading a stable property, instead of matching the action's user-visible
+// text - which breaks the moment a label is reworded or translated.
+void setThemedIcon(QAction *action, Icon icon);
+
+// The Icon last set by setThemedIcon(), or Icon::IconCount when the action
+// carries no tag.
+Icon themedIconOf(const QAction *action);
 }//namespace Kites

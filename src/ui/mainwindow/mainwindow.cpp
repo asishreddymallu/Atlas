@@ -149,13 +149,13 @@ void MainWindow::setUpToolBar()
     redoAction->setDisabled(true);
 
     // set toolbar icons (resources in :/icons)
-    processorAction->setIcon(IconManager::getInstance().getIcon(Icon::Processor));
-    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Play));
-    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
-    undoAction->setIcon(IconManager::getInstance().getIcon(Icon::Undo));
-    redoAction->setIcon(IconManager::getInstance().getIcon(Icon::Redo));
-    stepAction->setIcon(IconManager::getInstance().getIcon(Icon::Step));
-    debugAction->setIcon(IconManager::getInstance().getIcon(Icon::Debug));
+    setThemedIcon(processorAction, Icon::Processor);
+    setThemedIcon(runAction, Icon::Play);
+    setThemedIcon(pauseAction, Icon::Pause);
+    setThemedIcon(undoAction, Icon::Undo);
+    setThemedIcon(redoAction, Icon::Redo);
+    setThemedIcon(stepAction, Icon::Step);
+    setThemedIcon(debugAction, Icon::Debug);
     // tooltips for accessibility
     processorAction->setToolTip("Processor settings");
     runAction->setToolTip("Run program");
@@ -202,7 +202,7 @@ void MainWindow::setUpToolBar()
                     processorAction->setDisabled(true);
                     pauseAction->setEnabled(true);
                     runAction->setText("Stop");
-                    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
+                    setThemedIcon(runAction, Icon::Stop);
                     runAction->setToolTip("Stop execution");
                     this->run();
                 }
@@ -210,7 +210,7 @@ void MainWindow::setUpToolBar()
                 {
                     // emit stopSignal();
                     runAction->setText("Run");
-                    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Play));
+                    setThemedIcon(runAction, Icon::Play);
                     runAction->setToolTip("Run program");
                     m_processorManager->stop();
                 }
@@ -224,11 +224,11 @@ void MainWindow::setUpToolBar()
                 processorAction->setDisabled(true);
                 // debug run starts paused, so the toolbar starts in the paused state
                 runAction->setText("Stop");
-                runAction->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
+                setThemedIcon(runAction, Icon::Stop);
                 runAction->setToolTip("Stop execution");
                 pauseAction->setEnabled(true);
                 pauseAction->setText("Resume");
-                pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
+                setThemedIcon(pauseAction, Icon::Resume);
                 pauseAction->setToolTip("Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
@@ -247,7 +247,7 @@ void MainWindow::setUpToolBar()
                 if (pauseAction->text() == "Pause")
                 {
                     pauseAction->setText("Resume");
-                    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
+                    setThemedIcon(pauseAction, Icon::Resume);
                     pauseAction->setToolTip("Resume execution");
                     stepAction->setEnabled(true);
                     undoAction->setEnabled(true);
@@ -257,7 +257,7 @@ void MainWindow::setUpToolBar()
                 else
                 {
                     pauseAction->setText("Pause");
-                    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
+                    setThemedIcon(pauseAction, Icon::Pause);
                     pauseAction->setToolTip("Pause execution");
                     stepAction->setDisabled(true);
                     undoAction->setDisabled(true);
@@ -271,7 +271,7 @@ void MainWindow::setUpToolBar()
             [this, pauseAction, stepAction, undoAction, redoAction]()
             {
                 pauseAction->setText("Resume");
-                pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
+                setThemedIcon(pauseAction, Icon::Resume);
                 pauseAction->setToolTip("Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
@@ -310,10 +310,13 @@ void MainWindow::setUpMenubar()
     QMenu *preferencesMenu = new QMenu("Preferences", this);
     QMenu *processorMenu   = new QMenu("Processor", this);
     
-    QAction *openAction  = new QAction(IconManager::getInstance().getIcon(Icon::Open), "Open", this);
-    QAction *saveAction  = new QAction(IconManager::getInstance().getIcon(Icon::Save), "Save", this);
+    QAction *openAction  = new QAction("Open", this);
+    QAction *saveAction  = new QAction("Save", this);
     QAction *exitAction  = new QAction("Exit", this);
-    QAction *aboutAction = new QAction(IconManager::getInstance().getIcon(Icon::About), "About", this);
+    QAction *aboutAction = new QAction("About", this);
+    setThemedIcon(openAction, Icon::Open);
+    setThemedIcon(saveAction, Icon::Save);
+    setThemedIcon(aboutAction, Icon::About);
 
     ///////////File Menu///////////////////
     fileMenu->addAction(openAction);
@@ -352,7 +355,8 @@ void MainWindow::setUpMenubar()
             });
     //--------------------------------------------------
     QAction *advancedSettingsAction =
-        new QAction(IconManager::getInstance().getIcon(Icon::Settings), "Advanced Settings", this);
+        new QAction("Advanced Settings", this);
+    setThemedIcon(advancedSettingsAction, Icon::Settings);
     connect(advancedSettingsAction, &QAction::triggered, this,
             [this]()
             {
@@ -552,14 +556,14 @@ void MainWindow::runFinishedSlot()
         if (action->text() == "Stop")
         {
             action->setText("Run");
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Play));
+            setThemedIcon(action, Icon::Play);
             action->setToolTip("Run program");
             // when the program finishes we set the run button text back to run
         }
         if (action->text() == "Resume")
         {
             action->setText("Pause");
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
+            setThemedIcon(action, Icon::Pause);
             action->setToolTip("Pause execution");
             // in case we stop while paused
         }
@@ -580,68 +584,26 @@ void MainWindow::toggleTheme(const QString &themeId)
 
 void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
 {
-    // we will update the icons here based on the theme
-    // this is very very hacky but this will do for now
-    auto *toolbar = this->findChild<QToolBar *>();
-    if (toolbar)
+    // Icons are flat SVGs tinted with the theme's icon colour, so every one of
+    // them has to be re-tinted when the theme changes. Each action was tagged
+    // with its Icon by setThemedIcon(), so this is a single pass over every
+    // action in the window - toolbar, menus and submenus alike - with no
+    // dependence on user-visible text.
+    for (QAction *action : this->findChildren<QAction *>())
     {
-        for (QAction *action : toolbar->actions())
-        {
-            if (action->text() == "Processor")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Processor));
-            }
-            else if (action->text() == "Run")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Play));
-            }
-            else if (action->text() == "Pause")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
-            }
-            else if (action->text() == "Resume")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
-            }
-            else if (action->text() == "Stop")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
-            }
-            else if (action->text() == "Undo")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Undo));
-            }
-            else if (action->text() == "Redo")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Redo));
-            }
-            else if (action->text() == "Step")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Step));
-            }
-        }
+        const Icon icon = themedIconOf(action);
+        if (icon != Icon::IconCount)
+            setThemedIcon(action, icon);
     }
 
-    // sidebar icons
+    // sidebar entries are QListWidgetItems, not actions; they are already
+    // keyed by row rather than by label
     static const std::array<Icon, toIndex(TabIndex::TabCount)> sidebarIcons = {
         Icon::Editor, Icon::Memory, Icon::Processor, Icon::Cache, Icon::Compiler, Icon::Profiler};
     for (int row = 0; row < m_sidebar->count(); ++row)
     {
         if (row < static_cast<int>(sidebarIcons.size()))
             m_sidebar->item(row)->setIcon(IconManager::getInstance().getIcon(sidebarIcons[row]));
-    }
-
-    // menu bar action icons
-    for (QAction *action : this->findChildren<QAction *>())
-    {
-        if (action->text() == "Open")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Open));
-        else if (action->text() == "Save")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Save));
-        else if (action->text() == "About")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::About));
-        else if (action->text() == "Advanced Settings")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Settings));
     }
 }
 

@@ -1,10 +1,17 @@
 #include "icon_manager.h"
 #include "theme_manager.h"
+#include <QAction>
 #include <QApplication>
 #include <QPixmap>
 #include <QPainter>
+#include <QVariant>
 namespace Kites
 {
+namespace
+{
+// dynamic property carrying the Icon enum value an action was tagged with
+constexpr const char *themedIconProperty = "kitesIconId";
+} // namespace
 
 IconManager::IconManager()
 {
@@ -45,6 +52,27 @@ QIcon IconManager::getIcon(Icon icon, QSize size) const
 
     m_pixmapCache.insert(cacheKey, pixmap);
     return QIcon(pixmap);
+}
+
+void setThemedIcon(QAction *action, Icon icon)
+{
+    if (!action)
+        return;
+    action->setProperty(themedIconProperty, static_cast<int>(toIndex(icon)));
+    action->setIcon(IconManager::getInstance().getIcon(icon));
+}
+
+Icon themedIconOf(const QAction *action)
+{
+    if (!action)
+        return Icon::IconCount;
+
+    bool ok = false;
+    const int index = action->property(themedIconProperty).toInt(&ok);
+    if (!ok || index < 0 || index >= static_cast<int>(toIndex(Icon::IconCount)))
+        return Icon::IconCount;
+
+    return static_cast<Icon>(index);
 }
 
 void IconManager::setUpIconPaths()
