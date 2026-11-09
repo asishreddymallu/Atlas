@@ -30,7 +30,10 @@
           <item>
            <widget class="QLabel" name="label">
             <property name="text">
-             <string>TextLabel</string>
+             <string>C source</string>
+            </property>
+            <property name="paneTitle" stdset="0">
+             <bool>true</bool>
             </property>
            </widget>
           </item>
@@ -58,14 +61,17 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="layoutWidget">
+      <widget class="QWidget" name="layoutWidget_2">
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
            <widget class="QLabel" name="label_2">
             <property name="text">
-             <string>TextLabel</string>
+             <string>Assembly output</string>
+            </property>
+            <property name="paneTitle" stdset="0">
+             <bool>true</bool>
             </property>
            </widget>
           </item>

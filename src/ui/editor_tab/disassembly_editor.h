@@ -1,5 +1,6 @@
 #pragma once
 #include "ui/common/kites_editor.h"
+#include "ui/common/line_number_gutter_column.h"
 #include "ui/theme/theme_manager.h"
 #include <set>
 #include <QPainter>
@@ -12,6 +13,11 @@ public:
     : KitesEditor(parent)
     {
         setReadOnly(true);
+        addLeftGutterColumn(new LineNumberGutterColumn(this));
+        // KitesEditor's constructor sizes the viewport margins before this
+        // gutter exists, so it has to be recomputed here or the gutter paints
+        // over the first characters (same call Editor and ProfilerEditor make)
+        updateViewPortMargins();
     }
     //yes i am repeating code
     // i dont care i dont want to make a new class just for this highlighting logic

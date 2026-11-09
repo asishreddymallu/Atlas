@@ -145,6 +145,18 @@ QColor ThemeManager::getEditorErrorColor() const
     return theme ? theme->cacheMissColor : QColor("#f7768e");
 }
 
+QColor ThemeManager::getCacheHitColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->cacheHitColor : QColor("#2ada5c");
+}
+
+QColor ThemeManager::getCacheMissColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->cacheMissColor : QColor("#da2a2a");
+}
+
 QColor ThemeManager::getSuccessColor() const
 {
     const ThemeData *theme = editorTheme();

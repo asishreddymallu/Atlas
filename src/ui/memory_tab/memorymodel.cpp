@@ -1,4 +1,5 @@
 #include "memorymodel.h"
+#include "ui/common/table_font.h"
 #include "config/config.h"
 #include <QDebug>
 #include <algorithm>
@@ -155,7 +156,13 @@ QVariant MemoryModel::data(const QModelIndex &index, int role) const
 
     if (role == Qt::TextAlignmentRole)
     {
-        return Qt::AlignCenter;
+        // every column is a hex quantity, so all of them read right
+        return QVariant(int(Qt::AlignRight | Qt::AlignVCenter));
+    }
+
+    if (role == Qt::FontRole)
+    {
+        return tableNumericFont();
     }
 
     if (role == Qt::DisplayRole || role == Qt::ToolTipRole)

@@ -1,4 +1,5 @@
 #include "memorytab.h"
+#include "ui/common/data_table_style.h"
 #include "ui_memorytab.h"
 namespace Kites
 {
@@ -9,7 +10,8 @@ MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
 {
     ui->setupUi(this);
     ui->memoryTableView->setModel(m_memoryModel);
-    ui->memoryTableView->verticalHeader()->setVisible(false);
+    // every column is numeric, so the headers read right too
+    applyDataTableStyle(ui->memoryTableView, Qt::AlignRight | Qt::AlignVCenter);
     ui->memoryTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     QRegularExpression re("0x[0-9a-fA-F]+$");

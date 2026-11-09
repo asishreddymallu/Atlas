@@ -1,4 +1,5 @@
 #include "vm_state_table_model.h"
+#include "ui/common/table_font.h"
 
 namespace Kites
 {
@@ -51,6 +52,18 @@ QVariant VMStateTableModel::data(const QModelIndex &index, int role) const
   
     if (!m_vmManager)
         return QVariant{};
+
+    if (role == Qt::TextAlignmentRole)
+    {
+        return index.column() == 1
+                   ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter))
+                   : QVariant(int(Qt::AlignLeft | Qt::AlignVCenter));
+    }
+
+    if (role == Qt::FontRole)
+    {
+        return tableNumericFont();
+    }
 
     if (role == Qt::DisplayRole)
     {

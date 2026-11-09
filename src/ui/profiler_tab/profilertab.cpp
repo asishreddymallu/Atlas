@@ -1,4 +1,5 @@
 #include "profilertab.h"
+#include "ui/common/data_table_style.h"
 #include "ui_profilertab.h"
 #include "profiler/profiler.h"
 #include "common/instruction_types.h"
@@ -15,7 +16,11 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
     
     ui->instructionTypeCountTableView->horizontalHeader()->
     setSectionResizeMode(QHeaderView::Stretch);
-    ui->instructionTypeCountTableView->verticalHeader()->setVisible(false);
+    applyDataTableStyle(ui->instructionTypeCountTableView);
+    ui->plainTextEdit->setPlaceholderText(
+        "No profile yet.\n\n"
+        "Run a program (F5) to see per-line execution counts,\n"
+        "instruction types and an execution heat map.");
     if (m_profiler)
     {   
         InstructionTypeCountModel *model = new InstructionTypeCountModel(this, 

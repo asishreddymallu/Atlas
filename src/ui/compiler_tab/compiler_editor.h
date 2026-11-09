@@ -10,6 +10,11 @@ public:
     : KitesEditor(parent)
     {
         addLeftGutterColumn(new LineNumberGutterColumn(this));
+        // KitesEditor's constructor sizes the viewport margins before this
+        // gutter exists, so without this the gutter overlaps the first couple
+        // of characters until the block count next changes (same call that
+        // Editor and ProfilerEditor already make after adding theirs).
+        updateViewPortMargins();
     }
     ~CompilerEditor() {};
 };

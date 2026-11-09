@@ -29,6 +29,10 @@ CompilerTab::CompilerTab(QWidget *parent) : KitesTab(parent), ui(new Ui::Compile
     ui->splitter_2->setStretchFactor(0, 3);
     ui->splitter_2->setStretchFactor(1, 1);
     ui->outputTextEdit->setReadOnly(true);
+    ui->inputTextEdit->setPlaceholderText(
+        "Paste or write C/C++ here, then press Compile.");
+    ui->outputTextEdit->setPlaceholderText(
+        "Generated assembly appears here after you compile.");
     applyOutputBorderStyle();
 }
 

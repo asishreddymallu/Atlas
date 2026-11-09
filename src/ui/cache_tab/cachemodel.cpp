@@ -1,4 +1,6 @@
 #include "cachemodel.h"
+#include "ui/common/table_font.h"
+#include "ui/theme/theme_manager.h"
 #include <QColor>
 namespace Kites
 {
@@ -77,12 +79,17 @@ QVariant CacheModel::data(const QModelIndex &index, int role) const
     {
         if (index.row() == m_last_hit_row)
         {
-            return QColor(120, 220, 120, 90); // green for cache hit
+            // 25%: 35% left the row's text at 4.28:1 in tokyo_night_storm
+            QColor hit = ThemeManager::getInstance().getCacheHitColor();
+            hit.setAlpha(64);
+            return hit;
         }
 
         if (index.row() == m_last_miss_row)
         {
-            return QColor(255, 180, 180, 90); // red for cache miss
+            QColor miss = ThemeManager::getInstance().getCacheMissColor();
+            miss.setAlpha(90);
+            return miss;
         }
 
         if (!line.valid)
@@ -91,13 +98,25 @@ QVariant CacheModel::data(const QModelIndex &index, int role) const
         }
         else if (line.dirty)
         {
-            return QColor(255, 200, 100, 80); // light red for dirty lines
+            // a dirty line is a pending write-back, i.e. a warning state
+            QColor dirty = ThemeManager::getInstance().getWarningColor();
+            dirty.setAlpha(80);
+            return dirty;
         }
     }
 
     if (role == Qt::TextAlignmentRole)
     {
-        return Qt::AlignCenter;
+        // Index/Valid/Dirty/Tag are short flags and read centred; the data
+        // words are numeric and read right
+        return index.column() >= static_cast<int>(Column::DataStart)
+                   ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter))
+                   : QVariant(int(Qt::AlignCenter));
+    }
+
+    if (role == Qt::FontRole)
+    {
+        return tableNumericFont();
     }
 
     if (role == Qt::DisplayRole)

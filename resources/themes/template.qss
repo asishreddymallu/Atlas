@@ -93,6 +93,40 @@ QPushButton:focus, QToolButton:focus {
     border-color: {{accent}};
 }
 
+/* ── Segmented control ─────────────────────────────────────────
+ * Checkable QPushButtons sharing a parent with autoExclusive, styled as one
+ * joined pill. `segmented` marks membership; `segmentPos` rounds the outer
+ * corners so the pair reads as a single control. */
+QPushButton[segmented="true"] {
+    background-color: transparent;
+    color: {{mutedForeground}};
+    border: 1px solid {{border}};
+    border-radius: 0;
+    padding: 3px 14px;
+    min-height: 18px;
+}
+QPushButton[segmented="true"]:hover {
+    color: {{foreground}};
+    background-color: {{currentLine}};
+}
+QPushButton[segmented="true"]:checked {
+    color: {{foreground}};
+    background-color: {{selection}};
+}
+QPushButton[segmented="true"]:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+}
+QPushButton[segmentPos="first"] {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    border-right: none;
+}
+QPushButton[segmentPos="last"] {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
 /* ── Text inputs / editors ────────────────────────────────────── */
 QLineEdit {
     background-color: {{surface}};
@@ -143,6 +177,17 @@ QPlainTextEdit#outputTextEdit[borderStyle="subtle"] {
 }
 QPlainTextEdit#outputTextEdit[borderStyle="full"] {
     border: 2px solid {{accent}};
+}
+
+/* ── Pane titles ───────────────────────────────────────────────
+ * Small muted caption above a pane, set via a `paneTitle` dynamic property in
+ * the .ui files. Case is left to the string itself - QSS text-transform is not
+ * relied on. */
+QLabel[paneTitle="true"] {
+    color: {{mutedForeground}};
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 0;
 }
 
 /* ── Menus / menu bar ──────────────────────────────────────────── */
@@ -243,19 +288,52 @@ QSpinBox:focus {
 }
 
 /* ── Table / tree views ────────────────────────────────────────── */
-QTableView, QTreeView, QHeaderView::section {
+/* Data tables carry dense numeric content. Structure comes from monospace
+ * cells and column alignment (set by the models), not from gridlines, so the
+ * grid is dropped and rows are separated by zebra striping instead. */
+QTableView, QTreeView {
     background-color: {{surface}};
+    alternate-background-color: {{currentLine}};
     color: {{foreground}};
     border: 1px solid {{border}};
-    gridline-color: {{border}};
+    gridline-color: transparent;
+    selection-background-color: {{selection}};
 }
-QHeaderView::section {
-    padding: 4px;
+QTableView::item, QTreeView::item {
+    padding: 4px 10px;   /* spacing scale -> ~24px compact rows */
     border: none;
-    border-bottom: 1px solid {{border}};
+}
+QTableView::item:hover, QTreeView::item:hover {
+    background-color: {{selection}};
 }
 QTableView::item:selected, QTreeView::item:selected {
     background-color: {{selection}};
+    color: {{foreground}};
+}
+/* The header must not share the body's background or it stops reading as a
+ * header. Small semibold muted text over the window background, with a 2px
+ * rule under it - the one place a 2px border is allowed besides active-state
+ * indicators. Header text case is left to headerData(); QSS text-transform is
+ * not relied on. */
+QHeaderView {
+    background-color: {{background}};
+}
+QHeaderView::section {
+    background-color: {{background}};
+    color: {{mutedForeground}};
+    padding: 6px 10px;
+    border: none;
+    border-bottom: 2px solid {{border}};
+    font-size: 11px;
+    font-weight: 600;
+}
+QHeaderView::section:hover {
+    color: {{foreground}};
+}
+QTableCornerButton::section {
+    background-color: {{background}};
+    border: none;
+    border-bottom: 2px solid {{border}};
 }
 
 /* ── Scrollbars ────────────────────────────────────────────────── */
