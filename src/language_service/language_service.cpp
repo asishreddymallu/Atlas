@@ -31,14 +31,26 @@ QVector<Diagnostic> computeDiagnostics(QString source)
             {
                 originalLine = expandedLineToOriginalLine[info.line - 1];
             }
-            diagnostics.append(Diagnostic{originalLine, static_cast<int>(info.column),
-                                          QString::fromStdString(info.message)});
+            Diagnostic diagnostic;
+            diagnostic.line        = originalLine;
+            diagnostic.startColumn = static_cast<int>(info.column);
+            diagnostic.endColumn   = static_cast<int>(info.end_column);
+            diagnostic.severity    = info.severity;
+            diagnostic.category    = info.category;
+            diagnostic.message     = QString::fromStdString(info.message);
+            diagnostics.append(diagnostic);
         }
         return diagnostics;
     } catch (const std::exception& e) {
-        return QVector<Diagnostic>{Diagnostic{1, 1, QString("Internal error: ") + QString::fromStdString(e.what())}};
+        Diagnostic failure;
+        failure.line = 1;
+        failure.message = QString("Internal error: ") + QString::fromStdString(e.what());
+        return QVector<Diagnostic>{failure};
     } catch (...) {
-        return QVector<Diagnostic>{Diagnostic{1, 1, QString("Unknown error during assembly")}};
+        Diagnostic failure;
+        failure.line = 1;
+        failure.message = QString("Unknown error during assembly");
+        return QVector<Diagnostic>{failure};
     }
 }
 
@@ -79,13 +91,15 @@ void LanguageService::handleAssembleFinished()
         // only m_watcher.result() can throw if the thread function throws, 
         emit diagnosticsReadySignal(m_watcher.result());
     } catch (const std::exception& e) {
-        QVector<Diagnostic> err;
-        err.append(Diagnostic{1, 1, QString::fromStdString(e.what())});
-        emit diagnosticsReadySignal(err);
+        Diagnostic failure;
+        failure.line = 1;
+        failure.message = QString::fromStdString(e.what());
+        emit diagnosticsReadySignal(QVector<Diagnostic>{failure});
     } catch (...) {
-        QVector<Diagnostic> err;
-        err.append(Diagnostic{1, 1, QStringLiteral("Unknown exception in language service thread")});
-        emit diagnosticsReadySignal(err);
+        Diagnostic failure;
+        failure.line = 1;
+        failure.message = QStringLiteral("Unknown exception in language service thread");
+        emit diagnosticsReadySignal(QVector<Diagnostic>{failure});
     }
 }
 

@@ -54,9 +54,9 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
                     return; // a Run started while this request was in flight; Run owns the
                             // squiggles now, don't clobber them with a stale live result
                 if (m_buildDiagnosticsActive)
-                    return; // build errors stay on screen until the next Run clears them;
-                            // live diagnostics are not implemented yet and would otherwise
-                            // wipe them with an empty result on the first keystroke
+                    return; // TODO(Step 7): build errors stay on screen until the next Run
+                            // clears them; live diagnostics are not implemented yet and would
+                            // otherwise wipe them with an empty result on the first keystroke
                 applyDiagnostics(diagnostics);
             });
 
@@ -196,25 +196,12 @@ void EditorTab::setErrorLinesFromFile(const std::filesystem::path &filePath)
         return;
     }
 
-    QByteArray fileData = file.readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(fileData);
-
-    if (doc.isNull() || !doc.isObject())
+    // JSON -> Diagnostic lives in parseDiagnosticsJson() so it can be tested
+    // without standing up the UI; the behaviour here is unchanged.
+    const QVector<Diagnostic> diagnostics = parseDiagnosticsJson(file.readAll());
+    if (diagnostics.isEmpty())
     {
         qWarning() << "Failed to parse error JSON.";
-        return;
-    }
-
-    QJsonObject rootObject = doc.object();
-    QJsonArray errors = rootObject["errors"].toArray();
-
-    QVector<Diagnostic> diagnostics;
-    diagnostics.reserve(errors.size());
-    for (const QJsonValue &value : errors)
-    {
-        QJsonObject errorObj = value.toObject();
-        diagnostics.append(
-            Diagnostic{errorObj["line"].toInt(), 0, errorObj["message"].toString()});
     }
 
     m_buildDiagnosticsActive = true;

@@ -5,6 +5,7 @@
  */
 
 #include "utils.h"
+#include <cstdio>
 #include "common/globals.h"
 #include "processor/registers.h"
 
@@ -150,6 +151,45 @@ std::string ParseEscapedString(const std::string &input)
     return oss.str();
 }
 
+namespace
+{
+/// Escapes a string for embedding in a JSON string literal: backslash, double
+/// quote, the named control escapes, and anything else below 0x20 as \uXXXX.
+/// Without this a message containing a quote produced invalid JSON that the
+/// editor then silently failed to read.
+std::string escapeJsonString(const std::string &text)
+{
+    std::string escaped;
+    escaped.reserve(text.size());
+    for (const unsigned char c : text)
+    {
+        switch (c)
+        {
+        case '\\': escaped += "\\\\"; break;
+        case '"':  escaped += "\\\""; break;
+        case '\b': escaped += "\\b";  break;
+        case '\f': escaped += "\\f";  break;
+        case '\n': escaped += "\\n";  break;
+        case '\r': escaped += "\\r";  break;
+        case '\t': escaped += "\\t";  break;
+        default:
+            if (c < 0x20)
+            {
+                char buffer[7];
+                std::snprintf(buffer, sizeof(buffer), "\\u%04x", c);
+                escaped += buffer;
+            }
+            else
+            {
+                escaped += static_cast<char>(c);
+            }
+            break;
+        }
+    }
+    return escaped;
+}
+} // namespace
+
 void DumpErrors(const std::filesystem::path &filename, const std::vector<ParseError> &errors)
 {
     std::ofstream file(filename);
@@ -165,9 +205,14 @@ void DumpErrors(const std::filesystem::path &filename, const std::vector<ParseEr
     for (size_t i = 0; i < errors.size(); ++i)
     {
         const auto &error = errors[i];
+        // columns are 1-based with an exclusive end; 0 means unknown
         file << "        {\n";
         file << "            \"line\": " << error.line << ",\n";
-        file << "            \"message\": \"" << error.message << "\"\n";
+        file << "            \"column\": " << error.column << ",\n";
+        file << "            \"endColumn\": " << error.end_column << ",\n";
+        file << "            \"severity\": \"" << toString(error.severity) << "\",\n";
+        file << "            \"category\": \"" << toString(error.category) << "\",\n";
+        file << "            \"message\": \"" << escapeJsonString(error.message) << "\"\n";
         file << "        }";
         if (i != errors.size() - 1)
         {

@@ -8,6 +8,7 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include "common/diagnostic_severity.h"
 #include "code_generator.h"
 #include "errors.h"
 #include "tokens.h"
@@ -25,16 +26,49 @@ namespace Kites
  */
 struct ParseError
 {
-    unsigned int line;   ///< The line number where the error occurred.
-    unsigned int column; ///< The column number where the error occurred.
-    std::string message; ///< The error message.
+    /// Line number where the error occurred, 1-based. 0 = unknown.
+    unsigned int line = 0;
+    /// First column of the offending token, 1-based. 0 = unknown.
+    unsigned int column = 0;
+    /// One past the last column of the offending token, 1-based and exclusive.
+    /// 0 = unknown. See the column convention in common/diagnostic_severity.h.
+    unsigned int end_column = 0;
+    /// How bad it is. Everything the parser records today is an Error.
+    DiagnosticSeverity severity = DiagnosticSeverity::Error;
+    /// What kind of problem it is.
+    DiagnosticCategory category = DiagnosticCategory::Syntax;
+    /// The error message.
+    std::string message;
 
     /**
-     * @brief Constructs a ParseError object.
+     * @brief Constructs a ParseError with only a line number.
+     *
+     * Kept unchanged so every existing recordError() call site and test still
+     * compiles; the column span stays unknown (0) and consumers fall back to
+     * highlighting the whole line.
+     *
      * @param line The line number where the error occurred.
      * @param message The error message.
      */
     ParseError(unsigned int line, std::string message) : line(line), message(std::move(message))
+    {
+    }
+
+    /**
+     * @brief Constructs a ParseError carrying the offending token's span.
+     *
+     * @param line        1-based line number.
+     * @param column      1-based first column of the token.
+     * @param end_column  1-based column one past the token's last character.
+     * @param message     The error message.
+     * @param severity    Defaults to Error.
+     * @param category    Defaults to Syntax.
+     */
+    ParseError(unsigned int line, unsigned int column, unsigned int end_column,
+               std::string message, DiagnosticSeverity severity = DiagnosticSeverity::Error,
+               DiagnosticCategory category = DiagnosticCategory::Syntax)
+        : line(line), column(column), end_column(end_column), severity(severity),
+          category(category), message(std::move(message))
     {
     }
 };
