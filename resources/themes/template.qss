@@ -243,19 +243,52 @@ QSpinBox:focus {
 }
 
 /* ── Table / tree views ────────────────────────────────────────── */
-QTableView, QTreeView, QHeaderView::section {
+/* Data tables carry dense numeric content. Structure comes from monospace
+ * cells and column alignment (set by the models), not from gridlines, so the
+ * grid is dropped and rows are separated by zebra striping instead. */
+QTableView, QTreeView {
     background-color: {{surface}};
+    alternate-background-color: {{currentLine}};
     color: {{foreground}};
     border: 1px solid {{border}};
-    gridline-color: {{border}};
+    gridline-color: transparent;
+    selection-background-color: {{selection}};
 }
-QHeaderView::section {
-    padding: 4px;
+QTableView::item, QTreeView::item {
+    padding: 4px 10px;   /* spacing scale -> ~24px compact rows */
     border: none;
-    border-bottom: 1px solid {{border}};
+}
+QTableView::item:hover, QTreeView::item:hover {
+    background-color: {{selection}};
 }
 QTableView::item:selected, QTreeView::item:selected {
     background-color: {{selection}};
+    color: {{foreground}};
+}
+/* The header must not share the body's background or it stops reading as a
+ * header. Small semibold muted text over the window background, with a 2px
+ * rule under it - the one place a 2px border is allowed besides active-state
+ * indicators. Header text case is left to headerData(); QSS text-transform is
+ * not relied on. */
+QHeaderView {
+    background-color: {{background}};
+}
+QHeaderView::section {
+    background-color: {{background}};
+    color: {{mutedForeground}};
+    padding: 6px 10px;
+    border: none;
+    border-bottom: 2px solid {{border}};
+    font-size: 11px;
+    font-weight: 600;
+}
+QHeaderView::section:hover {
+    color: {{foreground}};
+}
+QTableCornerButton::section {
+    background-color: {{background}};
+    border: none;
+    border-bottom: 2px solid {{border}};
 }
 
 /* ── Scrollbars ────────────────────────────────────────────────── */

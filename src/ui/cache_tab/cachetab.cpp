@@ -1,4 +1,5 @@
 #include "cachetab.h"
+#include "ui/common/data_table_style.h"
 #include "cache_grid_delegate.h"
 #include "cacheconfigwidget.h"
 #include "ui_cachetab.h"
@@ -27,11 +28,11 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->L2tableView->setModel(m_cacheModels[CacheLevel::L2]);
     ui->InstructiontableView->setModel(m_cacheModels[CacheLevel::Instruction]);
 
-    ui->L1tableView->verticalHeader()->setVisible(false);
+    applyDataTableStyle(ui->L1tableView);
     ui->L1tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    ui->L2tableView->verticalHeader()->setVisible(false);
+    applyDataTableStyle(ui->L2tableView);
     ui->L2tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    ui->InstructiontableView->verticalHeader()->setVisible(false);
+    applyDataTableStyle(ui->InstructiontableView);
     ui->InstructiontableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     ui->L1tableView->setItemDelegate(new CacheGridDelegate(this));

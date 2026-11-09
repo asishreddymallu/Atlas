@@ -1,4 +1,5 @@
 #include "registercontainer.h"
+#include "ui/common/data_table_style.h"
 #include "ui_registercontainer.h"
 #include "processor/registers.h"
 #include "ui/common/collapsible_section.h"
@@ -92,7 +93,7 @@ void RegisterContainer::setupRegisterTable()
 
         auto *tableView = new QTableView(section);
         tableView->setModel(makeRangeProxy(spec.firstRow, spec.lastRowExclusive));
-        tableView->verticalHeader()->setVisible(false);
+        applyDataTableStyle(tableView);
         tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
         auto* header = tableView->horizontalHeader();

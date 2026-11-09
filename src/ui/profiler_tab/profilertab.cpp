@@ -1,4 +1,5 @@
 #include "profilertab.h"
+#include "ui/common/data_table_style.h"
 #include "ui_profilertab.h"
 #include "profiler/profiler.h"
 #include "common/instruction_types.h"
@@ -15,7 +16,7 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
     
     ui->instructionTypeCountTableView->horizontalHeader()->
     setSectionResizeMode(QHeaderView::Stretch);
-    ui->instructionTypeCountTableView->verticalHeader()->setVisible(false);
+    applyDataTableStyle(ui->instructionTypeCountTableView);
     if (m_profiler)
     {   
         InstructionTypeCountModel *model = new InstructionTypeCountModel(this, 

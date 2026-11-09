@@ -1,4 +1,5 @@
 #include "processortab.h"
+#include "ui/common/data_table_style.h"
 #include "circuit_scene.h"
 #include "circuit_view.h"
 #include "ui_processortab.h"
@@ -15,6 +16,9 @@ ProcessorTab::ProcessorTab(QWidget *parent, ProcessorManager *vmManager)
     ui->graphicsView->setScene(m_vmManager->getCircuitScene());
     ui->tableView->setModel(m_vmStateTableModel);
     ui->tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    // this was the only table still showing its vertical header, leaving an
+    // empty stub column down the left; the other five already hid theirs
+    applyDataTableStyle(ui->tableView);
 }
 
 void ProcessorTab::setWiresStayActive(bool stayActive)
