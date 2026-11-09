@@ -321,7 +321,12 @@ Token Lexer::directive()
 {
     ++pos_;
     size_t start_pos = pos_;
+    // the token starts AT the dot, so capture the column before accounting for it
     unsigned int start_column = column_number_;
+    // ...and the dot occupies one column. Without this the counter runs one
+    // behind for the rest of the line, so every token after a directive got a
+    // column one too small and the directive's own span was one short.
+    ++column_number_;
     while (pos_ < current_line_.size() && std::isalpha(current_line_[pos_]))
     {
         ++pos_;
@@ -333,10 +338,14 @@ Token Lexer::directive()
 
 Token Lexer::stringLiteral()
 {
+    // the token starts AT the opening quote, not at the first character inside
+    // it. This used to read the column after the quote was consumed, which
+    // happened to look right only because the directive desync above cancelled
+    // it out; with that fixed the start has to be captured here.
+    unsigned int start_column = column_number_;
     ++pos_;
     ++column_number_;
     size_t start_pos = pos_;
-    unsigned int start_column = column_number_;
 
     while (pos_ < current_line_.size() && current_line_[pos_] != '"')
     {
