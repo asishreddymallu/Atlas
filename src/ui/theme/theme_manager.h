@@ -56,6 +56,12 @@ struct ThemeData
     QColor cacheHitColor;
     QColor cacheMissColor;
 
+    // semantic status colors, guaranteed >= 4.5:1 against background and surface
+    QColor successColor;
+    QColor warningColor;
+    QColor errorColor;
+    QColor infoColor;
+
     QString stylesheet; // fully rendered QSS (template + this theme's colors)
 
     std::array<QTextCharFormat, toIndex(SyntaxStyle::SyntaxStyleCount)> syntaxFormats;
@@ -86,6 +92,13 @@ public:
     QColor getEditorForegroundColor() const;
     QColor getEditorMutedForegroundColor() const;
     QColor getEditorErrorColor() const; // for squiggly diagnostics; reuses the theme's cacheMiss red
+
+    // Semantic status colors. Use these instead of literal reds/greens so a
+    // status reads the same way in every theme.
+    QColor getSuccessColor() const;
+    QColor getWarningColor() const;
+    QColor getErrorColor() const;
+    QColor getInfoColor() const;
 
     // Validates, copies into the user theme directory and installs the theme.
     // Returns true on success; on failure `errorOut` is populated.

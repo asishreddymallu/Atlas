@@ -145,6 +145,30 @@ QColor ThemeManager::getEditorErrorColor() const
     return theme ? theme->cacheMissColor : QColor("#f7768e");
 }
 
+QColor ThemeManager::getSuccessColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->successColor : QColor("#9ece6a");
+}
+
+QColor ThemeManager::getWarningColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->warningColor : QColor("#e0af68");
+}
+
+QColor ThemeManager::getErrorColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->errorColor : QColor("#f7768e");
+}
+
+QColor ThemeManager::getInfoColor() const
+{
+    const ThemeData *theme = editorTheme();
+    return theme ? theme->infoColor : QColor("#7dcfff");
+}
+
 void ThemeManager::applyTheme(const ThemeData &theme)
 {
     QApplication::setPalette(theme.palette);
@@ -273,6 +297,16 @@ bool ThemeManager::parseThemeFile(const QString &path, ThemeData &themeOut, QStr
     themeOut.cacheHitColor    = colorOr(colors, "cacheHit", QColor("#2ada5c"));
     themeOut.cacheMissColor   = colorOr(colors, "cacheMiss", QColor("#da2a2a"));
 
+    // Semantic colors. User themes installed before these keys existed won't
+    // carry them, so fall back to the nearest equivalent the theme does define
+    // (success/error) or to an appearance-matched literal (warning/info).
+    themeOut.successColor = colorOr(colors, "success", themeOut.cacheHitColor);
+    themeOut.errorColor   = colorOr(colors, "error", themeOut.cacheMissColor);
+    themeOut.warningColor = colorOr(colors, "warning",
+                                    isDark ? QColor("#e0af68") : QColor("#8a5300"));
+    themeOut.infoColor    = colorOr(colors, "info",
+                                    isDark ? QColor("#7dcfff") : QColor("#0b5fbf"));
+
     QPalette &p = themeOut.palette;
     p.setColor(QPalette::Window,          background);
     p.setColor(QPalette::WindowText,      foreground);
@@ -325,7 +359,8 @@ QString ThemeManager::renderStylesheet(const QJsonObject &colors) const
 
     static const QStringList tokens = {
         "background", "surface", "border", "foreground",
-        "mutedForeground", "accent", "selection", "currentLine"
+        "mutedForeground", "accent", "selection", "currentLine",
+        "success", "warning", "error", "info"
     };
 
     const QColor background = colorOr(colors, "background", QColor("#1e1e1e"));
@@ -344,6 +379,12 @@ QString ThemeManager::renderStylesheet(const QJsonObject &colors) const
     values["accent"]          = accent;
     values["selection"]       = selection;
     values["currentLine"]     = colorOr(colors, "currentLine", surface.lighter(115));
+
+    const bool isDark = background.lightnessF() < 0.5;
+    values["success"] = colorOr(colors, "success", colorOr(colors, "cacheHit", QColor("#2ada5c")));
+    values["error"]   = colorOr(colors, "error", colorOr(colors, "cacheMiss", QColor("#da2a2a")));
+    values["warning"] = colorOr(colors, "warning", isDark ? QColor("#e0af68") : QColor("#8a5300"));
+    values["info"]    = colorOr(colors, "info", isDark ? QColor("#7dcfff") : QColor("#0b5fbf"));
 
     for (const QString &token : tokens)
         result.replace("{{" + token + "}}", values[token].name());
