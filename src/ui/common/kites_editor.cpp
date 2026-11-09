@@ -8,6 +8,12 @@
 
 namespace Kites
 {
+namespace
+{
+// spacing scale: 6px inset around the text body
+constexpr int editorDocumentMargin = 6;
+} // namespace
+
 KitesEditor::KitesEditor(QWidget *parent)
     : QPlainTextEdit(parent)
 {
@@ -23,6 +29,13 @@ KitesEditor::KitesEditor(QWidget *parent)
 
     const int tapspace = 4;
     setTabStopDistance(tapspace * fontMetrics().horizontalAdvance(' '));
+
+    // Breathing room between the gutter and the first character, and above the
+    // first line. Set on the document rather than as QSS padding: padding on a
+    // QAbstractScrollArea shifts contentsRect(), which resizeEvent() uses to
+    // place the gutters, so it would drag them along with the text.
+    document()->setDocumentMargin(editorDocumentMargin);
+
     updateViewPortMargins();
     highlightCurrentLine();
 }
