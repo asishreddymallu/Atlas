@@ -13,7 +13,11 @@
         "currentLine": "#2a2a2a",
         "iconColor": "#d4d4d4",
         "cacheHit": "#2ada5c",
-        "cacheMiss": "#da2a2a",
+        "cacheMiss": "#f07178",
+        "success": "#4ec9b0",
+        "warning": "#dcb67a",
+        "error": "#f07178",
+        "info": "#6fb3e8",
         "syntax": {
             "r32Instruction": "#569cd6",
             "r64Instruction": "#4fc1ff",

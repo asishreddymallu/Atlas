@@ -26,6 +26,22 @@
 
 namespace Kites
 {
+namespace
+{
+// Chrome icon size in logical pixels, shared by the toolbar and the sidebar so
+// the two never disagree. IconManager's default matches it.
+constexpr int toolbarIconSize = 20;
+
+// Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
+// at runtime (Run<->Stop, Pause<->Resume) cannot lose its key hint.
+void setActionHint(QAction *action, const QString &description)
+{
+    const QString keys = action->shortcut().toString(QKeySequence::NativeText);
+    action->setToolTip(keys.isEmpty() ? description
+                                      : QStringLiteral("%1  (%2)").arg(description, keys));
+}
+} // namespace
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 // ui(new Ui::MainWindow)
 {
@@ -142,22 +158,35 @@ void MainWindow::setUpToolBar()
     redoAction->setDisabled(true);
 
     // set toolbar icons (resources in :/icons)
-    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Play));
-    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
-    undoAction->setIcon(IconManager::getInstance().getIcon(Icon::Undo));
-    redoAction->setIcon(IconManager::getInstance().getIcon(Icon::Redo));
-    stepAction->setIcon(IconManager::getInstance().getIcon(Icon::Step));
-    debugAction->setIcon(IconManager::getInstance().getIcon(Icon::Debug));
+    setThemedIcon(processorAction, Icon::Processor);
+    setThemedIcon(runAction, Icon::Play);
+    setThemedIcon(pauseAction, Icon::Pause);
+    setThemedIcon(undoAction, Icon::Undo);
+    setThemedIcon(redoAction, Icon::Redo);
+    setThemedIcon(stepAction, Icon::Step);
+    setThemedIcon(debugAction, Icon::Debug);
+    // Keyboard shortcuts. None of these collide with QPlainTextEdit's built-in
+    // bindings (Ctrl+C/X/V/Z/Y/A and friends) or with the keys Editor
+    // intercepts for the completer popup (Enter/Return/Escape/Tab/Backtab).
+    // Toolbar Undo/Redo are deliberately left unbound: they undo a VM step,
+    // not a text edit, and Ctrl+Z in the editor must stay text undo.
+    runAction->setShortcut(QKeySequence(Qt::Key_F5));
+    debugAction->setShortcut(QKeySequence(Qt::Key_F9));
+    pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
+    stepAction->setShortcut(QKeySequence(Qt::Key_F10));
+
     // tooltips for accessibility
-    processorAction->setToolTip("Processor settings");
-    runAction->setToolTip("Run program");
-    pauseAction->setToolTip("Pause execution");
-    debugAction->setToolTip("Start debug run");
-    stepAction->setToolTip("Execute single step");
-    undoAction->setToolTip("Undo last VM step");
-    redoAction->setToolTip("Redo last VM step");
-    // optional: make icons a consistent size
-    toolbar->setIconSize(QSize(18, 18));
+    setActionHint(processorAction, "Processor settings");
+    setActionHint(runAction, "Run program");
+    setActionHint(pauseAction, "Pause execution");
+    setActionHint(debugAction, "Start debug run");
+    setActionHint(stepAction, "Execute single step");
+    setActionHint(undoAction, "Undo last VM step");
+    setActionHint(redoAction, "Redo last VM step");
+    // one icon size for the whole chrome; the sidebar uses the same value
+    toolbar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
+    // single fixed toolbar: the drag handle is just visual noise
+    toolbar->setMovable(false);
 
     //------------Spinbox for setting execution speed----------------
     QSpinBox *spinbox = new QSpinBox(this);
@@ -169,14 +198,18 @@ void MainWindow::setUpToolBar()
 
     QWidgetAction *spinboxAction = new QWidgetAction(this);
     spinboxAction->setDefaultWidget(spinbox);
-    toolbar->addAction(processorAction);
-    toolbar->addAction(runAction);
+    // identical action order to before; the separators only group them visually
+    toolbar->addAction(processorAction);   // processor settings
+    toolbar->addSeparator();
+    toolbar->addAction(runAction);         // start / stop
     toolbar->addAction(debugAction);
-    toolbar->addAction(spinboxAction);
-    toolbar->addAction(pauseAction);
+    toolbar->addSeparator();
+    toolbar->addAction(spinboxAction);     // step interval
+    toolbar->addSeparator();
+    toolbar->addAction(pauseAction);       // transport
     toolbar->addAction(stepAction);
     toolbar->addSeparator();
-    toolbar->addAction(undoAction);
+    toolbar->addAction(undoAction);        // history
     toolbar->addAction(redoAction);
 
     connect(runAction, &QAction::triggered, this,
@@ -188,16 +221,16 @@ void MainWindow::setUpToolBar()
                     processorAction->setDisabled(true);
                     pauseAction->setEnabled(true);
                     runAction->setText("Stop");
-                    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
-                    runAction->setToolTip("Stop execution");
+                    setThemedIcon(runAction, Icon::Stop);
+                    setActionHint(runAction, "Stop execution");
                     this->run();
                 }
                 else if (runAction->text() == "Stop")
                 {
                     // emit stopSignal();
                     runAction->setText("Run");
-                    runAction->setIcon(IconManager::getInstance().getIcon(Icon::Play));
-                    runAction->setToolTip("Run program");
+                    setThemedIcon(runAction, Icon::Play);
+                    setActionHint(runAction, "Run program");
                     m_processorManager->stop();
                 }
             });
@@ -210,12 +243,12 @@ void MainWindow::setUpToolBar()
                 processorAction->setDisabled(true);
                 // debug run starts paused, so the toolbar starts in the paused state
                 runAction->setText("Stop");
-                runAction->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
-                runAction->setToolTip("Stop execution");
+                setThemedIcon(runAction, Icon::Stop);
+                setActionHint(runAction, "Stop execution");
                 pauseAction->setEnabled(true);
                 pauseAction->setText("Resume");
-                pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
-                pauseAction->setToolTip("Resume execution");
+                setThemedIcon(pauseAction, Icon::Resume);
+                setActionHint(pauseAction, "Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
                 redoAction->setEnabled(true);
@@ -233,8 +266,8 @@ void MainWindow::setUpToolBar()
                 if (pauseAction->text() == "Pause")
                 {
                     pauseAction->setText("Resume");
-                    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
-                    pauseAction->setToolTip("Resume execution");
+                    setThemedIcon(pauseAction, Icon::Resume);
+                    setActionHint(pauseAction, "Resume execution");
                     stepAction->setEnabled(true);
                     undoAction->setEnabled(true);
                     redoAction->setEnabled(true);
@@ -243,8 +276,8 @@ void MainWindow::setUpToolBar()
                 else
                 {
                     pauseAction->setText("Pause");
-                    pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
-                    pauseAction->setToolTip("Pause execution");
+                    setThemedIcon(pauseAction, Icon::Pause);
+                    setActionHint(pauseAction, "Pause execution");
                     stepAction->setDisabled(true);
                     undoAction->setDisabled(true);
                     redoAction->setDisabled(true);
@@ -257,8 +290,8 @@ void MainWindow::setUpToolBar()
             [this, pauseAction, stepAction, undoAction, redoAction]()
             {
                 pauseAction->setText("Resume");
-                pauseAction->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
-                pauseAction->setToolTip("Resume execution");
+                setThemedIcon(pauseAction, Icon::Resume);
+                setActionHint(pauseAction, "Resume execution");
                 stepAction->setEnabled(true);
                 undoAction->setEnabled(true);
                 redoAction->setEnabled(true);
@@ -278,7 +311,7 @@ void MainWindow::setUpSidebar()
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Cache), "Cache"));
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Compiler), "Compiler"));
     m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Profiler), "Profiler"));
-    m_sidebar->setIconSize(QSize(20, 20));
+    m_sidebar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
     m_sidebar->setMinimumWidth(48);
     m_sidebar->setCurrentRow(0);
     // m_sidebar->setFocusPolicy(Qt::ClickFocus);
@@ -296,10 +329,18 @@ void MainWindow::setUpMenubar()
     QMenu *preferencesMenu = new QMenu("Preferences", this);
     QMenu *processorMenu   = new QMenu("Processor", this);
     
-    QAction *openAction  = new QAction(IconManager::getInstance().getIcon(Icon::Open), "Open", this);
-    QAction *saveAction  = new QAction(IconManager::getInstance().getIcon(Icon::Save), "Save", this);
+    QAction *openAction  = new QAction("Open", this);
+    QAction *saveAction  = new QAction("Save", this);
     QAction *exitAction  = new QAction("Exit", this);
-    QAction *aboutAction = new QAction(IconManager::getInstance().getIcon(Icon::About), "About", this);
+    QAction *aboutAction = new QAction("About", this);
+    setThemedIcon(openAction, Icon::Open);
+    setThemedIcon(saveAction, Icon::Save);
+    openAction->setShortcut(QKeySequence::Open);  // Ctrl+O
+    saveAction->setShortcut(QKeySequence::Save);  // Ctrl+S
+    setActionHint(openAction, "Open an assembly file");
+    setActionHint(saveAction, "Save the current program");
+    m_saveAction = saveAction;
+    setThemedIcon(aboutAction, Icon::About);
 
     ///////////File Menu///////////////////
     fileMenu->addAction(openAction);
@@ -338,7 +379,8 @@ void MainWindow::setUpMenubar()
             });
     //--------------------------------------------------
     QAction *advancedSettingsAction =
-        new QAction(IconManager::getInstance().getIcon(Icon::Settings), "Advanced Settings", this);
+        new QAction("Advanced Settings", this);
+    setThemedIcon(advancedSettingsAction, Icon::Settings);
     connect(advancedSettingsAction, &QAction::triggered, this,
             [this]()
             {
@@ -433,6 +475,9 @@ bool MainWindow::tryParseAndLoadProgram()
                                     //to show expanded pseudoinstructions
     editor->resetErrorLines();    // we reset previous error lines
     editor->setCanWrite(false);   // we disable writing in editor while vm is running
+    if (m_saveAction)
+        m_saveAction->setEnabled(false); // read-only editor: a disabled QAction also
+                                         // swallows its Ctrl+S shortcut
     m_processorManager->reset();
     try
     {
@@ -521,6 +566,8 @@ void MainWindow::runFinishedSlot()
 {
     auto *editor = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
     editor->setCanWrite(true); // re-enable writing in editor when vm stops
+    if (m_saveAction)
+        m_saveAction->setEnabled(true);
     editor->setExpandedLocked(false);
     editor->clearHighlights(); // we clear any highlights when processor stops
     // other we are not alble to move the cursor as the paint
@@ -538,14 +585,14 @@ void MainWindow::runFinishedSlot()
         if (action->text() == "Stop")
         {
             action->setText("Run");
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Play));
+            setThemedIcon(action, Icon::Play);
             action->setToolTip("Run program");
             // when the program finishes we set the run button text back to run
         }
         if (action->text() == "Resume")
         {
             action->setText("Pause");
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
+            setThemedIcon(action, Icon::Pause);
             action->setToolTip("Pause execution");
             // in case we stop while paused
         }
@@ -566,64 +613,26 @@ void MainWindow::toggleTheme(const QString &themeId)
 
 void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
 {
-    // we will update the icons here based on the theme
-    // this is very very hacky but this will do for now
-    auto *toolbar = this->findChild<QToolBar *>();
-    if (toolbar)
+    // Icons are flat SVGs tinted with the theme's icon colour, so every one of
+    // them has to be re-tinted when the theme changes. Each action was tagged
+    // with its Icon by setThemedIcon(), so this is a single pass over every
+    // action in the window - toolbar, menus and submenus alike - with no
+    // dependence on user-visible text.
+    for (QAction *action : this->findChildren<QAction *>())
     {
-        for (QAction *action : toolbar->actions())
-        {
-            if (action->text() == "Run")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Play));
-            }
-            else if (action->text() == "Pause")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Pause));
-            }
-            else if (action->text() == "Resume")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Resume));
-            }
-            else if (action->text() == "Stop")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Stop));
-            }
-            else if (action->text() == "Undo")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Undo));
-            }
-            else if (action->text() == "Redo")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Redo));
-            }
-            else if (action->text() == "Step")
-            {
-                action->setIcon(IconManager::getInstance().getIcon(Icon::Step));
-            }
-        }
+        const Icon icon = themedIconOf(action);
+        if (icon != Icon::IconCount)
+            setThemedIcon(action, icon);
     }
 
-    // sidebar icons
+    // sidebar entries are QListWidgetItems, not actions; they are already
+    // keyed by row rather than by label
     static const std::array<Icon, toIndex(TabIndex::TabCount)> sidebarIcons = {
         Icon::Editor, Icon::Memory, Icon::Processor, Icon::Cache, Icon::Compiler, Icon::Profiler};
     for (int row = 0; row < m_sidebar->count(); ++row)
     {
         if (row < static_cast<int>(sidebarIcons.size()))
             m_sidebar->item(row)->setIcon(IconManager::getInstance().getIcon(sidebarIcons[row]));
-    }
-
-    // menu bar action icons
-    for (QAction *action : this->findChildren<QAction *>())
-    {
-        if (action->text() == "Open")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Open));
-        else if (action->text() == "Save")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Save));
-        else if (action->text() == "About")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::About));
-        else if (action->text() == "Advanced Settings")
-            action->setIcon(IconManager::getInstance().getIcon(Icon::Settings));
     }
 }
 

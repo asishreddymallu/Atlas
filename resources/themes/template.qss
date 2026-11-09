@@ -26,18 +26,25 @@ QListWidget {
     border: none;
     border-right: 1px solid {{border}};
     outline: 0;
+    padding: 8px 6px;   /* spacing scale */
 }
 QListWidget::item {
-    padding: 8px 6px;
-    border-radius: 4px;
-    margin: 2px 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 2px 0;
+    color: {{mutedForeground}};
+    /* 2px accent indicator, transparent until the item is current. Reserving
+     * the space at rest means selecting an item cannot shift the label. */
+    border-left: 2px solid transparent;
+}
+QListWidget::item:hover:!selected {
+    background-color: {{currentLine}};
+    color: {{foreground}};
 }
 QListWidget::item:selected {
     background-color: {{selection}};
     color: {{foreground}};
-}
-QListWidget::item:hover:!selected {
-    background-color: {{currentLine}};
+    border-left: 2px solid {{accent}};
 }
 
 /* ── Tab widgets ───────────────────────────────────────────────── */
@@ -79,6 +86,12 @@ QPushButton:disabled, QToolButton:disabled {
     color: {{mutedForeground}};
     border-color: {{border}};
 }
+/* `* { outline: 0 }` at the top of this file removes Qt's default focus rect,
+ * so keyboard focus has to be drawn explicitly. The accent clears 3:1 against
+ * both background and surface in all four themes. */
+QPushButton:focus, QToolButton:focus {
+    border-color: {{accent}};
+}
 
 /* ── Text inputs / editors ────────────────────────────────────── */
 QLineEdit {
@@ -91,6 +104,23 @@ QLineEdit {
 }
 QLineEdit:focus {
     border-color: {{accent}};
+}
+QComboBox {
+    background-color: {{surface}};
+    color: {{foreground}};
+    border: 1px solid {{border}};
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 20px;
+}
+QComboBox:focus, QComboBox:on {
+    border-color: {{accent}};
+}
+QComboBox QAbstractItemView {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    selection-background-color: {{selection}};
+    outline: 0;
 }
 /* editors sit flush against their panel, Zed-style: no frame.
  * palette() roles (not literal colors) so a per-widget palette set by
@@ -118,24 +148,98 @@ QPlainTextEdit#outputTextEdit[borderStyle="full"] {
 /* ── Menus / menu bar ──────────────────────────────────────────── */
 QMenuBar {
     background-color: {{background}};
+    border: none;
     border-bottom: 1px solid {{border}};
+    padding: 2px 4px;
+}
+QMenuBar::item {
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: transparent;
 }
 QMenuBar::item:selected {
     background-color: {{currentLine}};
 }
+QMenuBar::item:pressed {
+    background-color: {{selection}};
+}
 QMenu {
     background-color: {{surface}};
     border: 1px solid {{border}};
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 12px;
+    border-radius: 4px;
 }
 QMenu::item:selected {
     background-color: {{selection}};
+}
+QMenu::item:disabled {
+    color: {{mutedForeground}};
+}
+QMenu::separator {
+    height: 1px;
+    background-color: {{border}};
+    margin: 4px 8px;
+}
+
+/* ── Tooltips ──────────────────────────────────────────────────── */
+QToolTip {
+    background-color: {{surface}};
+    color: {{foreground}};
+    border: 1px solid {{border}};
+    border-radius: 4px;
+    padding: 4px 8px;
 }
 
 /* ── Toolbars ──────────────────────────────────────────────────── */
 QToolBar {
     background-color: {{background}};
+    border: none;
     border-bottom: 1px solid {{border}};
-    spacing: 4px;
+    padding: 6px 8px;   /* spacing scale: 8 outer, 6 vertical */
+    spacing: 2px;
+}
+QToolBar::separator {
+    background-color: {{border}};
+    width: 1px;
+    margin: 6px 8px;
+}
+/* Toolbar buttons are flat (Zed-style): no resting border or fill, state is
+ * carried by the hover/pressed tint alone. More specific than the generic
+ * QPushButton/QToolButton rule above so it wins there, without touching
+ * QToolButtons elsewhere (e.g. the collapsible section headers). */
+QToolBar QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 6px 8px;
+    min-height: 20px;
+}
+QToolBar QToolButton:hover {
+    background-color: {{currentLine}};
+}
+QToolBar QToolButton:pressed,
+QToolBar QToolButton:checked {
+    background-color: {{selection}};
+}
+QToolBar QToolButton:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+}
+
+/* step-interval spinbox lives in the toolbar */
+QSpinBox {
+    background-color: {{surface}};
+    color: {{foreground}};
+    border: 1px solid {{border}};
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-height: 20px;
+}
+QSpinBox:focus {
+    border-color: {{accent}};
 }
 
 /* ── Table / tree views ────────────────────────────────────────── */
@@ -171,13 +275,24 @@ QScrollBar::handle {
 QScrollBar::handle:hover {
     background: {{mutedForeground}};
 }
+QScrollBar::handle:pressed {
+    background: {{accent}};
+}
 QScrollBar::add-line, QScrollBar::sub-line {
     width: 0; height: 0;
 }
+/* without these the default trough paints through on some styles */
+QScrollBar::add-page, QScrollBar::sub-page {
+    background: transparent;
+}
 
 /* ── Splitters ─────────────────────────────────────────────────── */
+/* width is pinned to 1px by AppStyle::pixelMetric(PM_SplitterWidth) */
 QSplitter::handle {
     background-color: {{border}};
+}
+QSplitter::handle:hover {
+    background-color: {{accent}};
 }
 
 /* ── Status bar ────────────────────────────────────────────────── */
@@ -185,6 +300,15 @@ QStatusBar {
     background-color: {{surface}};
     border-top: 1px solid {{border}};
     color: {{mutedForeground}};
+    padding: 2px 12px;
+}
+/* Qt draws a sunken frame around status bar widgets by default */
+QStatusBar::item {
+    border: none;
+}
+QStatusBar QLabel {
+    color: {{mutedForeground}};
+    padding: 0 4px;
 }
 
 /* ── Collapsible sections (src/ui/common/collapsible_section.*) ── */
