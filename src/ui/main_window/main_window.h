@@ -73,7 +73,6 @@ private:
     RegisterContainer *m_registerContainer {nullptr};
     ProcessorManager  *m_processorManager  {nullptr};
     QThread           *m_processorThread   {nullptr};
-    TabIndex           m_currentTabIndex   {TabIndex::EditorTabIndex};
     ExecutionState     m_executionState    {ExecutionState::Stopped};
 
     std::array<KitesTab*, toIndex(TabIndex::TabCount)> m_tabs;
