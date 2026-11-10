@@ -1,4 +1,4 @@
-#include "mainwindow.h"
+#include "main_window.h"
 #include "assembler/assembler.h"
 #include "common/assembled_program.h"
 #include "common/globals.h"
@@ -13,7 +13,7 @@
 #include "ui/processor_tab/processor_tab.h"
 #include "ui/profiler_tab/profiler_tab.h"
 #include "ui/theme/icon_manager.h"
-#include "ui_mainwindow.h"
+#include "ui_main_window.h"
 #include "utils/utils.h"
 #include <QActionGroup>
 #include <QFileDialog>
