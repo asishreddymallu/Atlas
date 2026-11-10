@@ -5,7 +5,7 @@
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
 #include "processor/processor_manager.h"
 #include "ui/cache_tab/cache_tab.h"
-#include "ui/compiler_tab/compilertab.h"
+#include "ui/compiler_tab/compiler_tab.h"
 #include "ui/dialogs/processor_dialog.h"
 #include "ui/dialogs/settings_dialog.h"
 #include "ui/editor_tab/editortab.h"

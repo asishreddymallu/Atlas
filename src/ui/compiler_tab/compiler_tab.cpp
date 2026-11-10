@@ -1,6 +1,6 @@
-#include "compilertab.h"
+#include "compiler_tab.h"
 #include "config/app_settings.h"
-#include "ui_compilertab.h"
+#include "ui_compiler_tab.h"
 #include <QClipboard>
 #include <QDir>
 #include <QFile>
