@@ -482,7 +482,13 @@ bool MainWindow::tryParseAndLoadProgram()
     try
     {
         std::string rawText = editor->getRawText();
-        rawText = customPseudoManager::expandPseudoInstruction(rawText);
+        // The assembler runs on the expanded text, so every line and column it
+        // reports is an expanded one. Keep the mapping so the editor can point
+        // diagnostics back at the line the user actually wrote. With no custom
+        // pseudo-instructions defined the mapping is the identity.
+        std::vector<int> expandedToOriginalLine;
+        rawText = customPseudoManager::expandPseudoInstruction(rawText, expandedToOriginalLine);
+        editor->setExpansionMapping(expandedToOriginalLine);
         std::ofstream out(globals::temporary_assembly_file_path);
         out << rawText;
         out.close();

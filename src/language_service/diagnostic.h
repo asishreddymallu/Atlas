@@ -17,7 +17,14 @@ namespace Kites
 // QTextCursor offsets happens only at the UI boundary.
 struct Diagnostic
 {
-    int line        = 0; ///< 1-based, matches editor line numbers. 0 = unknown.
+    /// 1-based line in the text that was actually assembled. When custom
+    /// pseudo-instructions are defined that is the *expanded* text, not what
+    /// the user typed. 0 = unknown.
+    int line        = 0;
+    /// 1-based line in the user's original source, mapped back from `line`
+    /// through customPseudoManager's expandedLineToOriginalLine. Filled in by
+    /// EditorTab, which owns the mapping. 0 = not mapped.
+    int originalLine = 0;
     int startColumn = 0; ///< 1-based first column of the token. 0 = unknown.
     int endColumn   = 0; ///< 1-based, exclusive. 0 = unknown.
     DiagnosticSeverity severity = DiagnosticSeverity::Error;

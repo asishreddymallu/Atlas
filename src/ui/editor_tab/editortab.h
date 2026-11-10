@@ -12,6 +12,7 @@
 #include <QTextCharFormat>
 #include <QTimer>
 #include <filesystem>
+#include <vector>
 
 namespace Kites
 {
@@ -29,6 +30,15 @@ public:
     ~EditorTab();
     void updateDisassemblyView(const std::string &disassembledCode);
     void setErrorLinesFromFile(const std::filesystem::path &filepath);
+    /// Mapping produced by customPseudoManager::expandPseudoInstruction:
+    /// index = expanded line - 1, value = 1-based original source line. Set by
+    /// MainWindow just before assembling so diagnostics reported against the
+    /// expanded text can be pointed back at the line the user wrote. With no
+    /// custom pseudo-instructions defined this is the identity.
+    void setExpansionMapping(const std::vector<int> &expandedToOriginalLine);
+    /// 1-based original source line for a 1-based expanded line. Returns the
+    /// input unchanged when no mapping was recorded (lines are then 1:1).
+    int mappedOriginalLine(int expandedLine) const;
     std::string getRawText();
     void setRawText(const QString &text);
     void resetErrorLines();
@@ -54,6 +64,7 @@ private slots:
     void applyDiagnostics(const QVector<Diagnostic> &diagnostics);
 
 private:
+    std::vector<int> m_expandedToOriginalLine;
     Editor *m_editor = nullptr;
     DisassemblyEditor *m_disassemblyView = nullptr;
     Editor *m_expandedView = nullptr;

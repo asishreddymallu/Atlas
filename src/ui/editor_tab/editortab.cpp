@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTextDocument>
 
 namespace Kites
 {
@@ -151,6 +152,7 @@ void EditorTab::resetErrorLines()
     m_expandedView->clearDiagnosticSelections(); // applyDiagnostics() squiggles both panes,
                                                  // so both have to be cleared here too
     m_editor->resetErrors();
+    m_expandedView->resetErrors(); // applyDiagnostics() sets tooltips on both panes
 }
 
 void EditorTab::updateDisassemblyView(const std::string &disassembledCode)
@@ -208,35 +210,133 @@ void EditorTab::setErrorLinesFromFile(const std::filesystem::path &filePath)
     applyDiagnostics(diagnostics);
 }
 
+namespace
+{
+/// Text of 1-based `line` in `document`, or a null QString when out of range.
+QString lineText(const QTextDocument *document, int line)
+{
+    if (!document || line <= 0)
+        return {};
+    const QTextBlock block = document->findBlockByNumber(line - 1);
+    return block.isValid() ? block.text() : QString();
+}
+
+/// Builds a squiggle selection for 1-based `line` of `document`.
+///
+/// Spans [startColumn, endColumn) are 1-based and come from the lexer, which
+/// counts bytes; QTextCursor counts UTF-16 units, so on a line containing
+/// non-ASCII before the token the span can be a little wide. Both ends are
+/// clamped to the block, so the worst case is a slightly-off highlight rather
+/// than an invalid cursor. See docs/audit/known_issues.md.
+///
+/// Passing startColumn <= 0 (or a span that does not fit) highlights the whole
+/// line, which is the documented fallback for a diagnostic with no column.
+bool makeSquiggle(QTextDocument *document, int line, int startColumn, int endColumn,
+                  const QTextCharFormat &format, QTextEdit::ExtraSelection &selectionOut)
+{
+    if (!document || line <= 0)
+        return false;
+
+    const QTextBlock block = document->findBlockByNumber(line - 1);
+    if (!block.isValid())
+        return false;
+
+    const int length = block.length() - 1; // block.length() counts the separator
+    QTextCursor cursor(block);
+
+    const bool haveSpan = startColumn > 0 && endColumn > startColumn && length > 0;
+    if (haveSpan)
+    {
+        const int from = std::min(startColumn - 1, length);
+        const int to   = std::min(endColumn - 1, length);
+        cursor.setPosition(block.position() + from);
+        cursor.setPosition(block.position() + to, QTextCursor::KeepAnchor);
+    }
+    if (!haveSpan || !cursor.hasSelection())
+    {
+        cursor = QTextCursor(block);
+        cursor.movePosition(QTextCursor::StartOfLine);
+        cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
+    }
+
+    selectionOut.format = format;
+    selectionOut.cursor = cursor;
+    return true;
+}
+} // namespace
+
+void EditorTab::setExpansionMapping(const std::vector<int> &expandedToOriginalLine)
+{
+    m_expandedToOriginalLine = expandedToOriginalLine;
+}
+
 void EditorTab::applyDiagnostics(const QVector<Diagnostic> &diagnostics)
 {
     m_editor->resetErrors();
+    m_expandedView->resetErrors();
 
-    QList<QTextEdit::ExtraSelection> extraSelections;
+    // Each pane needs cursors built from its OWN document: an ExtraSelection
+    // whose cursor belongs to another document is not a valid selection for
+    // the widget it is handed to. Previously both panes were given cursors
+    // from m_editor's document.
+    QList<QTextEdit::ExtraSelection> inputSelections;
+    QList<QTextEdit::ExtraSelection> expandedSelections;
+
+    QTextDocument *inputDocument    = m_editor->document();
+    QTextDocument *expandedDocument = m_expandedView->document();
+
     for (const Diagnostic &diagnostic : diagnostics)
     {
         if (diagnostic.line <= 0)
             continue; // Skip invalid lines
 
-        QTextBlock block = m_editor->document()->findBlockByNumber(
-            diagnostic.line - 1); // -1 since line is 1 based
-        if (!block.isValid())
+        // The assembler reports against the expanded text; map back to the
+        // line the user actually wrote. Without custom pseudo-instructions the
+        // mapping is the identity and this is a no-op.
+        int originalLine = diagnostic.originalLine;
+        if (originalLine <= 0)
         {
-            continue; // Line number is out of bounds
+            originalLine = mappedOriginalLine(diagnostic.line);
         }
-        QTextEdit::ExtraSelection selection;
-        selection.format = m_squiggleFormat;
-        m_editor->setErrorMessage(diagnostic.line - 1,
-                                  diagnostic.message); // passing error to editor for tooltip display
 
-        QTextCursor cursor(block);
-        cursor.movePosition(QTextCursor::StartOfLine);
-        cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
-        selection.cursor = cursor;
-        extraSelections.append(selection);
+        // Columns describe the expanded line. They only carry over to the
+        // original when that line survived expansion unchanged; if the line
+        // was generated or rewritten, fall back to the whole line.
+        const QString expandedLine = lineText(expandedDocument, diagnostic.line);
+        const QString originalText = lineText(inputDocument, originalLine);
+        const bool columnsApply = !expandedLine.isNull() && expandedLine == originalText;
+
+        QTextEdit::ExtraSelection inputSelection;
+        if (makeSquiggle(inputDocument, originalLine,
+                         columnsApply ? diagnostic.startColumn : 0,
+                         columnsApply ? diagnostic.endColumn : 0,
+                         m_squiggleFormat, inputSelection))
+        {
+            inputSelections.append(inputSelection);
+            // tooltip lives on the line the user can actually edit
+            m_editor->setErrorMessage(originalLine - 1, diagnostic.message);
+        }
+
+        QTextEdit::ExtraSelection expandedSelection;
+        if (makeSquiggle(expandedDocument, diagnostic.line, diagnostic.startColumn,
+                         diagnostic.endColumn, m_squiggleFormat, expandedSelection))
+        {
+            expandedSelections.append(expandedSelection);
+            m_expandedView->setErrorMessage(diagnostic.line - 1, diagnostic.message);
+        }
     }
 
-    m_editor->setDiagnosticSelections(extraSelections);
-    m_expandedView->setDiagnosticSelections(extraSelections);
+    m_editor->setDiagnosticSelections(inputSelections);
+    m_expandedView->setDiagnosticSelections(expandedSelections);
+}
+
+int EditorTab::mappedOriginalLine(int expandedLine) const
+{
+    if (expandedLine <= 0)
+        return 0;
+    const size_t index = static_cast<size_t>(expandedLine) - 1;
+    if (index >= m_expandedToOriginalLine.size())
+        return expandedLine; // no mapping recorded: lines are 1:1
+    return m_expandedToOriginalLine[index];
 }
 } // namespace Kites
