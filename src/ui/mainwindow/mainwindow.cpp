@@ -71,6 +71,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setUpToolBar();
     setUpMenubar();
     setUpTabs();
+    setUpProblemsDock();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -132,6 +133,38 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             });
     connect(&ThemeManager::getInstance(), &ThemeManager::themeChangedSignal, 
             this, &MainWindow::themeChangedSlot);
+}
+
+void MainWindow::setUpProblemsDock()
+{
+    m_problemsDock = new ProblemsDock(this);
+    addDockWidget(Qt::BottomDockWidgetArea, m_problemsDock);
+    m_problemsDock->hide(); // stays out of the way until a Run reports something
+
+    QAction *toggleAction = m_problemsDock->toggleViewAction();
+    toggleAction->setText("Problems");
+    toggleAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    setActionHint(toggleAction, "Show or hide the Problems list");
+
+    QMenu *viewMenu = menuBar()->addMenu("&View");
+    viewMenu->addAction(toggleAction);
+
+    auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
+    if (!editorTab)
+        return;
+
+    connect(editorTab, &EditorTab::diagnosticsChangedSignal, this,
+            [this, editorTab](const QVector<Diagnostic> &diagnostics)
+            {
+                m_problemsDock->setDiagnostics(diagnostics, editorTab->sourceLineCount());
+                // surface the list when there is something to see; never hide
+                // it on its own, so a dock the user opened stays open
+                if (!diagnostics.isEmpty())
+                    m_problemsDock->show();
+            });
+
+    connect(m_problemsDock, &ProblemsDock::diagnosticActivated, this,
+            [editorTab](const Diagnostic &diagnostic) { editorTab->goToDiagnostic(diagnostic); });
 }
 
 void MainWindow::setUpStatusBar()

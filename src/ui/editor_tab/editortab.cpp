@@ -153,6 +153,7 @@ void EditorTab::resetErrorLines()
                                                  // so both have to be cleared here too
     m_editor->resetErrors();
     m_expandedView->resetErrors(); // applyDiagnostics() sets tooltips on both panes
+    emit diagnosticsChangedSignal({}); // and the dock clears with them
 }
 
 void EditorTab::updateDisassemblyView(const std::string &disassembledCode)
@@ -262,8 +263,8 @@ int utf16OffsetForByteColumn(const QString &text, int byteColumn)
 ///
 /// Passing startColumn <= 0 (or a span that does not fit) highlights the whole
 /// line, which is the documented fallback for a diagnostic with no column.
-bool makeSquiggle(QTextDocument *document, int line, int startColumn, int endColumn,
-                  const QTextCharFormat &format, QTextEdit::ExtraSelection &selectionOut)
+bool makeCursor(QTextDocument *document, int line, int startColumn, int endColumn,
+                QTextCursor &cursorOut)
 {
     if (!document || line <= 0)
         return false;
@@ -292,6 +293,18 @@ bool makeSquiggle(QTextDocument *document, int line, int startColumn, int endCol
         cursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
     }
 
+    cursorOut = cursor;
+    return true;
+}
+
+/// Squiggle selection over the same span makeCursor() would select, so the
+/// dock's navigation and the editor's underline can never disagree.
+bool makeSquiggle(QTextDocument *document, int line, int startColumn, int endColumn,
+                  const QTextCharFormat &format, QTextEdit::ExtraSelection &selectionOut)
+{
+    QTextCursor cursor;
+    if (!makeCursor(document, line, startColumn, endColumn, cursor))
+        return false;
     selectionOut.format = format;
     selectionOut.cursor = cursor;
     return true;
@@ -318,31 +331,23 @@ void EditorTab::applyDiagnostics(const QVector<Diagnostic> &diagnostics)
     QTextDocument *inputDocument    = m_editor->document();
     QTextDocument *expandedDocument = m_expandedView->document();
 
+    QVector<Diagnostic> resolved;
+    resolved.reserve(diagnostics.size());
+
     for (const Diagnostic &diagnostic : diagnostics)
     {
         if (diagnostic.line <= 0)
             continue; // Skip invalid lines
 
-        // The assembler reports against the expanded text; map back to the
-        // line the user actually wrote. Without custom pseudo-instructions the
-        // mapping is the identity and this is a no-op.
-        int originalLine = diagnostic.originalLine;
-        if (originalLine <= 0)
-        {
-            originalLine = mappedOriginalLine(diagnostic.line);
-        }
+        const InputTarget target = inputTargetFor(diagnostic);
+        const int originalLine = target.line;
 
-        // Columns describe the expanded line. They only carry over to the
-        // original when that line survived expansion unchanged; if the line
-        // was generated or rewritten, fall back to the whole line.
-        const QString expandedLine = lineText(expandedDocument, diagnostic.line);
-        const QString originalText = lineText(inputDocument, originalLine);
-        const bool columnsApply = !expandedLine.isNull() && expandedLine == originalText;
+        Diagnostic withOriginal = diagnostic;
+        withOriginal.originalLine = originalLine;
+        resolved.append(withOriginal);
 
         QTextEdit::ExtraSelection inputSelection;
-        if (makeSquiggle(inputDocument, originalLine,
-                         columnsApply ? diagnostic.startColumn : 0,
-                         columnsApply ? diagnostic.endColumn : 0,
+        if (makeSquiggle(inputDocument, target.line, target.startColumn, target.endColumn,
                          m_squiggleFormat, inputSelection))
         {
             inputSelections.append(inputSelection);
@@ -361,6 +366,56 @@ void EditorTab::applyDiagnostics(const QVector<Diagnostic> &diagnostics)
 
     m_editor->setDiagnosticSelections(inputSelections);
     m_expandedView->setDiagnosticSelections(expandedSelections);
+
+    emit diagnosticsChangedSignal(resolved);
+}
+
+EditorTab::InputTarget EditorTab::inputTargetFor(const Diagnostic &diagnostic) const
+{
+    // The assembler reports against the expanded text; map back to the line the
+    // user actually wrote. Without custom pseudo-instructions the mapping is
+    // the identity and this is a no-op.
+    int originalLine = diagnostic.originalLine;
+    if (originalLine <= 0)
+    {
+        originalLine = mappedOriginalLine(diagnostic.line);
+    }
+
+    // Columns describe the expanded line. They only carry over to the original
+    // when that line survived expansion unchanged; if the line was generated or
+    // rewritten, fall back to the whole line.
+    const QString expandedLine = lineText(m_expandedView->document(), diagnostic.line);
+    const QString originalText = lineText(m_editor->document(), originalLine);
+    const bool columnsApply = !expandedLine.isNull() && expandedLine == originalText;
+
+    return {originalLine,
+            columnsApply ? diagnostic.startColumn : 0,
+            columnsApply ? diagnostic.endColumn : 0};
+}
+
+bool EditorTab::goToDiagnostic(const Diagnostic &diagnostic)
+{
+    // Same helper the squiggle uses, so the selection the dock makes is
+    // exactly what the Input pane underlines.
+    const InputTarget target = inputTargetFor(diagnostic);
+
+    QTextCursor cursor;
+    if (!makeCursor(m_editor->document(), target.line, target.startColumn, target.endColumn,
+                    cursor))
+    {
+        return false; // no line to go to: do nothing rather than jump anywhere
+    }
+
+    switchToEditorView(); // the Expanded view is read-only generated code
+    m_editor->setTextCursor(cursor);
+    m_editor->centerCursor();
+    m_editor->setFocus();
+    return true;
+}
+
+int EditorTab::sourceLineCount() const
+{
+    return m_editor->document()->blockCount();
 }
 
 int EditorTab::mappedOriginalLine(int expandedLine) const

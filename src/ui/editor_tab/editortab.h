@@ -39,6 +39,12 @@ public:
     /// 1-based original source line for a 1-based expanded line. Returns the
     /// input unchanged when no mapping was recorded (lines are then 1:1).
     int mappedOriginalLine(int expandedLine) const;
+    /// Moves the Input pane's cursor to `diagnostic`, selecting exactly what
+    /// the squiggle underlines, and switches away from the Expanded view.
+    /// Returns false, changing nothing, when the diagnostic has no usable line.
+    bool goToDiagnostic(const Diagnostic &diagnostic);
+    /// Lines in the user's source, for the Problems dock's bounds check.
+    int sourceLineCount() const;
     std::string getRawText();
     void setRawText(const QString &text);
     void resetErrorLines();
@@ -64,6 +70,16 @@ private slots:
     void applyDiagnostics(const QVector<Diagnostic> &diagnostics);
 
 private:
+    /// Where a diagnostic should land in the Input pane: the mapped line, and
+    /// the span to select there (0, 0 meaning the whole line).
+    struct InputTarget
+    {
+        int line = 0;
+        int startColumn = 0;
+        int endColumn = 0;
+    };
+    InputTarget inputTargetFor(const Diagnostic &diagnostic) const;
+
     std::vector<int> m_expandedToOriginalLine;
     Editor *m_editor = nullptr;
     DisassemblyEditor *m_disassemblyView = nullptr;
@@ -85,7 +101,10 @@ private:
     // public slots:
     Ui::EditorTab *ui;
 signals:
-    void loadProgramSignal(std::string& sourceText); 
+    void loadProgramSignal(std::string& sourceText);
+    /// Diagnostics currently shown, each with originalLine resolved. Emitted
+    /// empty by resetErrorLines() so the Problems dock clears with the editor.
+    void diagnosticsChangedSignal(const QVector<Diagnostic> &diagnostics); 
 };
 } // namespace Kites
 #endif // EDITORTAB__H

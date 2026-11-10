@@ -1,6 +1,7 @@
 #pragma once
 #include "processor/processor_manager.h"
 #include "ui/common/kitestab.h"
+#include "ui/problems_panel/problems_dock.h"
 #include "ui/register_table/registercontainer.h"
 #include "ui/theme/theme_manager.h"
 #include "utils/to_index.h"
@@ -54,6 +55,7 @@ private:
     void setUpToolBar();
     void setUpSidebar();
     void setUpMenubar();
+    void setUpProblemsDock();
     void setUpTabs();
     void toggleTheme(const QString &themeId);
     bool tryParseAndLoadProgram();
@@ -65,6 +67,7 @@ private:
     // held so Save can be disabled while the editor is read-only (i.e. while a
     // program is running); a disabled QAction also swallows its shortcut
     QAction           *m_saveAction        {nullptr};
+    ProblemsDock      *m_problemsDock     {nullptr};
     QListWidget       *m_sidebar           {nullptr};
     QStackedWidget    *m_stackedTabs       {nullptr};
     RegisterContainer *m_registerContainer {nullptr};
