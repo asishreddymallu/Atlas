@@ -143,3 +143,35 @@ Recorded because they changed reported columns on directive lines.
   string literals. Verified against a dedicated 8-program directive corpus:
   machine code identical, failing set unchanged, and every token diff a
   column-only change on a directive line.
+
+---
+
+## 8. A custom pseudo-instruction whose expansion uses ", " is silently skipped
+
+- **Where**: `src/custom_pseudo_manager/custom_pseudo_manager.cpp`, the
+  expansion loop in `expandPseudoInstruction` (the `badExpansion` guard).
+- **What**: each expansion line is split on whitespace, then every piece is
+  split on `,` with `Qt::KeepEmptyParts`. An operand written as `sp,` followed
+  by a space therefore yields `["sp", ""]`; the empty piece sets
+  `badExpansion`, and the whole expansion is abandoned. The source line is
+  emitted unchanged instead, with no warning anywhere.
+- **Effect**: the pseudo-instruction is left in the text, the assembler then
+  reports it as an unknown mnemonic, and the real cause - a formatting detail
+  in the saved JSON - is invisible to the user.
+- **Reproduced with**:
+  ```json
+  { "push": { "args": ["rs"],
+              "expansion": ["addi sp, sp, -8", "sd rs, 0(sp)"] } }
+  ```
+  `push t0` is left verbatim and fails to assemble. Writing the same expansion
+  without spaces after the commas works:
+  ```json
+  { "push": { "args": ["rs"],
+              "expansion": ["addi sp,sp,-8", "sd rs,0(sp)"] } }
+  ```
+  which expands to `addi sp, sp, -8` / `sd t0, 0(sp)` as intended - note that
+  the generator re-emits operands joined with `", "`, the very spacing it
+  refuses to accept as input.
+- **Status**: not fixed. The guard is meant to reject genuinely malformed
+  templates such as consecutive commas; it should trim pieces before testing
+  for emptiness rather than treating a trailing comma as malformed.
