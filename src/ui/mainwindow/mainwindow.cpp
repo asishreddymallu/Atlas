@@ -9,7 +9,7 @@
 #include "ui/dialogs/processor_dialog.h"
 #include "ui/dialogs/settings_dialog.h"
 #include "ui/editor_tab/editortab.h"
-#include "ui/memory_tab/memorytab.h"
+#include "ui/memory_tab/memory_tab.h"
 #include "ui/processor_tab/processortab.h"
 #include "ui/profiler_tab/profilertab.h"
 #include "ui/theme/icon_manager.h"
