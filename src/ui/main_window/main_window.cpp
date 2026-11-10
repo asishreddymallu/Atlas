@@ -20,16 +20,19 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSpinBox>
+#include <QTabBar>
+#include <QVBoxLayout>
 #include <QWidgetAction>
 #include <QSplitter>
 #include <QMessageBox>
+#include <cassert>
 
 namespace Kites
 {
 namespace
 {
-// Chrome icon size in logical pixels, shared by the toolbar and the sidebar so
-// the two never disagree. IconManager's default matches it.
+// Chrome icon size in logical pixels, shared by the toolbar and the ribbon's
+// tab strip so the two never disagree. IconManager's default matches it.
 constexpr int toolbarIconSize = 20;
 
 // Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
@@ -61,16 +64,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             
     m_registerContainer = new RegisterContainer(this, m_processorManager->getRegisterFile());
     QWidget *central = new QWidget(this);
-    QHBoxLayout *mainLayout = new QHBoxLayout(central);
+    // The ribbon spans the window above the content, so the central widget
+    // stacks vertically where it used to run left-to-right beside a sidebar.
+    QVBoxLayout *mainLayout = new QVBoxLayout(central);
     QSplitter *splitter = new QSplitter(Qt::Horizontal, this);
 
     m_stackedTabs = new QStackedWidget(this);
-    m_sidebar = new QListWidget(this);
+    m_ribbon = new RibbonBar(this);
     setUpStatusBar();
-    setUpSidebar();
     setUpToolBar();
     setUpMenubar();
     setUpTabs();
+    setUpRibbon();
     setUpProblemsDock();
 
     // m_registerContainer = new RegisterContainer(this);
@@ -80,16 +85,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     splitter->addWidget(m_registerContainer);
     splitter->widget(1)->setMaximumWidth(350);
 
-    // outer splitter makes the sidebar width user-adjustable (Zed-style)
-    QSplitter *outerSplitter = new QSplitter(Qt::Horizontal, this);
-    outerSplitter->addWidget(m_sidebar);
-    outerSplitter->addWidget(splitter);
-    outerSplitter->setCollapsible(1, false);
-    outerSplitter->setStretchFactor(0, 0);
-    outerSplitter->setStretchFactor(1, 1);
-    outerSplitter->setSizes({m_sidebar->sizeHintForColumn(0) + 24, 1000});
-
-    mainLayout->addWidget(outerSplitter);
+    mainLayout->addWidget(m_ribbon, 0);
+    mainLayout->addWidget(splitter, 1);
 
     setCentralWidget(central);
     resize(1200, 800);
@@ -335,22 +332,57 @@ void MainWindow::setUpToolBar()
     connect(redoAction, &QAction::triggered, this, [this]() { m_processorManager->redo(); });
 }
 
-void MainWindow::setUpSidebar()
+void MainWindow::setUpRibbon()
 {
-    auto &iconManager = IconManager::getInstance();
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Editor), "Editor"));
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Memory), "Memory"));
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Processor), "Processor"));
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Cache), "Cache"));
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Compiler), "Compiler"));
-    m_sidebar->addItem(new QListWidgetItem(iconManager.getIcon(Icon::Profiler), "Profiler"));
-    m_sidebar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
-    m_sidebar->setMinimumWidth(48);
-    m_sidebar->setCurrentRow(0);
-    // m_sidebar->setFocusPolicy(Qt::ClickFocus);
+    // Same six tabs, same order, same icons as the sidebar they replace. The
+    // order has to agree with TabIndex and with setUpTabs()'s addWidget
+    // sequence; the assertion below is what keeps the three honest.
+    m_ribbon->addTab("Editor", Icon::Editor);
+    m_ribbon->addTab("Memory", Icon::Memory);
+    m_ribbon->addTab("Processor", Icon::Processor);
+    m_ribbon->addTab("Cache", Icon::Cache);
+    m_ribbon->addTab("Compiler", Icon::Compiler);
+    m_ribbon->addTab("Profiler", Icon::Profiler);
+    assert(m_ribbon->count() == static_cast<int>(toIndex(TabIndex::TabCount)) &&
+           "ribbon tab count must match TabIndex");
 
-    connect(m_sidebar, &QListWidget::currentRowChanged, m_stackedTabs,
-            &QStackedWidget::setCurrentIndex);
+    // One page per tab, each still empty: Stage 2 fills them. The pages are
+    // created by addTab() above.
+
+    // Connected after the tabs exist, so adding the first one cannot drive a
+    // switch against a content stack that is not populated yet.
+    connect(m_ribbon, &RibbonBar::currentChanged, this,
+            [this](int index) { setCurrentTab(static_cast<TabIndex>(index)); });
+
+    // Establish the invariant explicitly rather than relying on both widgets
+    // happening to start at 0.
+    setCurrentTab(TabIndex::EditorTabIndex);
+
+    // The strip is the chrome's single tab stop; from there Tab moves into
+    // the content.
+    setTabOrder(m_ribbon->tabBar(), m_stackedTabs);
+}
+
+void MainWindow::setCurrentTab(TabIndex index)
+{
+    const int target = static_cast<int>(toIndex(index));
+    if (target < 0 || target >= static_cast<int>(toIndex(TabIndex::TabCount)))
+        return;
+
+    {
+        // Blocks only RibbonBar's own currentChanged, which is what would
+        // re-enter this function. The bar's internal strip-to-page wiring is
+        // a separate connection on its QTabBar and still runs, so the panel
+        // never shows a page belonging to a different tab.
+        QSignalBlocker blocker(m_ribbon);
+        m_ribbon->setCurrentIndex(target);
+    }
+    m_stackedTabs->setCurrentIndex(target);
+}
+
+MainWindow::TabIndex MainWindow::currentTab() const
+{
+    return static_cast<TabIndex>(m_stackedTabs->currentIndex());
 }
 
 void MainWindow::setUpMenubar()
@@ -664,15 +696,9 @@ void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
             setThemedIcon(action, icon);
     }
 
-    // sidebar entries are QListWidgetItems, not actions; they are already
-    // keyed by row rather than by label
-    static const std::array<Icon, toIndex(TabIndex::TabCount)> sidebarIcons = {
-        Icon::Editor, Icon::Memory, Icon::Processor, Icon::Cache, Icon::Compiler, Icon::Profiler};
-    for (int row = 0; row < m_sidebar->count(); ++row)
-    {
-        if (row < static_cast<int>(sidebarIcons.size()))
-            m_sidebar->item(row)->setIcon(IconManager::getInstance().getIcon(sidebarIcons[row]));
-    }
+    // tab-strip entries are QIcons on a QTabBar, not actions, so the pass
+    // above does not reach them; the bar re-reads IconManager itself.
+    m_ribbon->retintIcons();
 }
 
 MainWindow::~MainWindow()
