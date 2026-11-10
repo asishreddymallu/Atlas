@@ -25,43 +25,66 @@ the assembler and processor layers. **It touches none of the 35 files below.**
 
 ## Mapping
 
-| # | Old path | New path | Kind | Origin | Upstream branches touching it |
-|---|---|---|---|---|---|
-| 1 | `src/ui/cache_tab/cacheconfigwidget.cpp` | `src/ui/cache_tab/cache_config_widget.cpp` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 2 | `src/ui/cache_tab/cacheconfigwidget.h` | `src/ui/cache_tab/cache_config_widget.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 3 | `src/ui/cache_tab/cacheconfigwidget.ui` | `src/ui/cache_tab/cache_config_widget.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 4 | `src/ui/cache_tab/cachemodel.cpp` | `src/ui/cache_tab/cache_model.cpp` | rename | Atlas | kamaldev, fix/cache, 1to4firstIm, refiningmodes |
-| 5 | `src/ui/cache_tab/cachemodel.h` | `src/ui/cache_tab/cache_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 6 | `src/ui/cache_tab/cachetab.cpp` | `src/ui/cache_tab/cache_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 7 | `src/ui/cache_tab/cachetab.h` | `src/ui/cache_tab/cache_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 8 | `src/ui/cache_tab/cachetab.ui` | `src/ui/cache_tab/cache_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 9 | `src/ui/common/kitestab.cpp` | `src/ui/common/kites_tab.cpp` | rename | Kites | 1to4firstIm, refiningmodes |
-| 10 | `src/ui/common/kitestab.h` | `src/ui/common/kites_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 11 | `src/ui/compiler_tab/compilertab.cpp` | `src/ui/compiler_tab/compiler_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 12 | `src/ui/compiler_tab/compilertab.h` | `src/ui/compiler_tab/compiler_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 13 | `src/ui/compiler_tab/compilertab.ui` | `src/ui/compiler_tab/compiler_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 14 | `src/ui/editor_tab/editortab.cpp` | `src/ui/editor_tab/editor_tab.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications |
-| 15 | `src/ui/editor_tab/editortab.h` | `src/ui/editor_tab/editor_tab.h` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications |
-| 16 | `src/ui/editor_tab/editortab.ui` | `src/ui/editor_tab/editor_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 17 | `src/ui/mainwindow/mainwindow.cpp` | `src/ui/main_window/main_window.cpp` | dir+rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications |
-| 18 | `src/ui/mainwindow/mainwindow.h` | `src/ui/main_window/main_window.h` | dir+rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications |
-| 19 | `src/ui/mainwindow/mainwindow.ui` | `src/ui/main_window/main_window.ui` | dir+rename | Kites | 1to4firstIm, refiningmodes |
-| 20 | `src/ui/memory_tab/memorymodel.cpp` | `src/ui/memory_tab/memory_model.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications |
-| 21 | `src/ui/memory_tab/memorymodel.h` | `src/ui/memory_tab/memory_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 22 | `src/ui/memory_tab/memorytab.cpp` | `src/ui/memory_tab/memory_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 23 | `src/ui/memory_tab/memorytab.h` | `src/ui/memory_tab/memory_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 24 | `src/ui/memory_tab/memorytab.ui` | `src/ui/memory_tab/memory_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 25 | `src/ui/processor_tab/processortab.cpp` | `src/ui/processor_tab/processor_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes |
-| 26 | `src/ui/processor_tab/processortab.h` | `src/ui/processor_tab/processor_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 27 | `src/ui/processor_tab/processortab.ui` | `src/ui/processor_tab/processor_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 28 | `src/ui/profiler_tab/profilertab.cpp` | `src/ui/profiler_tab/profiler_tab.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes |
-| 29 | `src/ui/profiler_tab/profilertab.h` | `src/ui/profiler_tab/profiler_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 30 | `src/ui/profiler_tab/profilertab.ui` | `src/ui/profiler_tab/profiler_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 31 | `src/ui/register_table/registercontainer.cpp` | `src/ui/register_table/register_container.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes |
-| 32 | `src/ui/register_table/registercontainer.h` | `src/ui/register_table/register_container.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 33 | `src/ui/register_table/registercontainer.ui` | `src/ui/register_table/register_container.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes |
-| 34 | `src/ui/register_table/registermodel.cpp` | `src/ui/register_table/register_model.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes |
-| 35 | `src/ui/register_table/registermodel.h` | `src/ui/register_table/register_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes |
+| # | Old path | New path | Kind | Origin | Upstream branches touching it | Commit | Status |
+|---|---|---|---|---|---|---|---|
+| 1 | `src/ui/cache_tab/cacheconfigwidget.cpp` | `src/ui/cache_tab/cache_config_widget.cpp` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `fde8670` | Done |
+| 2 | `src/ui/cache_tab/cacheconfigwidget.h` | `src/ui/cache_tab/cache_config_widget.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `fde8670` | Done |
+| 3 | `src/ui/cache_tab/cacheconfigwidget.ui` | `src/ui/cache_tab/cache_config_widget.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes | `fde8670` | Done |
+| 4 | `src/ui/cache_tab/cachemodel.cpp` | `src/ui/cache_tab/cache_model.cpp` | rename | Atlas | kamaldev, fix/cache, 1to4firstIm, refiningmodes | `bb16c8e` | Done |
+| 5 | `src/ui/cache_tab/cachemodel.h` | `src/ui/cache_tab/cache_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `bb16c8e` | Done |
+| 6 | `src/ui/cache_tab/cachetab.cpp` | `src/ui/cache_tab/cache_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes | `5b60d23` | Done |
+| 7 | `src/ui/cache_tab/cachetab.h` | `src/ui/cache_tab/cache_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `5b60d23` | Done |
+| 8 | `src/ui/cache_tab/cachetab.ui` | `src/ui/cache_tab/cache_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes | `5b60d23` | Done |
+| 9 | `src/ui/common/kitestab.cpp` | `src/ui/common/kites_tab.cpp` | rename | Kites | 1to4firstIm, refiningmodes | `4540949` | Done |
+| 10 | `src/ui/common/kitestab.h` | `src/ui/common/kites_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `4540949` | Done |
+| 11 | `src/ui/compiler_tab/compilertab.cpp` | `src/ui/compiler_tab/compiler_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes | `c129eff` | Done |
+| 12 | `src/ui/compiler_tab/compilertab.h` | `src/ui/compiler_tab/compiler_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `c129eff` | Done |
+| 13 | `src/ui/compiler_tab/compilertab.ui` | `src/ui/compiler_tab/compiler_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes | `c129eff` | Done |
+| 14 | `src/ui/editor_tab/editortab.cpp` | `src/ui/editor_tab/editor_tab.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications | `cb61d5a` | Done |
+| 15 | `src/ui/editor_tab/editortab.h` | `src/ui/editor_tab/editor_tab.h` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications | `cb61d5a` | Done |
+| 16 | `src/ui/editor_tab/editortab.ui` | `src/ui/editor_tab/editor_tab.ui` | rename (+ui_*.h) | Atlas | fix/cache, 1to4firstIm, refiningmodes | `cb61d5a` | Done |
+| 17 | `src/ui/mainwindow/mainwindow.cpp` | `src/ui/main_window/main_window.cpp` | dir+rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications | `767f19f`, `7f497ab` | Done |
+| 18 | `src/ui/mainwindow/mainwindow.h` | `src/ui/main_window/main_window.h` | dir+rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications | `767f19f`, `7f497ab` | Done |
+| 19 | `src/ui/mainwindow/mainwindow.ui` | `src/ui/main_window/main_window.ui` | dir+rename | Kites | 1to4firstIm, refiningmodes | `767f19f`, `7f497ab` | Done |
+| 20 | `src/ui/memory_tab/memorymodel.cpp` | `src/ui/memory_tab/memory_model.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes, linux-installer-for-applications | `e97585e` | Done |
+| 21 | `src/ui/memory_tab/memorymodel.h` | `src/ui/memory_tab/memory_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `e97585e` | Done |
+| 22 | `src/ui/memory_tab/memorytab.cpp` | `src/ui/memory_tab/memory_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes | `eb86428` | Done |
+| 23 | `src/ui/memory_tab/memorytab.h` | `src/ui/memory_tab/memory_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `eb86428` | Done |
+| 24 | `src/ui/memory_tab/memorytab.ui` | `src/ui/memory_tab/memory_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes | `eb86428` | Done |
+| 25 | `src/ui/processor_tab/processortab.cpp` | `src/ui/processor_tab/processor_tab.cpp` | rename | Atlas | fix/cache, 1to4firstIm, refiningmodes | `c85bc9f` | Done |
+| 26 | `src/ui/processor_tab/processortab.h` | `src/ui/processor_tab/processor_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `c85bc9f` | Done |
+| 27 | `src/ui/processor_tab/processortab.ui` | `src/ui/processor_tab/processor_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes | `c85bc9f` | Done |
+| 28 | `src/ui/profiler_tab/profilertab.cpp` | `src/ui/profiler_tab/profiler_tab.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes | `0285490` | Done |
+| 29 | `src/ui/profiler_tab/profilertab.h` | `src/ui/profiler_tab/profiler_tab.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `0285490` | Done |
+| 30 | `src/ui/profiler_tab/profilertab.ui` | `src/ui/profiler_tab/profiler_tab.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes | `0285490` | Done |
+| 31 | `src/ui/register_table/registercontainer.cpp` | `src/ui/register_table/register_container.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes | `01df771` | Done |
+| 32 | `src/ui/register_table/registercontainer.h` | `src/ui/register_table/register_container.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `01df771` | Done |
+| 33 | `src/ui/register_table/registercontainer.ui` | `src/ui/register_table/register_container.ui` | rename (+ui_*.h) | Kites | fix/cache, 1to4firstIm, refiningmodes | `01df771` | Done |
+| 34 | `src/ui/register_table/registermodel.cpp` | `src/ui/register_table/register_model.cpp` | rename | Atlas | kamaldev, ui/fixes, fix/cache, 1to4firstIm, refiningmodes | `fc1b5b5` | Done |
+| 35 | `src/ui/register_table/registermodel.h` | `src/ui/register_table/register_model.h` | rename | Kites | fix/cache, 1to4firstIm, refiningmodes | `fc1b5b5` | Done |
+
+## Corrections
+
+- The commit message of **`fde8670`** states that `ui_cacheconfigwidget.h` was
+  gone. That was wrong when written: AUTOUIC does not delete a generated header
+  when its `.ui` is renamed, so a stale copy was still present in the
+  incremental build directories. The clean build at the end of Phase 4 confirms
+  the header is genuinely gone and that no source file references it. The
+  commit itself is correct; only that one line of its message is not. It was
+  left unamended deliberately.
+
+## Status
+
+All 35 rows are **Done**. The **Commit** column gives the short hash that
+performed each rename, recovered from the rename records of the commits in
+`pre-reorg-v0..HEAD` rather than typed by hand. Rows 17-19 carry two hashes
+because the main window moved directory and changed file name in separate
+commits: `767f19f` moved `src/ui/mainwindow/` to `src/ui/main_window/`, and
+`7f497ab` renamed the files within it.
+
+As a cross-check, each row's recorded **New path** was compared against the
+path git actually arrives at by following that file's rename chain from its
+old path. All 35 agree.
 
 ## Kites-origin files that upstream feature branches have also changed
 
