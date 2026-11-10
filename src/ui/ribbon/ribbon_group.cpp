@@ -79,8 +79,13 @@ QToolButton *RibbonGroup::makeButton(QAction *action, Qt::ToolButtonStyle style)
     // stop. Recorded as a known limitation in docs/audit/known_issues.md.
     button->setFocusPolicy(Qt::NoFocus);
 
-    // Insert before the trailing stretch so buttons stay left-aligned.
-    m_row->insertWidget(m_row->count() - 1, button);
+    // Insert before the trailing stretch so buttons stay left-aligned, and
+    // centre it vertically. The alignment is not cosmetic: in a QBoxLayout a
+    // child with a Fixed vertical policy also caps the row's maximum height,
+    // so without it the 33 px spin box and the 37 px small buttons would
+    // squash the 69 px large ones down to their own height. An aligned item
+    // keeps its own height and stops constraining the row.
+    m_row->insertWidget(m_row->count() - 1, button, 0, Qt::AlignVCenter);
     m_buttons.append(button);
     if (m_compact)
         button->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -101,7 +106,9 @@ void RibbonGroup::addWidget(QWidget *widget)
 {
     if (!widget)
         return;
-    m_row->insertWidget(m_row->count() - 1, widget);
+    // Vertically centred for the same reason as the buttons: a Fixed-height
+    // widget here would otherwise cap the whole row.
+    m_row->insertWidget(m_row->count() - 1, widget, 0, Qt::AlignVCenter);
 }
 
 void RibbonGroup::addSeparator()

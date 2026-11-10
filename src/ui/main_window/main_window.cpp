@@ -12,6 +12,7 @@
 #include "ui/memory_tab/memory_tab.h"
 #include "ui/processor_tab/processor_tab.h"
 #include "ui/profiler_tab/profiler_tab.h"
+#include "ui/ribbon/ribbon_group.h"
 #include "ui/theme/icon_manager.h"
 #include "ui_main_window.h"
 #include "utils/utils.h"
@@ -22,7 +23,6 @@
 #include <QSpinBox>
 #include <QTabBar>
 #include <QVBoxLayout>
-#include <QWidgetAction>
 #include <QSplitter>
 #include <QMessageBox>
 #include <cassert>
@@ -34,6 +34,11 @@ namespace
 // Chrome icon size in logical pixels, shared by the toolbar and the ribbon's
 // tab strip so the two never disagree. IconManager's default matches it.
 constexpr int toolbarIconSize = 20;
+
+// Icon size for the ribbon's large (icon-over-text) buttons. Actions shown
+// both there and on the 20 px toolbar are rasterised at this size, so the
+// toolbar scales one down rather than blowing a small one up.
+constexpr QSize largeIconSize{32, 32};
 
 // Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
 // at runtime (Run<->Stop, Pause<->Resume) cannot lose its key hint.
@@ -77,6 +82,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setUpTabs();
     setUpRibbon();
     setUpProblemsDock();
+    // After the dock, because the Problems toggle is the dock's own action.
+    // Deliberately a separate pass rather than folding it into setUpRibbon()
+    // and moving that call: nothing here creates a QAction, so the window's
+    // action creation order is exactly what it was.
+    setUpPersistentGroups();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -139,6 +149,7 @@ void MainWindow::setUpProblemsDock()
     m_problemsDock->hide(); // stays out of the way until a Run reports something
 
     QAction *toggleAction = m_problemsDock->toggleViewAction();
+    m_problemsToggleAction = toggleAction;
     toggleAction->setText("Problems");
     toggleAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
     setActionHint(toggleAction, "Show or hide the Problems list");
@@ -193,12 +204,12 @@ void MainWindow::setUpToolBar()
 
     // set toolbar icons (resources in :/icons)
     setThemedIcon(m_processorAction, Icon::Processor);
-    setThemedIcon(m_runAction, Icon::Play);
+    setThemedIcon(m_runAction, Icon::Play, largeIconSize);
     setThemedIcon(m_pauseAction, Icon::Pause);
     setThemedIcon(m_undoAction, Icon::Undo);
     setThemedIcon(m_redoAction, Icon::Redo);
     setThemedIcon(m_stepAction, Icon::Step);
-    setThemedIcon(m_debugAction, Icon::Debug);
+    setThemedIcon(m_debugAction, Icon::Debug, largeIconSize);
     // Keyboard shortcuts. None of these collide with QPlainTextEdit's built-in
     // bindings (Ctrl+C/X/V/Z/Y/A and friends) or with the keys Editor
     // intercepts for the completer popup (Enter/Return/Escape/Tab/Backtab).
@@ -230,15 +241,15 @@ void MainWindow::setUpToolBar()
     m_stepDelaySpin->setToolTip("Set Execution Speed (in milliseconds)");
     //---------------------------------------------------------------
 
-    QWidgetAction *spinboxAction = new QWidgetAction(this);
-    spinboxAction->setDefaultWidget(m_stepDelaySpin);
-    // identical action order to before; the separators only group them visually
+    // The spin box is a widget, not an action, so it can have exactly one
+    // parent: it now lives in the ribbon's Run group (setUpPersistentGroups)
+    // rather than in a QWidgetAction here. A second spin box would be the
+    // duplicated state this work is meant to avoid. Its range, default and
+    // connection are unchanged; only its home moved.
     toolbar->addAction(m_processorAction);   // processor settings
     toolbar->addSeparator();
     toolbar->addAction(m_runAction);         // start / stop
     toolbar->addAction(m_debugAction);
-    toolbar->addSeparator();
-    toolbar->addAction(spinboxAction);     // step interval
     toolbar->addSeparator();
     toolbar->addAction(m_pauseAction);       // transport
     toolbar->addAction(m_stepAction);
@@ -255,7 +266,7 @@ void MainWindow::setUpToolBar()
                     m_processorAction->setDisabled(true);
                     m_pauseAction->setEnabled(true);
                     m_runAction->setText("Stop");
-                    setThemedIcon(m_runAction, Icon::Stop);
+                    setThemedIcon(m_runAction, Icon::Stop, largeIconSize);
                     setActionHint(m_runAction, "Stop execution");
                     this->run();
                 }
@@ -263,7 +274,7 @@ void MainWindow::setUpToolBar()
                 {
                     // emit stopSignal();
                     m_runAction->setText("Run");
-                    setThemedIcon(m_runAction, Icon::Play);
+                    setThemedIcon(m_runAction, Icon::Play, largeIconSize);
                     setActionHint(m_runAction, "Run program");
                     m_processorManager->stop();
                 }
@@ -276,7 +287,7 @@ void MainWindow::setUpToolBar()
                 m_processorAction->setDisabled(true);
                 // debug run starts paused, so the toolbar starts in the paused state
                 m_runAction->setText("Stop");
-                setThemedIcon(m_runAction, Icon::Stop);
+                setThemedIcon(m_runAction, Icon::Stop, largeIconSize);
                 setActionHint(m_runAction, "Stop execution");
                 m_pauseAction->setEnabled(true);
                 m_pauseAction->setText("Resume");
@@ -366,6 +377,32 @@ void MainWindow::setUpRibbon()
     setTabOrder(m_ribbon->tabBar(), m_stackedTabs);
 }
 
+void MainWindow::setUpPersistentGroups()
+{
+    // Shown left of the per-tab page on every tab, so execution stays
+    // reachable while looking at any of them. Every button is bound to the
+    // QAction the menu or the toolbar already uses - QToolButton's default
+    // action - so enabled, checked, text, icon and tooltip are the action's,
+    // not a second copy, and no second shortcut is registered.
+    RibbonGroup *run = m_ribbon->addPersistentGroup("Run");
+    run->addLarge(m_runAction);
+    run->addLarge(m_debugAction);
+    run->addWidget(m_stepDelaySpin); // reparented out of the toolbar
+    run->addSeparator();
+    run->addSmall(m_pauseAction);
+    run->addSmall(m_stepAction);
+    run->addSeparator();
+    run->addSmall(m_undoAction);
+    run->addSmall(m_redoAction);
+    run->addSeparator();
+    run->addSmall(m_processorAction);
+
+    RibbonGroup *file = m_ribbon->addPersistentGroup("File");
+    file->addLarge(m_openAction);
+    file->addLarge(m_saveAction);
+    file->addSmall(m_problemsToggleAction);
+}
+
 void MainWindow::setCurrentTab(TabIndex index)
 {
     const int target = static_cast<int>(toIndex(index));
@@ -401,13 +438,14 @@ void MainWindow::setUpMenubar()
     QAction *saveAction  = new QAction("Save", this);
     QAction *exitAction  = new QAction("Exit", this);
     QAction *aboutAction = new QAction("About", this);
-    setThemedIcon(openAction, Icon::Open);
-    setThemedIcon(saveAction, Icon::Save);
+    setThemedIcon(openAction, Icon::Open, largeIconSize);
+    setThemedIcon(saveAction, Icon::Save, largeIconSize);
     openAction->setShortcut(QKeySequence::Open);  // Ctrl+O
     saveAction->setShortcut(QKeySequence::Save);  // Ctrl+S
     setActionHint(openAction, "Open an assembly file");
     setActionHint(saveAction, "Save the current program");
     m_saveAction = saveAction;
+    m_openAction = openAction;
     setThemedIcon(aboutAction, Icon::About);
 
     ///////////File Menu///////////////////
@@ -663,7 +701,7 @@ void MainWindow::runFinishedSlot()
     if (themedIconOf(m_runAction) == Icon::Stop)
     {
         m_runAction->setText("Run");
-        setThemedIcon(m_runAction, Icon::Play);
+        setThemedIcon(m_runAction, Icon::Play, largeIconSize);
         m_runAction->setToolTip("Run program");
         // when the program finishes we set the run button text back to run
     }

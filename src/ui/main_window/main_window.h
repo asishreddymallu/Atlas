@@ -65,6 +65,7 @@ private:
     void setUpStatusBar();
     void setUpToolBar();
     void setUpRibbon();
+    void setUpPersistentGroups();
     void setUpMenubar();
     void setUpProblemsDock();
     void setUpTabs();
@@ -78,6 +79,10 @@ private:
     // held so Save can be disabled while the editor is read-only (i.e. while a
     // program is running); a disabled QAction also swallows its shortcut
     QAction           *m_saveAction        {nullptr};
+    QAction           *m_openAction        {nullptr};
+    // the Problems dock's own toggleViewAction, held so the ribbon can
+    // show the same action the View menu does
+    QAction           *m_problemsToggleAction {nullptr};
     // The execution controls, held rather than left local to setUpToolBar().
     // runFinishedSlot() used to recover them by walking
     // findChildren<QToolBar*>()[0] and comparing action->text() - text these
