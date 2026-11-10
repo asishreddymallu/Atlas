@@ -1,4 +1,4 @@
-#include "kitestab.h"
+#include "kites_tab.h"
 
 namespace Kites
 {

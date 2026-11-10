@@ -2,7 +2,7 @@
 #define PROCESSORTAB_H
 
 #include "processor/processor_manager.h"
-#include "ui/common//kitestab.h"
+#include "ui/common/kites_tab.h"
 #include "vm_state_table_model.h"
 
 namespace Kites

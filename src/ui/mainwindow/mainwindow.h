@@ -1,6 +1,6 @@
 #pragma once
 #include "processor/processor_manager.h"
-#include "ui/common/kitestab.h"
+#include "ui/common/kites_tab.h"
 #include "ui/problems_panel/problems_dock.h"
 #include "ui/register_table/registercontainer.h"
 #include "ui/theme/theme_manager.h"

@@ -6,7 +6,7 @@
 #include "language_service/diagnostic.h"
 #include "language_service/language_service.h"
 #include "processor/processor_manager.h"
-#include "ui/common/kitestab.h"
+#include "ui/common/kites_tab.h"
 #include <QPlainTextEdit>
 #include <QString>
 #include <QTextCharFormat>
