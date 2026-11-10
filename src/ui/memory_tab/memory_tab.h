@@ -1,8 +1,8 @@
 #ifndef MEMORYTAB_H
 #define MEMORYTAB_H
 
-#include "ui/common/kitestab.h"
-#include "memorymodel.h"
+#include "ui/common/kites_tab.h"
+#include "memory_model.h"
 namespace Kites
 {
 

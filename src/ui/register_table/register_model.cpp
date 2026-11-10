@@ -1,4 +1,4 @@
-#include "registermodel.h"
+#include "register_model.h"
 #include "ui/common/table_font.h"
 #include "ui/theme/theme_manager.h"
 #include "common/register_names.h"

@@ -1,4 +1,4 @@
-#include "memorymodel.h"
+#include "memory_model.h"
 #include "ui/common/table_font.h"
 #include "config/config.h"
 #include <QDebug>

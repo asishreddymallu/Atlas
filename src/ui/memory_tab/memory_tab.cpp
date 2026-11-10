@@ -1,6 +1,6 @@
-#include "memorytab.h"
+#include "memory_tab.h"
 #include "ui/common/data_table_style.h"
-#include "ui_memorytab.h"
+#include "ui_memory_tab.h"
 namespace Kites
 {
 

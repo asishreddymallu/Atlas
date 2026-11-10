@@ -1,3 +1,5 @@
+> Historical record. Paths in this document are as of 2026-11-02; see [docs/ARCHITECTURE.md](../ARCHITECTURE.md) for the current layout and [docs/audit/path_mapping.md](path_mapping.md) for old to new paths.
+
 # Disabled Tests Audit & Investigation
 
 - **Branch**: `test/disabled-tests-audit`

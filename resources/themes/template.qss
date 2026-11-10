@@ -168,7 +168,7 @@ QTextEdit, QPlainTextEdit {
 
 /* ── Compiler output console border variants ─────────────────────
  * Toggled by objectName property set at runtime from AppSettings;
- * see compilertab.cpp. */
+ * see compiler_tab.cpp. */
 QPlainTextEdit#outputTextEdit[borderStyle="none"] {
     border: none;
 }

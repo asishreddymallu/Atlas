@@ -1,5 +1,5 @@
-#include "cacheconfigwidget.h"
-#include "ui_cacheconfigwidget.h"
+#include "cache_config_widget.h"
+#include "ui_cache_config_widget.h"
 #include <QFileDialog>
 #include <QMessageBox>
 

@@ -7,7 +7,7 @@
  * comparing the cursor the dock produces against the squiggle's selection.
  */
 #include "language_service/diagnostic.h"
-#include "ui/editor_tab/editortab.h"
+#include "ui/editor_tab/editor_tab.h"
 #include "ui/problems_panel/problems_dock.h"
 #include "ui/problems_panel/problems_model.h"
 

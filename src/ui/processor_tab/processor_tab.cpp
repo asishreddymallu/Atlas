@@ -1,8 +1,8 @@
-#include "processortab.h"
+#include "processor_tab.h"
 #include "ui/common/data_table_style.h"
 #include "circuit_scene.h"
 #include "circuit_view.h"
-#include "ui_processortab.h"
+#include "ui_processor_tab.h"
 #include <QHBoxLayout>
 
 // #include "vsrtl/graphics/vsrtl_widget.h"

@@ -1,3 +1,5 @@
+> Historical record. Paths in this document are as of 2026-11-02; see [docs/ARCHITECTURE.md](../ARCHITECTURE.md) for the current layout and [docs/audit/path_mapping.md](../audit/path_mapping.md) for old to new paths.
+
 # Editor UI Architecture & Diagnostics Exploration
 
 ## Executive Summary

@@ -1,7 +1,7 @@
 #ifndef COMPILERTAB_H
 #define COMPILERTAB_H
 
-#include "ui/common/kitestab.h"
+#include "ui/common/kites_tab.h"
 #include <QWidget>
 
 
