@@ -4,7 +4,7 @@
 #include "common/globals.h"
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
 #include "processor/processor_manager.h"
-#include "ui/cache_tab/cachetab.h"
+#include "ui/cache_tab/cache_tab.h"
 #include "ui/compiler_tab/compilertab.h"
 #include "ui/dialogs/processor_dialog.h"
 #include "ui/dialogs/settings_dialog.h"

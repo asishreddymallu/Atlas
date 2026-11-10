@@ -1,8 +1,8 @@
-#include "cachetab.h"
+#include "cache_tab.h"
 #include "ui/common/data_table_style.h"
 #include "cache_grid_delegate.h"
 #include "cache_config_widget.h"
-#include "ui_cachetab.h"
+#include "ui_cache_tab.h"
 #include <QSignalBlocker>
 #include <algorithm>
 
