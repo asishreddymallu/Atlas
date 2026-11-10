@@ -212,3 +212,64 @@ TEST(EditorDiagnosticMapping, SeveralDiagnosticsCanMapOntoOneOriginalLine)
     EXPECT_EQ(selectionLine(expanded[0]), 2);
     EXPECT_EQ(selectionLine(expanded[1]), 3);
 }
+
+// --------------------------------------------------------------------------
+// byte columns -> UTF-16 offsets, and clamping
+// --------------------------------------------------------------------------
+
+TEST(EditorDiagnosticMapping, ByteColumnsAreConvertedToUtf16Offsets)
+{
+    //  The line from parser_error_column_test, with the e-acute as the two
+    //  UTF-8 bytes 0xC3 0xA9:
+    //
+    //      "    .string \"caf<e-acute>\", \"x\""
+    //
+    //  By byte:  '"' of the second literal is column 22, its closing quote
+    //  ends it at column 25. A QTextCursor counts UTF-16 units, where the
+    //  e-acute is one unit, so the same token is at offsets 20..23 - one less
+    //  at each end, matching the one extra byte before it.
+    const QString line = QString::fromUtf8("    .string \"caf\xc3\xa9\", \"x\"");
+    ASSERT_EQ(line.toUtf8().size(), 24);  // bytes
+    ASSERT_EQ(line.size(), 23);           // UTF-16 units
+
+    const QString source = "main:\n" + line + "\n";
+    EditorTab tab(nullptr, nullptr);
+    tab.setRawText(source);
+    expandedPane(tab)->setPlainText(source);
+    tab.setExpansionMapping({1, 2, 3});
+
+    feedDiagnostic(tab, /*line=*/2, /*column=*/22, /*endColumn=*/25);
+
+    const auto input = squiggles(inputPane(tab));
+    ASSERT_EQ(input.size(), 1);
+    const QTextCursor cursor = input[0].cursor;
+    const int start = cursor.selectionStart() - cursor.block().position();
+    const int end   = cursor.selectionEnd()   - cursor.block().position();
+    EXPECT_EQ(start, 20) << "byte column 22 is UTF-16 offset 20";
+    EXPECT_EQ(end, 23);
+    EXPECT_EQ(cursor.selectedText(), QString("\"x\"")) << "must select exactly the token";
+}
+
+TEST(EditorDiagnosticMapping, AColumnPastTheEndOfTheLineIsClamped)
+{
+    //  "    ret" is 7 characters; a span of 40..50 cannot be honoured and must
+    //  clamp to the end of the block rather than build an invalid cursor.
+    const QString source = "main:\n    ret\n";
+    EditorTab tab(nullptr, nullptr);
+    tab.setRawText(source);
+    expandedPane(tab)->setPlainText(source);
+    tab.setExpansionMapping({1, 2, 3});
+
+    feedDiagnostic(tab, 2, 40, 50);
+
+    const auto input = squiggles(inputPane(tab));
+    ASSERT_EQ(input.size(), 1);
+    const QTextCursor cursor = input[0].cursor;
+    EXPECT_EQ(cursor.block().text(), QString("    ret"));
+    EXPECT_LE(cursor.selectionEnd() - cursor.block().position(), 7);
+    EXPECT_GE(cursor.selectionStart() - cursor.block().position(), 0);
+    // both ends clamp to the same place, so the span collapses and the
+    // whole-line fallback takes over
+    EXPECT_EQ(cursor.selectionStart() - cursor.block().position(), 0);
+    EXPECT_EQ(cursor.selectionEnd() - cursor.block().position(), 7);
+}

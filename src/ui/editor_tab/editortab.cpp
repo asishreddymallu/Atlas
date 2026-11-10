@@ -221,13 +221,44 @@ QString lineText(const QTextDocument *document, int line)
     return block.isValid() ? block.text() : QString();
 }
 
+/// Converts a 1-based BYTE column, as the lexer counts them, into a 0-based
+/// UTF-16 offset into `text`, as QTextCursor counts them.
+///
+/// The lexer advances its column once per std::string byte, so a UTF-8
+/// multi-byte character costs as many columns as it has bytes while a
+/// QTextCursor sees it as one or two UTF-16 units. Walking the string and
+/// adding each code point's UTF-8 length keeps the two in step. The result is
+/// clamped to the end of the text, so a column past the end of the line
+/// selects up to the end rather than producing an invalid cursor.
+int utf16OffsetForByteColumn(const QString &text, int byteColumn)
+{
+    if (byteColumn <= 1)
+        return 0;
+
+    const int targetBytes = byteColumn - 1;
+    int bytes = 0;
+    int offset = 0;
+    while (offset < text.size() && bytes < targetBytes)
+    {
+        const QChar unit = text.at(offset);
+        char32_t codePoint = unit.unicode();
+        int units = 1;
+        if (unit.isHighSurrogate() && offset + 1 < text.size() &&
+            text.at(offset + 1).isLowSurrogate())
+        {
+            codePoint = QChar::surrogateToUcs4(unit, text.at(offset + 1));
+            units = 2;
+        }
+        bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+        offset += units;
+    }
+    return offset;
+}
+
 /// Builds a squiggle selection for 1-based `line` of `document`.
 ///
-/// Spans [startColumn, endColumn) are 1-based and come from the lexer, which
-/// counts bytes; QTextCursor counts UTF-16 units, so on a line containing
-/// non-ASCII before the token the span can be a little wide. Both ends are
-/// clamped to the block, so the worst case is a slightly-off highlight rather
-/// than an invalid cursor. See docs/audit/known_issues.md.
+/// Spans [startColumn, endColumn) are 1-based byte columns from the lexer and
+/// are converted to UTF-16 offsets and clamped to the block before use.
 ///
 /// Passing startColumn <= 0 (or a span that does not fit) highlights the whole
 /// line, which is the documented fallback for a diagnostic with no column.
@@ -241,14 +272,16 @@ bool makeSquiggle(QTextDocument *document, int line, int startColumn, int endCol
     if (!block.isValid())
         return false;
 
-    const int length = block.length() - 1; // block.length() counts the separator
+    const QString text = block.text();
+    const int length = text.size();
     QTextCursor cursor(block);
 
     const bool haveSpan = startColumn > 0 && endColumn > startColumn && length > 0;
     if (haveSpan)
     {
-        const int from = std::min(startColumn - 1, length);
-        const int to   = std::min(endColumn - 1, length);
+        // byte columns -> UTF-16 offsets, both clamped to the block
+        const int from = std::min(utf16OffsetForByteColumn(text, startColumn), length);
+        const int to   = std::min(utf16OffsetForByteColumn(text, endColumn), length);
         cursor.setPosition(block.position() + from);
         cursor.setPosition(block.position() + to, QTextCursor::KeepAnchor);
     }
