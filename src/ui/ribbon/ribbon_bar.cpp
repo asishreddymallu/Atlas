@@ -90,6 +90,11 @@ RibbonPage *RibbonBar::page(int index) const
     return qobject_cast<RibbonPage *>(m_pages->widget(index));
 }
 
+RibbonPage *RibbonBar::currentPage() const
+{
+    return qobject_cast<RibbonPage *>(m_pages->currentWidget());
+}
+
 RibbonGroup *RibbonBar::addPersistentGroup(const QString &caption)
 {
     auto *group = new RibbonGroup(caption, m_persistent);

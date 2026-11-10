@@ -42,6 +42,9 @@ class RibbonBar : public QWidget
 
     int         count() const;
     RibbonPage *page(int index) const;
+    /// The page the panel is showing. Always page(currentIndex()); it exists
+    /// so that invariant can be asserted from outside.
+    RibbonPage *currentPage() const;
 
     /// A group shown to the left of the page area on every tab.
     RibbonGroup *addPersistentGroup(const QString &caption);
