@@ -2,7 +2,7 @@
 #define MEMORYTAB_H
 
 #include "ui/common/kites_tab.h"
-#include "memorymodel.h"
+#include "memory_model.h"
 namespace Kites
 {
 
