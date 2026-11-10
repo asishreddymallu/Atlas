@@ -273,3 +273,68 @@ TEST(EditorDiagnosticMapping, AColumnPastTheEndOfTheLineIsClamped)
     EXPECT_EQ(cursor.selectionStart() - cursor.block().position(), 0);
     EXPECT_EQ(cursor.selectionEnd() - cursor.block().position(), 7);
 }
+
+TEST(EditorDiagnosticMapping, AFourByteCodePointCountsAsTwoUtf16Units)
+{
+    //  "    .string \"<U+1F600>\", \"x\"" - the emoji is 4 UTF-8 bytes but a
+    //  surrogate PAIR, so 2 UTF-16 units. Hand-derived from the source text:
+    //
+    //      char   bytes  byteCol  u16off
+    //      '"'      1      13       12
+    //      emoji    4      14       13     <- 4 bytes, 2 units
+    //      '"'      1      18       15
+    //      ','      1      19       16
+    //      ' '      1      20       17
+    //      '"'      1      21       18     <- the token we point at
+    //      'x'      1      22       19
+    //      '"'      1      23       20
+    //      (end)           24       21
+    //
+    //  so byte columns 21..24 are UTF-16 offsets 18..21.
+    const QString line = QString::fromUtf8("    .string \"\xf0\x9f\x98\x80\", \"x\"");
+    ASSERT_EQ(line.toUtf8().size(), 23); // bytes
+    ASSERT_EQ(line.size(), 21);          // UTF-16 units: 2 for the emoji
+
+    const QString source = "main:\n" + line + "\n";
+    EditorTab tab(nullptr, nullptr);
+    tab.setRawText(source);
+    expandedPane(tab)->setPlainText(source);
+    tab.setExpansionMapping({1, 2, 3});
+
+    feedDiagnostic(tab, /*line=*/2, /*column=*/21, /*endColumn=*/24);
+
+    const auto input = squiggles(inputPane(tab));
+    ASSERT_EQ(input.size(), 1);
+    const QTextCursor cursor = input[0].cursor;
+    EXPECT_EQ(cursor.selectionStart() - cursor.block().position(), 18);
+    EXPECT_EQ(cursor.selectionEnd()   - cursor.block().position(), 21);
+    EXPECT_EQ(cursor.selectedText(), QString("\"x\""));
+}
+
+TEST(EditorDiagnosticMapping, AByteColumnInsideAMultiByteCharacterRoundsUpToTheNextBoundary)
+{
+    //  Same line. The emoji spans byte columns 14..17; byte column 15 lands
+    //  INSIDE it. The helper walks whole code points, so it stops only once it
+    //  has consumed at least that many bytes - resolving to UTF-16 offset 15,
+    //  the quote immediately AFTER the emoji. It rounds up to the next
+    //  character boundary and can never land between the two surrogates, so
+    //  the cursor stays valid and nothing reads past the line.
+    const QString line = QString::fromUtf8("    .string \"\xf0\x9f\x98\x80\", \"x\"");
+    const QString source = "main:\n" + line + "\n";
+    EditorTab tab(nullptr, nullptr);
+    tab.setRawText(source);
+    expandedPane(tab)->setPlainText(source);
+    tab.setExpansionMapping({1, 2, 3});
+
+    feedDiagnostic(tab, /*line=*/2, /*column=*/15, /*endColumn=*/24);
+
+    const auto input = squiggles(inputPane(tab));
+    ASSERT_EQ(input.size(), 1);
+    const QTextCursor cursor = input[0].cursor;
+    const int start = cursor.selectionStart() - cursor.block().position();
+    EXPECT_EQ(start, 15) << "rounds up past the emoji, never mid-surrogate";
+    EXPECT_EQ(cursor.selectionEnd() - cursor.block().position(), 21);
+    EXPECT_EQ(cursor.selectedText(), QString("\", \"x\""));
+    // the selection boundary is a valid character boundary, not a lone surrogate
+    EXPECT_FALSE(line.at(start).isLowSurrogate());
+}
