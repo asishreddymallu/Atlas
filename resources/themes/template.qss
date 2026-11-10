@@ -373,6 +373,46 @@ QSplitter::handle:hover {
     background-color: {{accent}};
 }
 
+/* ── Dock widgets (Problems) ───────────────────────────────────
+ * The dock's table inherits the QTableView rules above, so only the frame,
+ * title bar and empty state need styling here. */
+QDockWidget {
+    background-color: {{surface}};
+    color: {{foreground}};
+    titlebar-close-icon: none;
+    titlebar-normal-icon: none;
+}
+QDockWidget::title {
+    background-color: {{background}};
+    padding: 6px 10px;          /* spacing scale */
+    border-top: 1px solid {{border}};
+    border-bottom: 1px solid {{border}};
+    text-align: left;
+}
+QDockWidget::close-button,
+QDockWidget::float-button {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px;
+    icon-size: 12px;
+}
+QDockWidget::close-button:hover,
+QDockWidget::float-button:hover {
+    background-color: {{currentLine}};
+}
+QDockWidget::close-button:pressed,
+QDockWidget::float-button:pressed {
+    background-color: {{selection}};
+}
+
+/* the "No problems" placeholder sits on the dock's surface */
+QLabel#problemsEmptyState {
+    color: {{mutedForeground}};
+    font-size: 13px;
+    background-color: {{surface}};
+}
+
 /* ── Status bar ────────────────────────────────────────────────── */
 QStatusBar {
     background-color: {{surface}};
