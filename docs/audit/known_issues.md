@@ -54,8 +54,8 @@ evidence. Nothing here is a guess; each entry names the lines it was read from.
 
 ## 3. "Size in Bits" label contradicted its own value
 
-- **Where**: `src/ui/cache_tab/cacheconfigwidget.ui` (label `label_9`), value
-  written at `cacheconfigwidget.cpp:127`.
+- **Where**: `src/ui/cache_tab/cache_config_widget.ui` (label `label_9`), value
+  written at `cache_config_widget.cpp:127`.
 - **What**: the label read `Size in Bits:` while the field is populated with
   ```cpp
   ui->sizeLineEdit->setText(QString::number(newStats.cacheSizeInBytes) + " bytes");
@@ -65,7 +65,7 @@ evidence. Nothing here is a guess; each entry names the lines it was read from.
   That is correct whichever unit is really meant, because the value carries
   its own unit.
 - **Still open**: which unit is actually correct. If `cacheSizeInBytes` really
-  holds bits and is misnamed, the suffix at `cacheconfigwidget.cpp:127` is
+  holds bits and is misnamed, the suffix at `cache_config_widget.cpp:127` is
   wrong and so is the field name. If it really holds bytes, the original
   label was simply wrong and this is now resolved. Determining which requires
   reading the cache model's size accounting - simulator logic, out of scope
