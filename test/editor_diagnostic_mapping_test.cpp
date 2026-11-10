@@ -8,7 +8,7 @@
  * line numbers drift from the user's source. The programs below are the ones
  * from the stage 3 investigation.
  */
-#include "ui/editor_tab/editortab.h"
+#include "ui/editor_tab/editor_tab.h"
 
 #include <gtest/gtest.h>
 

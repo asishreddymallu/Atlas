@@ -8,7 +8,7 @@
 #include "ui/compiler_tab/compiler_tab.h"
 #include "ui/dialogs/processor_dialog.h"
 #include "ui/dialogs/settings_dialog.h"
-#include "ui/editor_tab/editortab.h"
+#include "ui/editor_tab/editor_tab.h"
 #include "ui/memory_tab/memory_tab.h"
 #include "ui/processor_tab/processor_tab.h"
 #include "ui/profiler_tab/profiler_tab.h"

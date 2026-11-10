@@ -1,7 +1,7 @@
-#include "editortab.h"
+#include "editor_tab.h"
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
 #include "ui/theme/theme_manager.h"
-#include "ui_editortab.h"
+#include "ui_editor_tab.h"
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
