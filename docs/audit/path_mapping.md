@@ -86,6 +86,15 @@ As a cross-check, each row's recorded **New path** was compared against the
 path git actually arrives at by following that file's rename chain from its
 old path. All 35 agree.
 
+## Historical captures
+
+`docs/audit/baseline_warnings.txt` is captured compiler output from before this
+refactor, and it deliberately still names the old file names — `cachemodel.cpp`,
+`editortab.h`, `compilertab.cpp`, `registermodel.cpp`, `profilertab.cpp`. It is
+a verbatim record of what the build printed at the time, not prose about the
+tree, so rewriting those paths would falsify the capture. Read it against the
+mapping table above.
+
 ## Kites-origin files that upstream feature branches have also changed
 
 These 18 are the rows where rename and upstream divergence overlap. None is on
