@@ -1,6 +1,6 @@
-#include "registercontainer.h"
+#include "register_container.h"
 #include "ui/common/data_table_style.h"
-#include "ui_registercontainer.h"
+#include "ui_register_container.h"
 #include "processor/registers.h"
 #include "ui/common/collapsible_section.h"
 #include <QHeaderView>
