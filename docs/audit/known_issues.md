@@ -175,3 +175,29 @@ Recorded because they changed reported columns on directive lines.
 - **Status**: not fixed. The guard is meant to reject genuinely malformed
   templates such as consecutive commas; it should trim pieces before testing
   for emptiness rather than treating a trailing comma as malformed.
+
+---
+
+## 9. `TEST_DIR` is never set, so a dead glob scans the whole filesystem
+
+- **Where**: `CMakeLists.txt:42`.
+  ```cmake
+  file(GLOB_RECURSE TEST_FILES "${TEST_DIR}/*.cpp")
+  ```
+- **What**: `TEST_DIR` is defined nowhere. `git grep TEST_DIR` over the tracked
+  CMake files returns exactly one hit - this use site. The pattern therefore
+  expands to `/*.cpp`, and `GLOB_RECURSE` walks the filesystem from root.
+- **Observed**: evaluating that one line on its own with `cmake -P` reports
+  `TEST_DIR is ''`, the pattern as `/*.cpp`, and a result list of **1015**
+  files on this machine - the first being
+  `/home/<user>/.cache/uv/archive-v0/.../generate_umath_validation_data.cpp`,
+  i.e. outside the repository entirely. The same script takes **3.64 s**
+  against **0.01 s** for a no-op script, so the cost is the directory walk.
+- **Consequence is cost, not correctness**: the `TEST_FILES` set here is never
+  read. `test/CMakeLists.txt:7` defines its own `TEST_FILES` with
+  `file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "*.cpp")` in its own scope,
+  and that is the variable consumed at `test/CMakeLists.txt:10` and `:46`. The
+  top-level value is shadowed before it could be used.
+- **Status**: not fixed. Deleting line 42, or setting `TEST_DIR`, is a build
+  change and this work package is documentation only. Noted so the configure-
+  time cost is not mistaken for a CMake or filesystem problem.
