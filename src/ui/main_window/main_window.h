@@ -12,6 +12,8 @@
 #include <QThread>
 #include <QWidget>
 
+class QSpinBox;
+
 namespace Kites
 {
 QT_BEGIN_NAMESPACE
@@ -76,6 +78,20 @@ private:
     // held so Save can be disabled while the editor is read-only (i.e. while a
     // program is running); a disabled QAction also swallows its shortcut
     QAction           *m_saveAction        {nullptr};
+    // The execution controls, held rather than left local to setUpToolBar().
+    // runFinishedSlot() used to recover them by walking
+    // findChildren<QToolBar*>()[0] and comparing action->text() - text these
+    // same handlers rewrite at runtime (Run<->Stop, Pause<->Resume). That is
+    // only safe while exactly one toolbar exists and no action is shown
+    // twice, and the ribbon makes both assumptions false.
+    QAction           *m_processorAction   {nullptr};
+    QAction           *m_runAction         {nullptr};
+    QAction           *m_pauseAction       {nullptr};
+    QAction           *m_debugAction       {nullptr};
+    QAction           *m_stepAction        {nullptr};
+    QAction           *m_undoAction        {nullptr};
+    QAction           *m_redoAction        {nullptr};
+    QSpinBox          *m_stepDelaySpin     {nullptr};
     ProblemsDock      *m_problemsDock     {nullptr};
     RibbonBar         *m_ribbon            {nullptr};
     QStackedWidget    *m_stackedTabs       {nullptr};

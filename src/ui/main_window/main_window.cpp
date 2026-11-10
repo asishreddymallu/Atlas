@@ -174,162 +174,165 @@ void MainWindow::setUpStatusBar()
 void MainWindow::setUpToolBar()
 {
     QToolBar *toolbar         = addToolBar("Main Toolbar");
-    QAction  *processorAction = new QAction("Processor", this);
-    QAction  *runAction       = new QAction("Run", this);
-    QAction  *pauseAction     = new QAction("Pause", this);
-    QAction  *debugAction     = new QAction("Debug Run", this);
-    QAction  *stepAction      = new QAction("Step", this);
-    QAction  *undoAction      = new QAction("Undo", this);
-    QAction  *redoAction      = new QAction("Redo", this);
+    // Held as members so every place that needs them - the ribbon from the
+    // next commit, and runFinishedSlot() below - can name the action instead
+    // of hunting for it by its user-visible text in whichever QToolBar Qt
+    // happens to return first. Creation order is unchanged.
+    m_processorAction = new QAction("Processor", this);
+    m_runAction       = new QAction("Run", this);
+    m_pauseAction     = new QAction("Pause", this);
+    m_debugAction     = new QAction("Debug Run", this);
+    m_stepAction      = new QAction("Step", this);
+    m_undoAction      = new QAction("Undo", this);
+    m_redoAction      = new QAction("Redo", this);
 
-    stepAction->setDisabled(true);
-    pauseAction->setDisabled(true);
-    undoAction->setDisabled(true);
-    redoAction->setDisabled(true);
+    m_stepAction->setDisabled(true);
+    m_pauseAction->setDisabled(true);
+    m_undoAction->setDisabled(true);
+    m_redoAction->setDisabled(true);
 
     // set toolbar icons (resources in :/icons)
-    setThemedIcon(processorAction, Icon::Processor);
-    setThemedIcon(runAction, Icon::Play);
-    setThemedIcon(pauseAction, Icon::Pause);
-    setThemedIcon(undoAction, Icon::Undo);
-    setThemedIcon(redoAction, Icon::Redo);
-    setThemedIcon(stepAction, Icon::Step);
-    setThemedIcon(debugAction, Icon::Debug);
+    setThemedIcon(m_processorAction, Icon::Processor);
+    setThemedIcon(m_runAction, Icon::Play);
+    setThemedIcon(m_pauseAction, Icon::Pause);
+    setThemedIcon(m_undoAction, Icon::Undo);
+    setThemedIcon(m_redoAction, Icon::Redo);
+    setThemedIcon(m_stepAction, Icon::Step);
+    setThemedIcon(m_debugAction, Icon::Debug);
     // Keyboard shortcuts. None of these collide with QPlainTextEdit's built-in
     // bindings (Ctrl+C/X/V/Z/Y/A and friends) or with the keys Editor
     // intercepts for the completer popup (Enter/Return/Escape/Tab/Backtab).
     // Toolbar Undo/Redo are deliberately left unbound: they undo a VM step,
     // not a text edit, and Ctrl+Z in the editor must stay text undo.
-    runAction->setShortcut(QKeySequence(Qt::Key_F5));
-    debugAction->setShortcut(QKeySequence(Qt::Key_F9));
-    pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
-    stepAction->setShortcut(QKeySequence(Qt::Key_F10));
+    m_runAction->setShortcut(QKeySequence(Qt::Key_F5));
+    m_debugAction->setShortcut(QKeySequence(Qt::Key_F9));
+    m_pauseAction->setShortcut(QKeySequence(Qt::Key_F6));
+    m_stepAction->setShortcut(QKeySequence(Qt::Key_F10));
 
     // tooltips for accessibility
-    setActionHint(processorAction, "Processor settings");
-    setActionHint(runAction, "Run program");
-    setActionHint(pauseAction, "Pause execution");
-    setActionHint(debugAction, "Start debug run");
-    setActionHint(stepAction, "Execute single step");
-    setActionHint(undoAction, "Undo last VM step");
-    setActionHint(redoAction, "Redo last VM step");
+    setActionHint(m_processorAction, "Processor settings");
+    setActionHint(m_runAction, "Run program");
+    setActionHint(m_pauseAction, "Pause execution");
+    setActionHint(m_debugAction, "Start debug run");
+    setActionHint(m_stepAction, "Execute single step");
+    setActionHint(m_undoAction, "Undo last VM step");
+    setActionHint(m_redoAction, "Redo last VM step");
     // one icon size for the whole chrome; the sidebar uses the same value
     toolbar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
     // single fixed toolbar: the drag handle is just visual noise
     toolbar->setMovable(false);
 
     //------------Spinbox for setting execution speed----------------
-    QSpinBox *spinbox = new QSpinBox(this);
-    spinbox->setRange(1, 10000);
-    spinbox->setValue(1000);
-    spinbox->setSuffix(" ms");
-    spinbox->setToolTip("Set Execution Speed (in milliseconds)");
+    m_stepDelaySpin = new QSpinBox(this);
+    m_stepDelaySpin->setRange(1, 10000);
+    m_stepDelaySpin->setValue(1000);
+    m_stepDelaySpin->setSuffix(" ms");
+    m_stepDelaySpin->setToolTip("Set Execution Speed (in milliseconds)");
     //---------------------------------------------------------------
 
     QWidgetAction *spinboxAction = new QWidgetAction(this);
-    spinboxAction->setDefaultWidget(spinbox);
+    spinboxAction->setDefaultWidget(m_stepDelaySpin);
     // identical action order to before; the separators only group them visually
-    toolbar->addAction(processorAction);   // processor settings
+    toolbar->addAction(m_processorAction);   // processor settings
     toolbar->addSeparator();
-    toolbar->addAction(runAction);         // start / stop
-    toolbar->addAction(debugAction);
+    toolbar->addAction(m_runAction);         // start / stop
+    toolbar->addAction(m_debugAction);
     toolbar->addSeparator();
     toolbar->addAction(spinboxAction);     // step interval
     toolbar->addSeparator();
-    toolbar->addAction(pauseAction);       // transport
-    toolbar->addAction(stepAction);
+    toolbar->addAction(m_pauseAction);       // transport
+    toolbar->addAction(m_stepAction);
     toolbar->addSeparator();
-    toolbar->addAction(undoAction);        // history
-    toolbar->addAction(redoAction);
+    toolbar->addAction(m_undoAction);        // history
+    toolbar->addAction(m_redoAction);
 
-    connect(runAction, &QAction::triggered, this,
-            [this, processorAction, runAction, pauseAction, debugAction]()
+    connect(m_runAction, &QAction::triggered, this,
+            [this]()
             {
-                if (runAction->text() == "Run")
+                if (m_runAction->text() == "Run")
                 {
-                    debugAction->setDisabled(true);
-                    processorAction->setDisabled(true);
-                    pauseAction->setEnabled(true);
-                    runAction->setText("Stop");
-                    setThemedIcon(runAction, Icon::Stop);
-                    setActionHint(runAction, "Stop execution");
+                    m_debugAction->setDisabled(true);
+                    m_processorAction->setDisabled(true);
+                    m_pauseAction->setEnabled(true);
+                    m_runAction->setText("Stop");
+                    setThemedIcon(m_runAction, Icon::Stop);
+                    setActionHint(m_runAction, "Stop execution");
                     this->run();
                 }
-                else if (runAction->text() == "Stop")
+                else if (m_runAction->text() == "Stop")
                 {
                     // emit stopSignal();
-                    runAction->setText("Run");
-                    setThemedIcon(runAction, Icon::Play);
-                    setActionHint(runAction, "Run program");
+                    m_runAction->setText("Run");
+                    setThemedIcon(m_runAction, Icon::Play);
+                    setActionHint(m_runAction, "Run program");
                     m_processorManager->stop();
                 }
             });
 
-    connect(debugAction, &QAction::triggered, this,
-            [this, processorAction, runAction, pauseAction, stepAction, undoAction, redoAction,
-             debugAction]()
+    connect(m_debugAction, &QAction::triggered, this,
+            [this]()
             {
-                debugAction->setDisabled(true);
-                processorAction->setDisabled(true);
+                m_debugAction->setDisabled(true);
+                m_processorAction->setDisabled(true);
                 // debug run starts paused, so the toolbar starts in the paused state
-                runAction->setText("Stop");
-                setThemedIcon(runAction, Icon::Stop);
-                setActionHint(runAction, "Stop execution");
-                pauseAction->setEnabled(true);
-                pauseAction->setText("Resume");
-                setThemedIcon(pauseAction, Icon::Resume);
-                setActionHint(pauseAction, "Resume execution");
-                stepAction->setEnabled(true);
-                undoAction->setEnabled(true);
-                redoAction->setEnabled(true);
+                m_runAction->setText("Stop");
+                setThemedIcon(m_runAction, Icon::Stop);
+                setActionHint(m_runAction, "Stop execution");
+                m_pauseAction->setEnabled(true);
+                m_pauseAction->setText("Resume");
+                setThemedIcon(m_pauseAction, Icon::Resume);
+                setActionHint(m_pauseAction, "Resume execution");
+                m_stepAction->setEnabled(true);
+                m_undoAction->setEnabled(true);
+                m_redoAction->setEnabled(true);
                 this->run(true);
             });
 
-    connect(processorAction, &QAction::triggered, this, &MainWindow::processorChangeDialog);
+    connect(m_processorAction, &QAction::triggered, this, &MainWindow::processorChangeDialog);
 
-    connect(spinbox, qOverload<int>(&QSpinBox::valueChanged), this,
+    connect(m_stepDelaySpin, qOverload<int>(&QSpinBox::valueChanged), this,
             [this](int value) { m_processorManager->setStepDelay(value); });
 
-    connect(pauseAction, &QAction::triggered, this,
-            [this, pauseAction, stepAction, undoAction, redoAction]()
+    connect(m_pauseAction, &QAction::triggered, this,
+            [this]()
             {
-                if (pauseAction->text() == "Pause")
+                if (m_pauseAction->text() == "Pause")
                 {
-                    pauseAction->setText("Resume");
-                    setThemedIcon(pauseAction, Icon::Resume);
-                    setActionHint(pauseAction, "Resume execution");
-                    stepAction->setEnabled(true);
-                    undoAction->setEnabled(true);
-                    redoAction->setEnabled(true);
+                    m_pauseAction->setText("Resume");
+                    setThemedIcon(m_pauseAction, Icon::Resume);
+                    setActionHint(m_pauseAction, "Resume execution");
+                    m_stepAction->setEnabled(true);
+                    m_undoAction->setEnabled(true);
+                    m_redoAction->setEnabled(true);
                     m_processorManager->pause();
                 }
                 else
                 {
-                    pauseAction->setText("Pause");
-                    setThemedIcon(pauseAction, Icon::Pause);
-                    setActionHint(pauseAction, "Pause execution");
-                    stepAction->setDisabled(true);
-                    undoAction->setDisabled(true);
-                    redoAction->setDisabled(true);
+                    m_pauseAction->setText("Pause");
+                    setThemedIcon(m_pauseAction, Icon::Pause);
+                    setActionHint(m_pauseAction, "Pause execution");
+                    m_stepAction->setDisabled(true);
+                    m_undoAction->setDisabled(true);
+                    m_redoAction->setDisabled(true);
                     m_processorManager->resume();
                 }
             });
 
     // we also connect the vm paused at breakpoint signal to change the pause button text
     connect(m_processorManager, &ProcessorManager::processorPausedAtBreakpointSignal, this,
-            [this, pauseAction, stepAction, undoAction, redoAction]()
+            [this]()
             {
-                pauseAction->setText("Resume");
-                setThemedIcon(pauseAction, Icon::Resume);
-                setActionHint(pauseAction, "Resume execution");
-                stepAction->setEnabled(true);
-                undoAction->setEnabled(true);
-                redoAction->setEnabled(true);
+                m_pauseAction->setText("Resume");
+                setThemedIcon(m_pauseAction, Icon::Resume);
+                setActionHint(m_pauseAction, "Resume execution");
+                m_stepAction->setEnabled(true);
+                m_undoAction->setEnabled(true);
+                m_redoAction->setEnabled(true);
             });
 
-    connect(stepAction, &QAction::triggered, this, [this]() { m_processorManager->step(); });
-    connect(undoAction, &QAction::triggered, this, [this]() { m_processorManager->undo(); });
-    connect(redoAction, &QAction::triggered, this, [this]() { m_processorManager->redo(); });
+    connect(m_stepAction, &QAction::triggered, this, [this]() { m_processorManager->step(); });
+    connect(m_undoAction, &QAction::triggered, this, [this]() { m_processorManager->undo(); });
+    connect(m_redoAction, &QAction::triggered, this, [this]() { m_processorManager->redo(); });
 }
 
 void MainWindow::setUpRibbon()
@@ -644,36 +647,39 @@ void MainWindow::runFinishedSlot()
     // other we are not alble to move the cursor as the paint
     //  keeps jumping to last highlighted line
     editor->switchToEditorView();
-    QList<QToolBar *> toolbars = this->findChildren<QToolBar *>();
-    // since we only have one toolbar we can directly access it
-    for (QAction *action : toolbars[0]->actions())
-    {
-        if (action->text() == "Run" || action->text() == "Processor" ||
-            action->text() == "Debug Run")
-        {
-            action->setEnabled(true);
-        }
-        if (action->text() == "Stop")
-        {
-            action->setText("Run");
-            setThemedIcon(action, Icon::Play);
-            action->setToolTip("Run program");
-            // when the program finishes we set the run button text back to run
-        }
-        if (action->text() == "Resume")
-        {
-            action->setText("Pause");
-            setThemedIcon(action, Icon::Pause);
-            action->setToolTip("Pause execution");
-            // in case we stop while paused
-        }
 
-        if (action->text() == "Pause" || action->text() == "Stop" || action->text() == "Step")
-        {
-            action->setDisabled(true);
-        }
+    // Same transitions as before, addressed by member instead of recovered
+    // from findChildren<QToolBar*>()[0] and matched on user-visible text.
+    //
+    // Where the old loop asked "is this the one that currently reads Stop?",
+    // this asks which icon the action is wearing. setThemedIcon() sets the
+    // icon in lockstep with the text at every site that flips either one, so
+    // the two agree in every reachable state - and the icon tag is a stable
+    // property rather than a label a reword or a translation would break.
+    m_processorAction->setEnabled(true);
+    m_debugAction->setEnabled(true);
+    m_runAction->setEnabled(true);
+
+    if (themedIconOf(m_runAction) == Icon::Stop)
+    {
+        m_runAction->setText("Run");
+        setThemedIcon(m_runAction, Icon::Play);
+        m_runAction->setToolTip("Run program");
+        // when the program finishes we set the run button text back to run
+    }
+    if (themedIconOf(m_pauseAction) == Icon::Resume)
+    {
+        m_pauseAction->setText("Pause");
+        setThemedIcon(m_pauseAction, Icon::Pause);
+        m_pauseAction->setToolTip("Pause execution");
+        // in case we stop while paused
     }
 
+    m_pauseAction->setDisabled(true);
+    m_stepAction->setDisabled(true);
+    // Undo and Redo are deliberately left as they are: the old loop matched
+    // no case for them either, so a debug run that ends leaves VM history
+    // navigable exactly as it did before.
 }
 
 
