@@ -13,6 +13,7 @@
 #include "ui/processor_tab/processor_tab.h"
 #include "ui/profiler_tab/profiler_tab.h"
 #include "ui/ribbon/ribbon_group.h"
+#include "ui/ribbon/ribbon_page.h"
 #include "ui/theme/icon_manager.h"
 #include "ui_main_window.h"
 #include "utils/utils.h"
@@ -87,6 +88,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // and moving that call: nothing here creates a QAction, so the window's
     // action creation order is exactly what it was.
     setUpPersistentGroups();
+    setUpEditorPage();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -401,6 +403,60 @@ void MainWindow::setUpPersistentGroups()
     file->addLarge(m_openAction);
     file->addLarge(m_saveAction);
     file->addSmall(m_problemsToggleAction);
+}
+
+void MainWindow::setUpEditorPage()
+{
+    auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
+    if (!editorTab)
+        return;
+
+    RibbonPage  *page = m_ribbon->page(toIndex(TabIndex::EditorTabIndex));
+    RibbonGroup *view = page->addGroup("View");
+
+    // The in-tab segmented buttons stay exactly where they are and remain the
+    // state. These two only offer the same choice from the ribbon: triggering
+    // one calls the slot the button would have called, and the tab reports
+    // back so they show which pane is current. Nothing here decides anything.
+    m_editorViewAction   = new QAction("Editor", this);
+    m_expandedViewAction = new QAction("Expanded", this);
+    for (QAction *action : {m_editorViewAction, m_expandedViewAction})
+        action->setCheckable(true);
+
+    // Exclusive, like the autoExclusive pair in the tab: checking one
+    // unchecks the other without either of them deciding anything.
+    auto *group = new QActionGroup(this);
+    group->setExclusive(true);
+    group->addAction(m_editorViewAction);
+    group->addAction(m_expandedViewAction);
+
+    m_editorViewAction->setToolTip("Show the source you wrote");
+    m_expandedViewAction->setToolTip("Show pseudo-instructions expanded");
+
+    view->addSmall(m_editorViewAction);
+    view->addSmall(m_expandedViewAction);
+
+    // Ribbon -> tab. QAction::triggered fires only on a real activation, not
+    // on setChecked(), so the mirror below cannot drive this back.
+    connect(m_editorViewAction, &QAction::triggered, this,
+            [editorTab] { editorTab->switchToEditorView(); });
+    connect(m_expandedViewAction, &QAction::triggered, this,
+            [editorTab] { editorTab->switchToExpandedView(); });
+
+    // Tab -> ribbon, so changing the pane with the in-tab buttons moves these
+    // too. The exclusive group unchecks the sibling.
+    connect(editorTab, &EditorTab::viewChangedSignal, this,
+            [this](bool expanded)
+            { (expanded ? m_expandedViewAction : m_editorViewAction)->setChecked(true); });
+
+    // A run pins the Expanded pane and disables the in-tab Editor button.
+    // Without this the ribbon would be a way around that lock.
+    connect(editorTab, &EditorTab::expandedLockChangedSignal, this,
+            [this](bool locked) { m_editorViewAction->setEnabled(!locked); });
+
+    // Start in step with whatever the tab already shows.
+    (editorTab->isExpandedView() ? m_expandedViewAction : m_editorViewAction)->setChecked(true);
+    m_editorViewAction->setEnabled(!editorTab->isExpandedLocked());
 }
 
 void MainWindow::setCurrentTab(TabIndex index)

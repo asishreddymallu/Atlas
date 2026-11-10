@@ -1,5 +1,7 @@
 #include "ribbon_group.h"
 
+#include "ui/theme/icon_manager.h"
+
 #include <QAction>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -21,6 +23,24 @@ constexpr const char *restingStyleProperty = "ribbonRestingStyle";
 // tab strip; the large one is the Office-style icon-over-text button.
 constexpr int smallIconSize = 20;
 constexpr int largeIconSize = 32;
+
+// Compact mode hides button text. A button with no icon has nothing left to
+// show, so it keeps its label instead of becoming a blank square. The View
+// group's Editor/Expanded pair is the case in point: the in-tab control it
+// mirrors is text-only too.
+//
+// The question is asked of the action's icon *tag*, not of the pixmap. An
+// action tagged by setThemedIcon() is meant to have an icon whether or not
+// the resource resolved, which keeps this independent of whether the .qrc
+// objects are linked - they are in the application and are not in
+// kites_test. A directly-set QIcon counts too.
+Qt::ToolButtonStyle compactStyleFor(const QToolButton *button)
+{
+    const QAction *action = button->defaultAction();
+    const bool     hasIcon =
+        (action && themedIconOf(action) != Icon::IconCount) || !button->icon().isNull();
+    return hasIcon ? Qt::ToolButtonIconOnly : Qt::ToolButtonTextOnly;
+}
 } // namespace
 
 RibbonGroup::RibbonGroup(const QString &caption, QWidget *parent) : QWidget(parent)
@@ -88,7 +108,7 @@ QToolButton *RibbonGroup::makeButton(QAction *action, Qt::ToolButtonStyle style)
     m_row->insertWidget(m_row->count() - 1, button, 0, Qt::AlignVCenter);
     m_buttons.append(button);
     if (m_compact)
-        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setToolButtonStyle(compactStyleFor(button));
     return button;
 }
 
@@ -141,7 +161,7 @@ void RibbonGroup::setCompact(bool compact)
     {
         if (compact)
         {
-            button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+            button->setToolButtonStyle(compactStyleFor(button));
             continue;
         }
         bool ok = false;

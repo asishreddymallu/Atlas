@@ -60,6 +60,14 @@ public:
     // syntax error. No-op if line <= 0 (PC couldn't be resolved to a source line).
     void showRuntimeError(int line, const QString &message);
 
+    /// True while the Expanded pane is the one on screen. Lets a second
+    /// control that offers the same choice - the ribbon's View group - show
+    /// which one is current without keeping a copy of the state.
+    bool isExpandedView() const;
+    /// True while a run has pinned the Expanded pane. A second control must
+    /// honour this too, or it would be a way around the lock.
+    bool isExpandedLocked() const;
+
 public slots:
     void onExpandButtonClicked(bool checked);
     void switchToExpandedView();
@@ -102,6 +110,13 @@ private:
     Ui::EditorTab *ui;
 signals:
     void loadProgramSignal(std::string& sourceText);
+    /// The visible pane changed, however it was changed. The in-tab buttons
+    /// remain the state; this only reports it, so another view of the same
+    /// choice can follow along instead of holding a second copy.
+    void viewChangedSignal(bool expanded);
+    /// setExpandedLocked() ran. Emitted so another view of the choice can
+    /// disable itself in step with the in-tab Editor button.
+    void expandedLockChangedSignal(bool locked);
     /// Diagnostics currently shown, each with originalLine resolved. Emitted
     /// empty by resetErrorLines() so the Problems dock clears with the editor.
     void diagnosticsChangedSignal(const QVector<Diagnostic> &diagnostics); 

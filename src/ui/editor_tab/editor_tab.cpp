@@ -101,6 +101,20 @@ void EditorTab::onExpandButtonClicked(bool checked)
     {
         ui->stackedWidget->setCurrentIndex(0);
     }
+    // Both buttons are autoExclusive, so every switch - including one made by
+    // checking the other button - arrives here. One emit therefore covers
+    // them all.
+    emit viewChangedSignal(checked);
+}
+
+bool EditorTab::isExpandedView() const
+{
+    return ui->expandedViewButton->isChecked();
+}
+
+bool EditorTab::isExpandedLocked() const
+{
+    return m_expandedLocked;
 }
 
 void EditorTab::switchToExpandedView()
@@ -123,6 +137,7 @@ void EditorTab::setExpandedLocked(bool locked)
         ui->expandedViewButton->setChecked(true);
         ui->stackedWidget->setCurrentIndex(1);
     }
+    emit expandedLockChangedSignal(locked);
 }
 
 EditorTab::~EditorTab()

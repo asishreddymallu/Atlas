@@ -239,6 +239,8 @@ TEST(RibbonGroup, CompactHidesLabelsAndRestoresThem)
     RibbonGroup group("Run");
     QAction large("Run");
     QAction small("Step");
+    setThemedIcon(&large, Icon::Play);
+    setThemedIcon(&small, Icon::Step);
     QToolButton *largeButton = group.addLarge(&large);
     QToolButton *smallButton = group.addSmall(&small);
 
@@ -255,6 +257,22 @@ TEST(RibbonGroup, CompactHidesLabelsAndRestoresThem)
     EXPECT_EQ(largeButton->toolButtonStyle(), Qt::ToolButtonTextUnderIcon)
         << "leaving compact mode must restore the style the caller asked for";
     EXPECT_EQ(smallButton->toolButtonStyle(), Qt::ToolButtonTextBesideIcon);
+}
+
+TEST(RibbonGroup, CompactKeepsTheLabelOfAnIconlessButton)
+{
+    // Hiding the text of a button that has no icon would leave a blank
+    // square. Asked of the icon tag, not the pixmap, so the answer does not
+    // depend on whether the .qrc objects are linked - they are not here.
+    RibbonGroup group("View");
+    QAction textOnly("Expanded");
+    QToolButton *button = group.addSmall(&textOnly);
+
+    group.setCompact(true);
+    EXPECT_EQ(button->toolButtonStyle(), Qt::ToolButtonTextOnly);
+
+    group.setCompact(false);
+    EXPECT_EQ(button->toolButtonStyle(), Qt::ToolButtonTextBesideIcon);
 }
 
 TEST(RibbonGroup, ButtonsStayOutOfTheTabChain)

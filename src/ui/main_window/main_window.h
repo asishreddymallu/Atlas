@@ -66,6 +66,7 @@ private:
     void setUpToolBar();
     void setUpRibbon();
     void setUpPersistentGroups();
+    void setUpEditorPage();
     void setUpMenubar();
     void setUpProblemsDock();
     void setUpTabs();
@@ -83,6 +84,10 @@ private:
     // the Problems dock's own toggleViewAction, held so the ribbon can
     // show the same action the View menu does
     QAction           *m_problemsToggleAction {nullptr};
+    // The ribbon's View group. These forward to EditorTab's existing slots
+    // and mirror its in-tab buttons; the buttons stay the state.
+    QAction           *m_editorViewAction   {nullptr};
+    QAction           *m_expandedViewAction {nullptr};
     // The execution controls, held rather than left local to setUpToolBar().
     // runFinishedSlot() used to recover them by walking
     // findChildren<QToolBar*>()[0] and comparing action->text() - text these
