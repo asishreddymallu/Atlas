@@ -1,7 +1,7 @@
 #ifndef REGISTERCONTAINER_H
 #define REGISTERCONTAINER_H
 
-#include "registermodel.h"
+#include "register_model.h"
 #include <QWidget>
 #include <memory>
 
