@@ -1,4 +1,4 @@
-#include "ui/mainwindow/mainwindow.h"
+#include "ui/main_window/mainwindow.h"
 #include "ui/theme/app_style.h"
 #ifdef LOG_PANEL
     #include "ui/log_panel/log_panel.h"
