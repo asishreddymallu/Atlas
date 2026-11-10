@@ -11,6 +11,10 @@ namespace
 {
 // dynamic property carrying the Icon enum value an action was tagged with
 constexpr const char *themedIconProperty = "kitesIconId";
+// and the logical size its pixmap was rasterised at, so a re-tint can rebuild
+// it at that size instead of silently dropping back to the default
+constexpr const char *themedIconSizeProperty = "kitesIconSize";
+constexpr int defaultThemedIconExtent = 20;
 } // namespace
 
 IconManager::IconManager()
@@ -54,12 +58,29 @@ QIcon IconManager::getIcon(Icon icon, QSize size) const
     return QIcon(pixmap);
 }
 
-void setThemedIcon(QAction *action, Icon icon)
+void setThemedIcon(QAction *action, Icon icon, QSize size)
 {
     if (!action)
         return;
+    if (size.isEmpty())
+        size = QSize(defaultThemedIconExtent, defaultThemedIconExtent);
     action->setProperty(themedIconProperty, static_cast<int>(toIndex(icon)));
-    action->setIcon(IconManager::getInstance().getIcon(icon));
+    action->setProperty(themedIconSizeProperty, size);
+    action->setIcon(IconManager::getInstance().getIcon(icon, size));
+}
+
+QSize themedIconSizeOf(const QAction *action)
+{
+    const QSize fallback(defaultThemedIconExtent, defaultThemedIconExtent);
+    if (!action)
+        return fallback;
+
+    const QVariant stored = action->property(themedIconSizeProperty);
+    if (!stored.isValid())
+        return fallback;
+
+    const QSize size = stored.toSize();
+    return size.isEmpty() ? fallback : size;
 }
 
 Icon themedIconOf(const QAction *action)

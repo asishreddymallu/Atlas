@@ -57,9 +57,20 @@ private:
 // QAction::setIcon(): it lets the icon be re-tinted on a theme change by
 // reading a stable property, instead of matching the action's user-visible
 // text - which breaks the moment a label is reworded or translated.
-void setThemedIcon(QAction *action, Icon icon);
+//
+// `size` is the logical size the pixmap is rasterised at, and is remembered
+// alongside the icon so a re-tint can rebuild it at the same size. It only
+// needs passing for an action shown larger than the chrome default: a ribbon
+// button that draws at 32 px would otherwise upscale a 20 px pixmap. An
+// action shown at several sizes should be tagged with the largest, which the
+// smaller sites then render scaled down rather than blown up.
+void setThemedIcon(QAction *action, Icon icon, QSize size = QSize(20, 20));
 
 // The Icon last set by setThemedIcon(), or Icon::IconCount when the action
 // carries no tag.
 Icon themedIconOf(const QAction *action);
+
+// The size setThemedIcon() last rasterised this action's icon at, or the
+// 20 px default when the action carries no tag.
+QSize themedIconSizeOf(const QAction *action);
 }//namespace Kites

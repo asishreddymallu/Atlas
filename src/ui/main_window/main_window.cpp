@@ -699,7 +699,7 @@ void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
     {
         const Icon icon = themedIconOf(action);
         if (icon != Icon::IconCount)
-            setThemedIcon(action, icon);
+            setThemedIcon(action, icon, themedIconSizeOf(action));
     }
 
     // tab-strip entries are QIcons on a QTabBar, not actions, so the pass
