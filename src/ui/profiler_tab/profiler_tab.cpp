@@ -1,6 +1,6 @@
-#include "profilertab.h"
+#include "profiler_tab.h"
 #include "ui/common/data_table_style.h"
-#include "ui_profilertab.h"
+#include "ui_profiler_tab.h"
 #include "profiler/profiler.h"
 #include "common/instruction_types.h"
 #include "instruction_type_count_model.h"
