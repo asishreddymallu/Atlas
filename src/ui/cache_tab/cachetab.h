@@ -1,7 +1,7 @@
 #pragma once
 #include "cache_grid_delegate.h"
 #include "cacheconfigwidget.h"
-#include "cachemodel.h"
+#include "cache_model.h"
 #include "ui/common/kites_tab.h"
 #include "processor/memory_controller.h"
 #include <QWidget>
