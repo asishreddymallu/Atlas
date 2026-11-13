@@ -406,23 +406,67 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 16. A checkable menu entry with an icon shows no check mark
+## 16. Resolved: a checkable menu entry with an icon showed no check mark
 
-- **Where**: Settings > Processor > Wires Stay Active, the action shared by
-  that menu entry and the ribbon's Datapath group.
-- **What**: since the action was given `Icon::Wires`, Qt draws the icon where
-  a menu check mark would go, and the stylesheet's `QMenu::item` rules carry
-  no `QMenu::indicator` treatment to put it back. Captured unchecked and
-  checked and compared: **the two images differ by 0 pixels out of 6929**.
-  The menu no longer shows whether wires stay active at all.
-- **The ribbon button is unaffected** - `#ribbonPanel QToolButton:checked`
-  gives it the accent border and the selection fill, measured above 3:1 and
-  4.5:1 in every theme.
-- **Before the icon** the entry showed an ordinary check mark, as the
-  overflow menu's display-base entries still do - those actions have no icon.
-- **Status**: reported, not fixed, pending a decision. The options are a
-  scoped `QMenu::item:checked` or `QMenu::indicator` rule, which would fix
-  every checkable entry at once, or leaving Wires Stay Active without an
-  icon. Hiding the icon on the menu entry alone is not possible without
-  cloning the action, which is the thing the whole ribbon design avoids.
+- **Was**: Qt draws an icon where a menu check mark goes, so once Wires Stay
+  Active gained `Icon::Wires` its menu entry was **pixel-identical checked and
+  unchecked - 0 of 6929**.
+- **Now**: three rules on `QMenu::item` in `resources/themes/template.qss`
+  give a checked entry a 2 px `{{accent}}` bar down its leading edge and a
+  fill. Entries without an icon keep their check mark as well. Measured,
+  checked against unchecked, in all four themes:
+
+  | menu | differing pixels |
+  |---|---|
+  | Settings > Processor (Wires Stay Active) | 4809–4890 of 6929 |
+  | View (Problems) | 6185–6295 of 8815 |
+  | Settings > Preferences (theme radio set) | 4958–5059 of 23450 |
+  | File, Help, Settings (no checkable entries) | 0 |
+
+- **Nothing else about the menus changed**: the 2 px the border takes is given
+  back out of `padding-left`, and every menu captured before and after in its
+  unchecked state differs by 0 pixels (Preferences by 21, which is the active
+  theme's radio mark that the "after" capture forces off).
+- The hovered bar is `{{foreground}}`, not `{{accent}}`: accent on selection
+  is the same hue in `kites_dark` and falls to 2.53:1, so the indicator would
+  have vanished under the pointer. Worst case across the four themes is now
+  4.81:1 hovered, 5.44:1 at rest against the menu, 4.86:1 disabled.
+
+---
+
+## 17. The Cache tab's content sits 9 px left of every other tab's
+
+- **Where**: `src/ui/cache_tab/cache_tab.cpp` - the host layout's left
+  contents margin, zeroed in `8e30284` so the inner tab bar lines up with the
+  ribbon strip.
+- **Measured**, the x of the first content widget in window coordinates:
+
+  | tab | content x | host layout margins |
+  |---|---|---|
+  | Editor, Memory, Processor, Compiler, Profiler | **9** | 9,9,9,9 |
+  | Cache | **0** | 0,9,9,9 |
+
+  Zeroing a left margin moves the whole widget, not just its tab bar, so the
+  Cache pane's content moved left with the bar. Cache is the odd one out.
+- **Status**: not fixed, proposal only. The smallest change that keeps the
+  bar flush and gives the pane the other tabs' left edge is to give the inset
+  back *inside* each page, derived from the style rather than written down:
+
+  ```cpp
+  // The host layout's left margin is zero so the tab bar lines up with the
+  // ribbon strip; give the same amount back inside each page so the pane's
+  // content keeps the left edge the other five tabs have.
+  const int inset = style()->pixelMetric(QStyle::PM_LayoutLeftMargin);
+  for (QWidget *page : {ui->tab, ui->L1Tab, ui->L2Tab})
+      if (QLayout *pageLayout = page->layout())
+      {
+          const QMargins m = pageLayout->contentsMargins();
+          pageLayout->setContentsMargins(m.left() + inset, m.top(), m.right(), m.bottom());
+      }
+  ```
+
+  The one-line alternative is `QTabWidget::pane { padding-left: 9px; }` in
+  `template.qss`, which reaches only this tab because it is the application's
+  only `QTabWidget` - but it writes 9 down as a literal where the code form
+  asks the style for the same number the other five layouts were given.
 
