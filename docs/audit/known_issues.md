@@ -325,3 +325,46 @@ Recorded because they changed reported columns on directive lines.
 - **Raising them would undo the fix.** These lines were `QFrame::VLine` with
   a Plain shadow, taking a near-white colour from the palette at roughly
   10:1, and that is exactly the harshness Stage 5 was asked to remove.
+
+---
+
+## 15. Resolved: ribbon page groups were laid out but not painted
+
+- **Symptom**: on every tab except Editor, the groups belonging to that tab's
+  ribbon page drew nothing. They were constructed, laid out, at the right
+  geometry, `isVisible()` true and `isHidden()` false - and blank.
+- **Cause**: `RibbonGroup::measure()` wrapped its mode flip in
+  `setUpdatesEnabled(false)` and `setUpdatesEnabled(true)`, restoring
+  whatever `updatesEnabled()` returned on entry. That flag is **inherited**:
+  disabling updates on a widget sets `WA_UpdatesDisabled` on its descendants,
+  and `updatesEnabled()` reports the inherited value. A `QStackedWidget`
+  switches updates off while it swaps pages, so a group measured during a
+  page change read `false` as if it were its own and wrote `false` back onto
+  itself. The stack then re-enabled painting for everything it had disabled -
+  but not for the flag `measure()` had just set. The persistent Run and File
+  groups live outside the stack and were never affected, which is why only
+  the per-tab pages went blank.
+- **Introduced by** `d7dbebf` (*feat(ribbon): measure a group in both modes,
+  and say if it can overflow*), the commit that added `measure()`.
+  `git log -S setUpdatesEnabled -- src/ui/ribbon/ribbon_group.cpp` names it
+  and `6c56f71`, and nothing else.
+- **Fixed in** `6c56f71` (*style(ribbon): classic buttons*), not in a commit
+  of its own: the toggle was removed when the bug was found while reviewing
+  that stage's screenshots. `measure()` no longer touches the flag at all.
+  The flip is synchronous and Qt coalesces the repaints it raises, so there
+  was never an intermediate state to suppress.
+- **The tip of Stage 4B2 was affected.** Measured, not remembered: an
+  out-of-tree probe built against `fb58737` shows a real, shown window and
+  visits every tab, and reports 25 groups with painting switched off; the
+  same probe against the current tip reports none. `QWidget::grab()` honours
+  the flag, so the screenshots taken at the end of B2 show the page area
+  blank as well - the evidence was already there and was not read. The
+  screenshots were reported as "nothing is clipped at either size", which was
+  true and beside the point.
+- **Guarded by** four tests in `test/ribbon_navigation_test.cpp`
+  (`RibbonStage6.*`): every group still paints after construction, after
+  visiting every page, at every width from 800 to 1700, and after being
+  measured repeatedly and while an ancestor has painting switched off. Two of
+  the four fail against the pre-fix `measure()`; the other two do not
+  discriminate and are kept for coverage.
+

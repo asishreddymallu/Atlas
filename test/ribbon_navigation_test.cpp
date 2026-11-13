@@ -2299,3 +2299,138 @@ TEST(RibbonStage5, ButtonsInAColumnShareAWidthAndLargeOnesShareAFloor)
                         << button->text().toStdString() << "' share a column but not a width";
         }
 }
+
+// ══════════ Stage 6: the painting bug measure() used to leave behind ══════
+//
+// RibbonGroup::measure() wrapped its mode flip in setUpdatesEnabled(false)
+// and (true). Changing a button style asks the parent chain for a new size,
+// which asks the group for its widths again, so measure() re-entered itself;
+// the inner call read updatesEnabled() as already false and put false back
+// for good. Every group on a ribbon PAGE ended up laid out, visible, at the
+// right geometry - and painting nothing.
+//
+// The tests that existed could not see it: they asked for geometry and for
+// isVisible()/isHidden(), and all of those were correct. Only the paint flag
+// was wrong, so that is what these ask for.
+
+namespace
+{
+/// Every group on the bar, persistent and per page, whatever state it is in.
+QList<RibbonGroup *> allGroups(RibbonBar *bar)
+{
+    QList<RibbonGroup *> result;
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        result.append(bar->persistentGroup(i));
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            result.append(group);
+    return result;
+}
+
+void expectEveryGroupPaints(RibbonBar *bar, const QString &where)
+{
+    for (RibbonGroup *group : allGroups(bar))
+        EXPECT_TRUE(group->updatesEnabled())
+            << "'" << group->caption().toStdString() << "' has painting switched off "
+            << where.toStdString();
+}
+
+} // namespace
+
+TEST(RibbonStage6, EveryGroupStillPaintsAfterConstruction)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    ASSERT_FALSE(allGroups(bar).isEmpty());
+    expectEveryGroupPaints(bar, "straight after construction");
+}
+
+TEST(RibbonStage6, EveryGroupStillPaintsAfterVisitingEveryPage)
+{
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    for (int page = 0; page < bar->count(); ++page)
+    {
+        window.setCurrentTab(static_cast<MainWindow::TabIndex>(page));
+        QApplication::processEvents();
+        // Every group, not just this page's: the bug hit the pages that were
+        // NOT current when they were measured.
+        expectEveryGroupPaints(bar, QStringLiteral("after switching to page %1").arg(page));
+    }
+}
+
+TEST(RibbonStage6, EveryGroupStillPaintsAtEveryWidth)
+{
+    MainWindow window;
+    RibbonBar *bar = settleAt(window, 1700);
+    ASSERT_NE(bar, nullptr);
+
+    for (int width = 800; width <= 1700; width += 20)
+    {
+        settleAt(window, width);
+        // Including the groups that are in the overflow menu: hidden is a
+        // state they are meant to be in, painting switched off is not.
+        expectEveryGroupPaints(bar, QStringLiteral("at width %1").arg(width));
+        for (RibbonGroup *group : bar->overflowedGroups())
+            EXPECT_TRUE(group->updatesEnabled())
+                << "overflowed '" << group->caption().toStdString() << "' cannot paint at "
+                << width;
+    }
+}
+
+TEST(RibbonStage6, MeasuringNeverLeavesPaintingOff)
+{
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    for (RibbonGroup *group : allGroups(bar))
+    {
+        // Plain repetition first.
+        for (int i = 0; i < 5; ++i)
+        {
+            group->invalidateWidths();
+            const int full    = group->fullWidth();
+            const int compact = group->compactWidth();
+            EXPECT_GT(full, 0);
+            EXPECT_LE(compact, full);
+            EXPECT_TRUE(group->updatesEnabled())
+                << "'" << group->caption().toStdString() << "' stopped painting on pass " << i;
+        }
+
+        // Then the case that actually broke it: measuring while an ANCESTOR
+        // has painting switched off. That is the state a QStackedWidget
+        // leaves its pages in while it swaps them, and it is why only the
+        // groups on ribbon pages were affected - the persistent ones live
+        // outside the stack. The old measure() read the inherited false as
+        // if it were its own, and put it back on the group itself; the
+        // ancestor then re-enabled painting for everything it had disabled,
+        // but not for the flag measure() had set.
+        QWidget *ancestor = group->parentWidget();
+        ASSERT_NE(ancestor, nullptr);
+        ancestor->setUpdatesEnabled(false);
+        ASSERT_FALSE(group->updatesEnabled()) << "the ancestor did not reach the group";
+        group->invalidateWidths();
+        group->fullWidth();
+        group->compactWidth();
+        ancestor->setUpdatesEnabled(true);
+
+        EXPECT_TRUE(group->updatesEnabled())
+            << "'" << group->caption().toStdString()
+            << "' kept painting switched off after being measured under a disabled ancestor";
+        // The widths survive re-entry too.
+        EXPECT_GT(group->fullWidth(), 0);
+    }
+
+    // And the window as a whole is still painting after all that.
+    expectEveryGroupPaints(bar, "after repeated and re-entrant measurement");
+}
