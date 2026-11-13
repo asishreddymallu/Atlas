@@ -274,6 +274,23 @@ QToolBar QToolButton:disabled {
     background-color: transparent;
 }
 
+/* ── Ribbon ────────────────────────────────────────────────────
+ * The ribbon's checkable buttons (the Editor/Expanded pair, the display-base
+ * and cache-level pickers) mirror a widget inside the tab and have to show
+ * which one is current. The rules above only reach a checked QToolButton
+ * under a QToolBar, so without this a checked ribbon button draws exactly
+ * like an unchecked one.
+ *
+ * The accent border is the indicator that carries the state: it clears 3:1
+ * against the panel ground in all four themes, where the selection fill on
+ * its own does not. The fill reinforces it and keeps {{foreground}} above
+ * 4.5:1. Scoped by the panel's object name so no other QToolButton moves.
+ * Stage 5 refines the look. */
+#ribbonPanel QToolButton:checked {
+    background-color: {{selection}};
+    border: 1px solid {{accent}};
+}
+
 /* step-interval spinbox lives in the toolbar */
 QSpinBox {
     background-color: {{surface}};
