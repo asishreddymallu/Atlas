@@ -360,6 +360,19 @@ bool RibbonGroup::isCompact() const
     return m_compact;
 }
 
+// What the layout will actually give a widget, which is not its sizeHint:
+// an explicit minimumWidth wins over a smaller hint. The large buttons carry
+// one - the floor that keeps Run from sitting narrower than Debug Run - and
+// compact mode shrinks their hint below it, so a sum of hints alone
+// understates a compact group by the whole of that floor.
+namespace
+{
+int laidOutWidth(const QWidget *widget)
+{
+    return std::max(widget->sizeHint().width(), widget->minimumWidth());
+}
+} // namespace
+
 int RibbonGroup::currentWidth()
 {
     // Summed from the slots rather than read from sizeHint().
@@ -399,7 +412,7 @@ int RibbonGroup::currentWidth()
                 QWidget *cell = inner->itemAt(j)->widget();
                 if (!cell)
                     continue;
-                const int cellWidth = cell->sizeHint().width();
+                const int cellWidth = laidOutWidth(cell);
                 if (sideBySide)
                 {
                     slotWidth += cellWidth;
@@ -416,7 +429,7 @@ int RibbonGroup::currentWidth()
         else
         {
             // A large button or a separator.
-            slotWidth = slot->sizeHint().width();
+            slotWidth = laidOutWidth(slot);
         }
 
         if (slotWidth <= 0)
