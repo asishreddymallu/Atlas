@@ -3,6 +3,29 @@
 #include "ui_memory_tab.h"
 namespace Kites
 {
+namespace
+{
+// The combo box's three entries, as the .ui spells them. One table instead
+// of two if-chains, so the label and the base can never drift apart.
+struct BaseEntry
+{
+    const char *text;
+    Base        base;
+};
+constexpr BaseEntry baseEntries[] = {
+    {"Hex", Base::Hexadecimal},
+    {"Binary", Base::Binary},
+    {"Decimal", Base::Decimal},
+};
+
+Base baseForText(const QString &text)
+{
+    for (const BaseEntry &entry : baseEntries)
+        if (text == QLatin1String(entry.text))
+            return entry.base;
+    return Base::Hexadecimal; // the combo's first entry, and the model's default
+}
+} // namespace
 
 MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
     : KitesTab(parent), ui(new Ui::MemoryTab),
@@ -53,19 +76,29 @@ MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
     connect(ui->comboBox, &QComboBox::currentTextChanged, this,
             [this](const QString &text)
             {
-                if (text == "Hex")
-                {
-                    m_memoryModel->setDisplayBase(Base::Hexadecimal);
-                }
-                else if (text == "Binary")
-                {
-                    m_memoryModel->setDisplayBase(Base::Binary);
-                }
-                else if (text == "Decimal")
-                {
-                    m_memoryModel->setDisplayBase(Base::Decimal);
-                }
+                const Base base = baseForText(text);
+                m_memoryModel->setDisplayBase(base);
+                // Announced after the model has it, so anything that reacts
+                // sees the table already in the new base.
+                emit displayBaseChangedSignal(base);
             });
+}
+
+void MemoryTab::triggerSearch()
+{
+    ui->searchButton->click();
+}
+
+void MemoryTab::setDisplayBase(Base base)
+{
+    for (const BaseEntry &entry : baseEntries)
+        if (entry.base == base)
+            ui->comboBox->setCurrentText(QLatin1String(entry.text));
+}
+
+Base MemoryTab::displayBase() const
+{
+    return baseForText(ui->comboBox->currentText());
 }
 
 void MemoryTab::changeMemoryController(MemoryController *memoryController)

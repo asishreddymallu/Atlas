@@ -67,6 +67,7 @@ private:
     void setUpRibbon();
     void setUpPersistentGroups();
     void setUpEditorPage();
+    void setUpMemoryPage();
     void setUpMenubar();
     void setUpProblemsDock();
     void setUpTabs();

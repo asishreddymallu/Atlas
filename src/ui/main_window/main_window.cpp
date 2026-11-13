@@ -49,6 +49,40 @@ void setActionHint(QAction *action, const QString &description)
     action->setToolTip(keys.isEmpty() ? description
                                       : QStringLiteral("%1  (%2)").arg(description, keys));
 }
+
+// One exclusive row of small checkable buttons, for a choice that a widget
+// inside a tab already owns: the memory and register display bases and the
+// cache level. Only the buttons are built here - the caller wires what each
+// one forwards to and how the tab reports back - so none of the three holds
+// any state of its own, and all three read the same way.
+//
+// No shortcuts: everything on the ribbon is reached by mouse or through the
+// menu that already owns the command.
+QList<QAction *> addExclusiveChoices(QObject *owner, RibbonGroup *group, const QStringList &labels)
+{
+    auto *actionGroup = new QActionGroup(owner);
+    actionGroup->setExclusive(true);
+
+    QList<QAction *> actions;
+    for (const QString &label : labels)
+    {
+        auto *action = new QAction(label, owner);
+        action->setCheckable(true);
+        actionGroup->addAction(action);
+        group->addSmall(action);
+        actions.append(action);
+    }
+    return actions;
+}
+
+// Checks one of those buttons and lets the exclusive group uncheck the rest.
+// An index the row does not have leaves the buttons alone rather than
+// guessing, so a value the ribbon does not offer cannot show a wrong one.
+void checkChoice(const QList<QAction *> &actions, int index)
+{
+    if (index >= 0 && index < actions.size())
+        actions.at(index)->setChecked(true);
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -89,6 +123,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // action creation order is exactly what it was.
     setUpPersistentGroups();
     setUpEditorPage();
+    setUpMemoryPage();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -457,6 +492,47 @@ void MainWindow::setUpEditorPage()
     // Start in step with whatever the tab already shows.
     (editorTab->isExpandedView() ? m_expandedViewAction : m_editorViewAction)->setChecked(true);
     m_editorViewAction->setEnabled(!editorTab->isExpandedLocked());
+}
+
+void MainWindow::setUpMemoryPage()
+{
+    auto *memoryTab = dynamic_cast<MemoryTab *>(m_tabs[TabIndex::MemoryTabIndex]);
+    if (!memoryTab)
+        return;
+
+    RibbonPage *page = m_ribbon->page(toIndex(TabIndex::MemoryTabIndex));
+
+    // The search box and its button stay in the tab and keep owning the
+    // address. This presses that button, so the search runs through exactly
+    // the path it always has - there is no second way to search.
+    RibbonGroup *find = page->addGroup("Find");
+    auto *searchAction = new QAction("Search", this);
+    searchAction->setToolTip("Jump the table to the address in the tab's search box");
+    find->addLarge(searchAction);
+    connect(searchAction, &QAction::triggered, memoryTab,
+            [memoryTab] { memoryTab->triggerSearch(); });
+
+    // The combo box in the tab stays the state. These three move it, and it
+    // reports back so they show which base is current.
+    RibbonGroup           *display = page->addGroup("Display");
+    const QList<Base>      bases {Base::Hexadecimal, Base::Binary, Base::Decimal};
+    const QList<QAction *> choices =
+        addExclusiveChoices(this, display, {"Hex", "Binary", "Decimal"});
+
+    for (int i = 0; i < choices.size(); ++i)
+    {
+        const Base base = bases.at(i);
+        // triggered fires only on a real activation, never on setChecked(),
+        // so the mirror below cannot drive this back.
+        connect(choices.at(i), &QAction::triggered, memoryTab,
+                [memoryTab, base] { memoryTab->setDisplayBase(base); });
+    }
+
+    connect(memoryTab, &MemoryTab::displayBaseChangedSignal, this,
+            [choices, bases](Base base) { checkChoice(choices, bases.indexOf(base)); });
+
+    // Start in step with whatever the combo box already shows.
+    checkChoice(choices, bases.indexOf(memoryTab->displayBase()));
 }
 
 void MainWindow::setCurrentTab(TabIndex index)

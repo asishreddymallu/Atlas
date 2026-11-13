@@ -21,6 +21,7 @@
  */
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/main_window/main_window.h"
+#include "ui/memory_tab/memory_tab.h"
 #include "ui/problems_panel/problems_dock.h"
 #include "ui/ribbon/ribbon_bar.h"
 #include "ui/ribbon/ribbon_group.h"
@@ -33,8 +34,11 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMenuBar>
+#include <QComboBox>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTableView>
 #include <QToolBar>
 #include <QWidgetAction>
 #include <algorithm>
@@ -531,21 +535,55 @@ TEST(RibbonStage2, PersistentGroupsExistOnceNotPerPage)
                 << "page " << page << " has its own copy of the Run group";
 }
 
-TEST(RibbonStage2, OnlyTheEditorPageHasAGroup)
+namespace
+{
+/// Every ribbon page's groups, in order. The persistent groups (Run, File)
+/// are deliberately absent: they live beside the pages, not on them, and
+/// PersistentGroupsExistOnceNotPerPage is what guards that.
+///
+/// This table is the ribbon's inventory. Adding a group without listing it
+/// here fails, which is the point - nothing reaches the ribbon unnoticed.
+struct PageGroups
+{
+    MainWindow::TabIndex page;
+    QStringList          captions;
+};
+/// The ribbon actions that deliberately carry no icon, by label. Everything
+/// else on the ribbon must be tagged with kitesIconId so the theme re-tint
+/// pass reaches it; see EveryRibbonActionWithAnIconCarriesItsThemeTag.
+const QStringList kIconlessRibbonActions = {
+    "Problems", // the dock's own toggleViewAction, which has never had one
+    "Editor",     "Expanded", // Editor page, View
+    "Search",     "Hex",      "Binary", "Decimal", // Memory page
+};
+
+const QList<PageGroups> kPageGroups = {
+    {MainWindow::EditorTabIndex, {"View"}},
+    {MainWindow::MemoryTabIndex, {"Find", "Display"}},
+    {MainWindow::ProcessorTabIndex, {}},
+    {MainWindow::CacheTabIndex, {}},
+    {MainWindow::CompilerTabIndex, {}},
+    {MainWindow::ProfilerTabIndex, {}},
+};
+} // namespace
+
+TEST(RibbonStage2, EachPageHasExactlyTheGroupsItShould)
 {
     MainWindow window;
     RibbonBar *bar = window.findChild<RibbonBar *>();
     ASSERT_NE(bar, nullptr);
+    ASSERT_EQ(kPageGroups.size(), bar->count());
 
-    RibbonPage *editorPage = bar->page(MainWindow::EditorTabIndex);
-    ASSERT_NE(editorPage, nullptr);
-    ASSERT_EQ(editorPage->groupCount(), 1);
-    EXPECT_EQ(editorPage->group(0)->caption(), QStringLiteral("View"));
+    for (const PageGroups &spec : kPageGroups)
+    {
+        RibbonPage *page = bar->page(static_cast<int>(spec.page));
+        ASSERT_NE(page, nullptr) << "no page for tab " << spec.page;
 
-    for (int page = 0; page < bar->count(); ++page)
-        if (page != MainWindow::EditorTabIndex)
-            EXPECT_EQ(bar->page(page)->groupCount(), 0)
-                << "page " << page << " should still be empty in Stage 2";
+        QStringList captions;
+        for (RibbonGroup *group : page->groups())
+            captions << group->caption();
+        EXPECT_EQ(captions, spec.captions) << "wrong groups on page " << spec.page;
+    }
 }
 
 TEST(RibbonStage2, RibbonButtonsUseTheVerySameActionsAsTheToolbarAndMenus)
@@ -784,8 +822,20 @@ TEST(RibbonStage2, EveryRibbonActionWithAnIconCarriesItsThemeTag)
         ++untaggedAndIconless;
     }
     EXPECT_GT(tagged, 0);
-    // Problems (the dock's toggle) plus the two View actions carry no icon.
-    EXPECT_EQ(untaggedAndIconless, 3);
+    EXPECT_EQ(untaggedAndIconless, kIconlessRibbonActions.size());
+
+    // ...and they are the ones we chose to leave bare, not an icon quietly
+    // lost. The icon set has nothing that says "search", "binary" or "cache
+    // level", and reusing a tab's icon for a different idea reads worse than
+    // a plain text button.
+    QStringList bare;
+    for (QAction *a : actions)
+        if (themedIconOf(a) == Icon::IconCount)
+            bare << a->text();
+    bare.sort();
+    QStringList expected = kIconlessRibbonActions;
+    expected.sort();
+    EXPECT_EQ(bare, expected);
 }
 
 TEST(RibbonStage2, LargeButtonsAskForThirtyTwoPixelIcons)
@@ -803,4 +853,153 @@ TEST(RibbonStage2, LargeButtonsAskForThirtyTwoPixelIcons)
     EXPECT_EQ(themedIconSizeOf(debugAction), QSize(32, 32));
     // A small one is still tagged at the chrome size.
     EXPECT_EQ(themedIconSizeOf(toolbar.at(4)), QSize(20, 20));
+}
+
+// ═══════════════════ Stage 3: the other five ribbon pages ═════════════════
+//
+// Every control here mirrors a widget that stays inside its tab. The tests
+// below always ask the *widget* what happened, never the ribbon action, so a
+// button that only looked right while quietly holding its own copy of the
+// state would fail.
+
+namespace
+{
+/// The ribbon group with this caption on `page`, or null.
+RibbonGroup *pageGroupNamed(RibbonBar *bar, MainWindow::TabIndex page, const QString &caption)
+{
+    for (RibbonGroup *group : bar->page(static_cast<int>(page))->groups())
+        if (group->caption() == caption)
+            return group;
+    return nullptr;
+}
+
+/// The button in `group` labelled `text`. Ribbon buttons take their text
+/// from their action, so this is asking the action by label.
+QToolButton *buttonNamed(RibbonGroup *group, const QString &text)
+{
+    if (!group)
+        return nullptr;
+    for (QToolButton *button : group->buttons())
+        if (button->text() == text)
+            return button;
+    return nullptr;
+}
+
+/// Exactly one button in the group is checked, and it is this one.
+void expectOnlyChecked(RibbonGroup *group, const QString &text)
+{
+    for (QToolButton *button : group->buttons())
+        EXPECT_EQ(button->isChecked(), button->text() == text)
+            << "'" << button->text().toStdString() << "' in group '"
+            << group->caption().toStdString() << "'";
+}
+} // namespace
+
+TEST(RibbonStage3, MemoryDisplayBaseReachesTheComboAndTheModel)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *memoryTab = window.findChild<MemoryTab *>();
+    ASSERT_NE(memoryTab, nullptr);
+
+    auto *combo = memoryTab->findChild<QComboBox *>("comboBox");
+    auto *view  = memoryTab->findChild<QTableView *>("memoryTableView");
+    ASSERT_NE(combo, nullptr);
+    ASSERT_NE(view, nullptr);
+    ASSERT_NE(view->model(), nullptr);
+
+    RibbonGroup *display = pageGroupNamed(bar, MainWindow::MemoryTabIndex, "Display");
+    ASSERT_NE(display, nullptr);
+    ASSERT_EQ(display->buttons().size(), 3);
+
+    // The Double Word column carries the base's prefix, so the model tells us
+    // what base it is really rendering in - not just what the combo says.
+    auto doubleWordText = [view] { return view->model()->index(0, 1).data().toString(); };
+
+    // Starting state: the combo's first entry and the model's default agree.
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Hex"));
+    EXPECT_TRUE(doubleWordText().startsWith(QStringLiteral("0x")));
+    expectOnlyChecked(display, "Hex");
+
+    QToolButton *binary = buttonNamed(display, "Binary");
+    ASSERT_NE(binary, nullptr);
+    binary->click();
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Binary")) << "the tab's combo did not move";
+    EXPECT_EQ(memoryTab->displayBase(), Base::Binary);
+    EXPECT_TRUE(doubleWordText().startsWith(QStringLiteral("0b")))
+        << "the model is not rendering in binary: " << doubleWordText().toStdString();
+    expectOnlyChecked(display, "Binary");
+
+    QToolButton *decimal = buttonNamed(display, "Decimal");
+    ASSERT_NE(decimal, nullptr);
+    decimal->click();
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Decimal"));
+    EXPECT_EQ(memoryTab->displayBase(), Base::Decimal);
+    // Decimal is the one base with no prefix. A zeroed cell renders "0x0",
+    // "0b0" and "0" in the three bases, so the prefix is what separates them.
+    EXPECT_FALSE(doubleWordText().startsWith(QStringLiteral("0x")))
+        << doubleWordText().toStdString();
+    EXPECT_FALSE(doubleWordText().startsWith(QStringLiteral("0b")))
+        << doubleWordText().toStdString();
+    expectOnlyChecked(display, "Decimal");
+}
+
+TEST(RibbonStage3, MemoryDisplayBaseMirrorsBackFromTheCombo)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *memoryTab = window.findChild<MemoryTab *>();
+    ASSERT_NE(memoryTab, nullptr);
+    auto *combo = memoryTab->findChild<QComboBox *>("comboBox");
+    ASSERT_NE(combo, nullptr);
+
+    RibbonGroup *display = pageGroupNamed(bar, MainWindow::MemoryTabIndex, "Display");
+    ASSERT_NE(display, nullptr);
+
+    // Driving the widget the user would actually touch.
+    combo->setCurrentText(QStringLiteral("Binary"));
+    expectOnlyChecked(display, "Binary");
+
+    combo->setCurrentText(QStringLiteral("Decimal"));
+    expectOnlyChecked(display, "Decimal");
+
+    combo->setCurrentText(QStringLiteral("Hex"));
+    expectOnlyChecked(display, "Hex");
+}
+
+TEST(RibbonStage3, MemorySearchPressesTheTabsOwnButton)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *memoryTab = window.findChild<MemoryTab *>();
+    ASSERT_NE(memoryTab, nullptr);
+
+    auto *searchBar    = memoryTab->findChild<QLineEdit *>("searchBar");
+    auto *searchButton = memoryTab->findChild<QPushButton *>("searchButton");
+    auto *view         = memoryTab->findChild<QTableView *>("memoryTableView");
+    ASSERT_NE(searchBar, nullptr);
+    ASSERT_NE(searchButton, nullptr);
+    ASSERT_NE(view, nullptr);
+
+    // The in-tab button is still the only thing that runs a search.
+    SignalCounter clicks;
+    QObject::connect(searchButton, &QPushButton::clicked, &window, [&clicks] { ++clicks.count; });
+
+    RibbonGroup *find = pageGroupNamed(bar, MainWindow::MemoryTabIndex, "Find");
+    ASSERT_NE(find, nullptr);
+    QToolButton *search = buttonNamed(find, "Search");
+    ASSERT_NE(search, nullptr);
+
+    searchBar->setText(QStringLiteral("0x100"));
+    const QString before = view->model()->index(0, 0).data().toString();
+
+    search->click();
+
+    EXPECT_EQ(clicks.count, 1) << "the ribbon did not go through the tab's own button";
+    const QString after = view->model()->index(0, 0).data().toString();
+    EXPECT_NE(after, before) << "the table did not move to the searched address";
+    EXPECT_EQ(after, QStringLiteral("0x100"));
 }
