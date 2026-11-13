@@ -249,8 +249,14 @@ Recorded because they changed reported columns on directive lines.
   busiest page therefore set the floor for every tab. `RibbonPage` now
   reports a zero horizontal minimum and `RibbonBar` reports
   `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron.
-  Measured at the shipped state that is **543 px**: Run 338 + File 168 +
-  chevron 37. It does not bind, and would have to grow by 306 px to.
+  Measured at the shipped state that is **636 px**: Run 389 + File 210 +
+  chevron 37. It does not bind, and would have to grow by 213 px to.
+
+  (It read 543 until Stage 8, when `currentWidth()` was corrected to ask for
+  `max(sizeHint, minimumWidth)` per leaf instead of the hint alone. The large
+  buttons carry an explicit minimum width that compact mode does not shrink,
+  so the old number understated every compact group by that floor - which is
+  what let the panel squeeze the segmented runs.)
 
   Giving Problems, Search, Copy to Clipboard and Wires Stay Active an icon
   made their groups 24 px WIDER in full mode and much narrower in compact,
