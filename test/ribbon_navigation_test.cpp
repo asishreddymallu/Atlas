@@ -592,14 +592,17 @@ struct PageGroups
 /// The ribbon actions that deliberately carry no icon, by label. Everything
 /// else on the ribbon must be tagged with kitesIconId so the theme re-tint
 /// pass reaches it; see EveryRibbonActionWithAnIconCarriesItsThemeTag.
+/// Since Stage 6 the only ribbon actions without an icon are the exclusive
+/// segmented choices. Problems, Search, Copy to Clipboard and Wires Stay
+/// Active each got one; the segmented sets stay bare on purpose - they are
+/// one choice shown as one control, and the pair they mirror in the editor's
+/// Input header is text-only too. SegmentedChoicesAreOneRun asserts that
+/// from the other side.
 const QStringList kIconlessRibbonActions = {
-    "Problems", // the dock's own toggleViewAction, which has never had one
-    "Editor",     "Expanded", // Editor page, View
-    "Search",     "Hex",      "Binary", "Decimal", // Memory page
-    "Wires Stay Active",                               // Processor page, Datapath
-    "Binary",     "Hexadecimal", "Decimal/Float",      // Processor page, Registers
-    "Instruction", "L1",     "L2",                     // Cache page, Level
-    "Copy to Clipboard",                               // Compiler page, Output
+    "Editor",      "Expanded",                         // Editor page, View
+    "Hex",         "Binary",      "Decimal",           // Memory page, Display
+    "Binary",      "Hexadecimal", "Decimal/Float",     // Processor page, Registers
+    "Instruction", "L1",          "L2",                // Cache page, Level
 };
 
 const QList<PageGroups> kPageGroups = {
@@ -2433,4 +2436,73 @@ TEST(RibbonStage6, MeasuringNeverLeavesPaintingOff)
 
     // And the window as a whole is still painting after all that.
     expectEveryGroupPaints(bar, "after repeated and re-entrant measurement");
+}
+
+TEST(RibbonStage6, TheFourNewIconsAreTaggedAndSharedCorrectly)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    struct Expected
+    {
+        const char *label;
+        Icon        icon;
+        const char *group;
+    };
+    const Expected wired[] = {
+        {"Problems", Icon::Problems, "File"},
+        {"Search", Icon::Search, "Find"},
+        {"Copy to Clipboard", Icon::Copy, "Output"},
+        {"Wires Stay Active", Icon::Wires, "Datapath"},
+    };
+
+    for (const Expected &want : wired)
+    {
+        RibbonGroup *group = anyGroupNamed(bar, QString::fromUtf8(want.group));
+        ASSERT_NE(group, nullptr) << want.group;
+
+        QToolButton *button = buttonNamed(group, QString::fromUtf8(want.label));
+        ASSERT_NE(button, nullptr) << want.label << " is not in '" << want.group << "'";
+        QAction *action = button->defaultAction();
+        ASSERT_NE(action, nullptr);
+
+        // Tagged, so the theme re-tint pass reaches it.
+        EXPECT_EQ(themedIconOf(action), want.icon) << want.label;
+        // At the small size: all four are small buttons and none moved group.
+        EXPECT_EQ(themedIconSizeOf(action), QSize(smallRibbonIconSize, smallRibbonIconSize))
+            << want.label;
+        // Still a small button, not promoted to large.
+        EXPECT_EQ(button->toolButtonStyle(), Qt::ToolButtonTextBesideIcon) << want.label;
+        // Nothing gained a shortcut. Problems already had Ctrl+Shift+M and
+        // keeps exactly that.
+        if (QString::fromUtf8(want.label) == QStringLiteral("Problems"))
+            EXPECT_EQ(action->shortcut(), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+        else
+            EXPECT_TRUE(action->shortcut().isEmpty()) << want.label;
+    }
+
+    // Problems and Wires Stay Active are shown in the menus too, and must be
+    // the very same objects - an icon on a clone would look right and carry
+    // a second copy of the checked state.
+    QAction *problems = window.findChild<ProblemsDock *>()->toggleViewAction();
+    ASSERT_NE(problems, nullptr);
+    EXPECT_EQ(buttonNamed(anyGroupNamed(bar, "File"), "Problems")->defaultAction(), problems);
+
+    QAction *wires = nullptr;
+    for (QAction *menuAction : window.menuBar()->actions())
+        if (QMenu *menu = menuAction->menu())
+            for (QAction *entry : menu->actions())
+                if (QMenu *submenu = entry->menu())
+                    for (QAction *sub : submenu->actions())
+                        if (sub->text() == QStringLiteral("Wires Stay Active"))
+                            wires = sub;
+    ASSERT_NE(wires, nullptr);
+    EXPECT_EQ(buttonNamed(anyGroupNamed(bar, "Datapath"), "Wires Stay Active")->defaultAction(),
+              wires);
+
+    // The menu entries therefore carry the icon too, which is the point of
+    // sharing the action rather than cloning it.
+    EXPECT_EQ(themedIconOf(problems), Icon::Problems);
+    EXPECT_EQ(themedIconOf(wires), Icon::Wires);
 }

@@ -30,6 +30,10 @@ enum class Icon
     Save,
     Settings,
     About,
+    Search,
+    Problems,
+    Copy,
+    Wires,
     IconCount
 };
 

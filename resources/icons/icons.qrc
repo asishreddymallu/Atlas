@@ -19,5 +19,9 @@
         <file>save.svg</file>
         <file>settings.svg</file>
         <file>about.svg</file>
+        <file>search.svg</file>
+        <file>problems.svg</file>
+        <file>copy.svg</file>
+        <file>wires.svg</file>
     </qresource>
 </RCC>

@@ -192,6 +192,7 @@ void MainWindow::setUpProblemsDock()
     toggleAction->setText("Problems");
     toggleAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
     setActionHint(toggleAction, "Show or hide the Problems list");
+    setThemedIcon(toggleAction, Icon::Problems);
 
     QMenu *viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(toggleAction);
@@ -502,6 +503,7 @@ void MainWindow::setUpMemoryPage()
     // the path it always has - there is no second way to search.
     RibbonGroup *find = page->addGroup("Find");
     auto *searchAction = new QAction("Search", this);
+    setThemedIcon(searchAction, Icon::Search);
     searchAction->setToolTip("Jump the table to the address in the tab's search box");
     // Small, not large: no icon in the set says "search", and a large button
     // without an icon is just a wider text button - the icon over the label
@@ -635,6 +637,7 @@ void MainWindow::setUpCompilerPage()
     // the command does: it copies to the clipboard, not to the editor.
     RibbonGroup *output = page->addGroup("Output");
     auto        *copyAction = new QAction("Copy to Clipboard", this);
+    setThemedIcon(copyAction, Icon::Copy);
     copyAction->setToolTip("Copy the generated assembly to the clipboard");
     output->addSmall(copyAction);
     connect(copyAction, &QAction::triggered, compilerTab,
@@ -708,6 +711,7 @@ void MainWindow::setUpMenubar()
     //----------------------------------------------
     settingsMenu->addMenu(processorMenu);
     QAction *wireStayActiveAction = new QAction("Wires Stay Active", this);
+    setThemedIcon(wireStayActiveAction, Icon::Wires);
     wireStayActiveAction->setCheckable(true);
     wireStayActiveAction->setChecked(false);
     m_wiresStayActiveAction = wireStayActiveAction;
