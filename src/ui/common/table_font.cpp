@@ -1,14 +1,12 @@
 #include "table_font.h"
 #include "ui/theme/font_manager.h"
+#include "ui/theme/type_scale.h"
 #include <QObject>
 
 namespace Kites
 {
 namespace
 {
-// type scale: 12px for table numerics, one step below the 13px UI body text
-constexpr int tableFontPixelSize = 12;
-
 struct TableFontCache
 {
     QFont font;

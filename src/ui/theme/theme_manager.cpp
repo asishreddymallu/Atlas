@@ -1,4 +1,5 @@
 #include "theme_manager.h"
+#include "type_scale.h"
 #include "config/app_settings.h"
 #include <QApplication>
 #include <QDir>
@@ -400,6 +401,13 @@ QString ThemeManager::renderStylesheet(const QJsonObject &colors) const
 
     for (const QString &token : tokens)
         result.replace("{{" + token + "}}", values[token].name());
+
+    // Type scale. Not a colour, but the same substitution: the stylesheet
+    // should not carry its own font sizes any more than it carries its own
+    // colours, and there is one place to change them (type_scale.h).
+    result.replace("{{fontSize}}", QString::number(baseFontPixelSize) + "px");
+    result.replace("{{fontSizeSmall}}", QString::number(smallFontPixelSize) + "px");
+    result.replace("{{fontSizeTable}}", QString::number(tableFontPixelSize) + "px");
 
     return result;
 }
