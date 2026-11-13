@@ -3,6 +3,8 @@
 #include "cache_grid_delegate.h"
 #include "cache_config_widget.h"
 #include "ui_cache_tab.h"
+#include <QLayout>
+#include <QMargins>
 #include <QSignalBlocker>
 #include <QTabWidget>
 #include <algorithm>
@@ -72,6 +74,18 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->tabWidget->setTabText(0, "Instruction Cache");
     ui->tabWidget->setTabText(1, "L1 Cache");
     ui->tabWidget->setTabText(2, "L2 Cache");
+
+    // The inner tab bar started 9 px right of the ribbon's strip, which made
+    // two bars of the same kind look like two different kinds of control.
+    // The 9 px is the default left contents margin of the layout holding the
+    // tab widget - the .ui sets none, so Qt supplies it - and the .ui is not
+    // to be reformatted, so it is zeroed here. Only the left: the top, right
+    // and bottom keep the breathing room the rest of the tab was drawn with.
+    if (QLayout *outer = layout())
+    {
+        const QMargins margins = outer->contentsMargins();
+        outer->setContentsMargins(0, margins.top(), margins.right(), margins.bottom());
+    }
 
     ui->tabWidget->setCurrentIndex(0); // show Instruction cache by default
 
