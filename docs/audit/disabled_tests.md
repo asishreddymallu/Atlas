@@ -18,10 +18,44 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `FIVE_STAGE_VM_TEST.no_hazard_no_forwarding_test_1` | `// TEST` | Fails assertion | Assertion expects `x1 == 15`, but executing 12 `addi x1, x1, 10` instructions without hazard handling / forwarding produces `x1 == 40` due to pipeline stall/drain timings. | Recalculate the expected architectural register state under NHNF mode or update assembly program to match test assertion. |
 | `FIVE_STAGE_VM_TEST.no_hazard_no_forwarding_test_2` | `// TEST` | **PASSES** (0.04s) | Was commented out along with the file. Passes assertion `x4 == 20` cleanly on `pipeline_test_code_2.s`. | **Re-enabled and active.** |
-| `FIVE_STAGE_VM_TEST.hazard_no_forwarding_test_1` | `// TEST` | Fails assertion | Assertion expects `x1 == 36`, but executing 12 `addi x1, x1, 10` instructions under hazard detection with stalls produces `x1 == 120`. | Correct the expected assertion value to 120 (since stalls correctly serialize the 12 `addi` operations). |
-| `FIVE_STAGE_VM_TEST.no_hazard_forwarding_test` | `// TEST` | Fails runtime | Throws `Failed to open file: ../examples/pipeline_test_code.s` (file does not exist on disk). | Provide `examples/pipeline_test_code.s` or update path to existing example. |
-| `FIVE_STAGE_VM_TEST.harzard_no_forwarding_test` | `// TEST` | Fails runtime | Throws `Failed to open file: ../examples/pipeline_test_code.s` (file does not exist on disk). | Provide `examples/pipeline_test_code.s` or update path to existing example. |
-| `FIVE_STAGE_VM_TEST.harzard_forwarding_test` | `// TEST` | Fails runtime | Throws `Failed to open file: ../examples/pipeline_test_code.s` (file does not exist on disk). | Provide `examples/pipeline_test_code.s` or update path to existing example. |
+| `FIVE_STAGE_VM_TEST.hazard_no_forwarding_test_1` | `// TEST` | Fails assertion | Assertion expects `x1 == 36`, but executing 12 `addi x1, x1, 10` instructions under hazard detection with stalls produces `x1 == 120`. **The 36 is not arbitrary**: it is the sum `1+2+…+8` produced by the deleted `pipeline_test_code.s` (below). The test was repointed to `pipeline_test_code_1.s` and kept the old expectation. | Either restore the original asset and keep 36, or keep `pipeline_test_code_1.s` and correct the expectation to 120. Decide which program the test is meant to exercise first. |
+| `FIVE_STAGE_VM_TEST.no_hazard_forwarding_test` | `// TEST` | Fails runtime | Throws `Failed to open file: ../examples/pipeline_test_code.s`. The path is quoted verbatim from `test/rv5s_test.cpp:53`; the file is not on disk, but it did exist — see **The missing `pipeline_test_code.s`** below. | Restore the file from `58f9c8d` (it is eight lines), or repoint the test. It asserts nothing, so either runs. |
+| `FIVE_STAGE_VM_TEST.harzard_no_forwarding_test` | `// TEST` | Fails runtime | Same asset, quoted from `test/rv5s_test.cpp:64`. | As above. Note the test name says *no forwarding* but it constructs `RV5StageProcessorHF`, which forwards. |
+| `FIVE_STAGE_VM_TEST.harzard_forwarding_test` | `// TEST` | Fails runtime | Same asset, quoted from `test/rv5s_test.cpp:75`. | As above. Note the test name says *forwarding* but it constructs `RV5StageProcessorHNF`, which does not. |
+
+#### The missing `pipeline_test_code.s`
+
+Three of the rows above cite a file that is not in the tree, so the citations
+read like stale paths. They are not. `examples/pipeline_test_code.s` existed,
+and it was a **third** program, not an early name for `pipeline_test_code_1.s` or `pipeline_test_code_2.s`:
+
+```
+added   58f9c8d  2025-10-29  "restructured the file structure"
+deleted 2e37de8  2025-11-10  "feat: implement Editor class ..."
+```
+
+Its whole content, recoverable with `git show 58f9c8d:examples/pipeline_test_code.s`:
+
+```asm
+addi x1,x1,1
+addi x1,x1,2
+addi x1,x1,3
+addi x1,x1,4
+addi x1,x1,5
+addi x1,x1,6
+addi x1,x1,7
+addi x1,x1,8
+```
+
+Eight instructions summing `x1` to **36** — which is exactly the expectation
+left stranded in `hazard_no_forwarding_test_1`, and the reason that test looks
+unreasonable against `pipeline_test_code_1.s` (twelve `addi x1,x1,10`, giving 120).
+
+**The three citations cannot be resolved to `pipeline_test_code_1.s` or `pipeline_test_code_2.s` from context.**
+All three tests assert nothing — they load a program, call `DebugRun()` and
+end — so no expected value identifies which program was meant. The only
+evidence is the path they name, and that names this file. Restoring it from
+`58f9c8d` is the change that keeps every one of them honest.
 
 ---
 
