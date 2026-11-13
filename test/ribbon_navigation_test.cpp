@@ -1354,3 +1354,75 @@ TEST(RibbonStage3, NothingOnTheRibbonAddedAShortcut)
     distinct.removeDuplicates();
     EXPECT_EQ(distinct.size(), sequences.size()) << "two actions share a key sequence";
 }
+
+namespace
+{
+/// Every ribbon button, by the group it sits in, its label and its size.
+/// Large means icon over text; small means icon beside text. A button with
+/// no icon renders the same either way, so "large" is only meaningful where
+/// there is an icon to put above the label - which is why Search is small.
+struct ButtonSpec
+{
+    const char         *group;
+    const char         *label;
+    Qt::ToolButtonStyle style;
+};
+constexpr Qt::ToolButtonStyle kLarge = Qt::ToolButtonTextUnderIcon;
+constexpr Qt::ToolButtonStyle kSmall = Qt::ToolButtonTextBesideIcon;
+
+const QList<ButtonSpec> kPersistentButtons = {
+    {"Run", "Run", kLarge},       {"Run", "Debug Run", kLarge}, {"Run", "Pause", kSmall},
+    {"Run", "Step", kSmall},      {"Run", "Undo", kSmall},      {"Run", "Redo", kSmall},
+    {"Run", "Processor", kSmall}, {"File", "Open", kLarge},     {"File", "Save", kLarge},
+    {"File", "Problems", kSmall},
+};
+
+const QList<ButtonSpec> kPageButtons = {
+    {"View", "Editor", kSmall},           {"View", "Expanded", kSmall},
+    {"Find", "Search", kSmall},           {"Display", "Hex", kSmall},
+    {"Display", "Binary", kSmall},        {"Display", "Decimal", kSmall},
+    {"Datapath", "Wires Stay Active", kSmall},
+    {"Registers", "Binary", kSmall},      {"Registers", "Hexadecimal", kSmall},
+    {"Registers", "Decimal/Float", kSmall},
+    {"Level", "Instruction", kSmall},     {"Level", "L1", kSmall},
+    {"Level", "L2", kSmall},              {"Build", "Compile", kLarge},
+    {"Output", "Copy to Clipboard", kSmall},
+};
+} // namespace
+
+TEST(RibbonStage3, EveryButtonHasTheLabelAndSizeItShould)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    auto render = [](const QList<ButtonSpec> &specs)
+    {
+        QStringList out;
+        for (const ButtonSpec &spec : specs)
+            out << QStringLiteral("%1/%2/%3")
+                       .arg(QString::fromUtf8(spec.group), QString::fromUtf8(spec.label),
+                            spec.style == kLarge ? QStringLiteral("large")
+                                                 : QStringLiteral("small"));
+        return out;
+    };
+
+    QStringList persistent;
+    QStringList onPages;
+    auto collect = [](QStringList &into, RibbonGroup *group)
+    {
+        for (QToolButton *button : group->buttons())
+            into << QStringLiteral("%1/%2/%3")
+                        .arg(group->caption(), button->text(),
+                             button->toolButtonStyle() == kLarge ? QStringLiteral("large")
+                                                                 : QStringLiteral("small"));
+    };
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        collect(persistent, bar->persistentGroup(i));
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            collect(onPages, group);
+
+    EXPECT_EQ(persistent, render(kPersistentButtons));
+    EXPECT_EQ(onPages, render(kPageButtons));
+}

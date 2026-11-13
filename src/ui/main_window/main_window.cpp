@@ -511,7 +511,10 @@ void MainWindow::setUpMemoryPage()
     RibbonGroup *find = page->addGroup("Find");
     auto *searchAction = new QAction("Search", this);
     searchAction->setToolTip("Jump the table to the address in the tab's search box");
-    find->addLarge(searchAction);
+    // Small, not large: no icon in the set says "search", and a large button
+    // without an icon is just a wider text button - the icon over the label
+    // is the whole difference between the two sizes.
+    find->addSmall(searchAction);
     connect(searchAction, &QAction::triggered, memoryTab,
             [memoryTab] { memoryTab->triggerSearch(); });
 
