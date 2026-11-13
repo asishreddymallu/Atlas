@@ -47,10 +47,24 @@ QListWidget::item:selected {
     border-left: 2px solid {{accent}};
 }
 
-/* ── Tab widgets ───────────────────────────────────────────────── */
+/* ── Tab widgets ─────────────────────────────────────────────────
+ * The Cache tab's Instruction/L1/L2 bar is the only QTabWidget in the
+ * application, and it is the same kind of control as the ribbon's strip: the
+ * QTabBar rules below already style both identically - muted labels, an
+ * accent underline on the selected one, a hover tint on the rest.
+ *
+ * What made it read as a separate widget was the box around its pane and the
+ * indent its .ui layout gives the bar. The box becomes a single hairline
+ * under the bar, which is exactly the boundary the ribbon panel carries, and
+ * the bar is pulled flush left so both start at their container's edge. The
+ * .ui file is untouched. */
 QTabWidget::pane {
-    border: 1px solid {{border}};
+    border: none;
+    border-top: 1px solid {{border}};
     background-color: {{background}};
+}
+QTabWidget::tab-bar {
+    left: 0px;
 }
 QTabBar::tab {
     background-color: transparent;
