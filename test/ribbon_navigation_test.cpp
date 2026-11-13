@@ -22,6 +22,8 @@
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/main_window/main_window.h"
 #include "ui/memory_tab/memory_tab.h"
+#include "ui/cache_tab/cache_config_widget.h"
+#include "ui/cache_tab/cache_tab.h"
 #include "ui/processor_tab/circuit_scene.h"
 #include "ui/processor_tab/processor_tab.h"
 #include "ui/register_table/register_container.h"
@@ -43,6 +45,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTableView>
+#include <QTabWidget>
 #include <QToolBar>
 #include <QWidgetAction>
 #include <algorithm>
@@ -561,13 +564,14 @@ const QStringList kIconlessRibbonActions = {
     "Search",     "Hex",      "Binary", "Decimal", // Memory page
     "Wires Stay Active",                               // Processor page, Datapath
     "Binary",     "Hexadecimal", "Decimal/Float",      // Processor page, Registers
+    "Instruction", "L1",     "L2",                     // Cache page, Level
 };
 
 const QList<PageGroups> kPageGroups = {
     {MainWindow::EditorTabIndex, {"View"}},
     {MainWindow::MemoryTabIndex, {"Find", "Display"}},
     {MainWindow::ProcessorTabIndex, {"Datapath", "Registers"}},
-    {MainWindow::CacheTabIndex, {}},
+    {MainWindow::CacheTabIndex, {"Level"}},
     {MainWindow::CompilerTabIndex, {}},
     {MainWindow::ProfilerTabIndex, {}},
 };
@@ -1136,4 +1140,72 @@ TEST(RibbonStage3, RegisterDisplayBaseMirrorsBackFromTheCombo)
 
     combo->setCurrentText(QStringLiteral("Hexadecimal"));
     expectOnlyChecked(group, "Hexadecimal");
+}
+
+TEST(RibbonStage3, CacheLevelMovesTheInnerTabBarAndFollowsIt)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *cacheTab = window.findChild<CacheTab *>();
+    ASSERT_NE(cacheTab, nullptr);
+
+    auto *inner = cacheTab->findChild<QTabWidget *>("tabWidget");
+    ASSERT_NE(inner, nullptr);
+    ASSERT_EQ(inner->count(), 3);
+
+    RibbonGroup *level = pageGroupNamed(bar, MainWindow::CacheTabIndex, "Level");
+    ASSERT_NE(level, nullptr);
+    ASSERT_EQ(level->buttons().size(), 3);
+
+    // The inner bar's page order is not the CacheLevel enum's order, which
+    // is exactly the mistake these assertions are here to catch.
+    EXPECT_EQ(inner->tabText(0), QStringLiteral("Instruction Cache"));
+    EXPECT_EQ(inner->tabText(1), QStringLiteral("L1 Cache"));
+    EXPECT_EQ(inner->tabText(2), QStringLiteral("L2 Cache"));
+
+    // Starting state agrees: the tab widget opens on the instruction cache.
+    EXPECT_EQ(inner->currentIndex(), 0);
+    EXPECT_EQ(cacheTab->currentCacheLevel(), CacheTab::Instruction);
+    expectOnlyChecked(level, "Instruction");
+
+    // ribbon -> tab
+    buttonNamed(level, "L2")->click();
+    EXPECT_EQ(inner->currentIndex(), 2) << "the inner tab bar did not move";
+    EXPECT_EQ(inner->tabText(inner->currentIndex()), QStringLiteral("L2 Cache"));
+    EXPECT_EQ(cacheTab->currentCacheLevel(), CacheTab::L2);
+    expectOnlyChecked(level, "L2");
+
+    buttonNamed(level, "L1")->click();
+    EXPECT_EQ(inner->tabText(inner->currentIndex()), QStringLiteral("L1 Cache"));
+    EXPECT_EQ(cacheTab->currentCacheLevel(), CacheTab::L1);
+    expectOnlyChecked(level, "L1");
+
+    // tab -> ribbon
+    inner->setCurrentIndex(0);
+    EXPECT_EQ(cacheTab->currentCacheLevel(), CacheTab::Instruction);
+    expectOnlyChecked(level, "Instruction");
+
+    inner->setCurrentIndex(2);
+    expectOnlyChecked(level, "L2");
+}
+
+TEST(RibbonStage3, CachePageOffersNoPolicyButton)
+{
+    // "Custom policy..." is deliberately absent: CacheConfigWidget's handler
+    // assumes the replacement-policy combo has already moved to Custom, and
+    // calling it from anywhere else leaves the combo and the cache config
+    // disagreeing. If a Policy group is ever added, it has to come with the
+    // combo move, not just the dialog - so this fails until that is thought
+    // through. See the Stage 3 report.
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    EXPECT_EQ(pageGroupNamed(bar, MainWindow::CacheTabIndex, "Policy"), nullptr);
+
+    // The in-tab control is untouched and still the only way there.
+    auto *cacheTab = window.findChild<CacheTab *>();
+    ASSERT_NE(cacheTab, nullptr);
+    EXPECT_EQ(cacheTab->findChildren<CacheConfigWidget *>().size(), 3);
 }

@@ -125,6 +125,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setUpEditorPage();
     setUpMemoryPage();
     setUpProcessorPage();
+    setUpCachePage();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -568,6 +569,46 @@ void MainWindow::setUpProcessorPage()
             [choices, bases](Base base) { checkChoice(choices, bases.indexOf(base)); });
 
     checkChoice(choices, bases.indexOf(m_registerContainer->displayBase()));
+}
+
+void MainWindow::setUpCachePage()
+{
+    auto *cacheTab = dynamic_cast<CacheTab *>(m_tabs[TabIndex::CacheTabIndex]);
+    if (!cacheTab)
+        return;
+
+    RibbonPage *page = m_ribbon->page(toIndex(TabIndex::CacheTabIndex));
+
+    // The inner tab widget stays the state. These three move it, and it
+    // reports back, so the two always show the same level.
+    RibbonGroup *level = page->addGroup("Level");
+    const QList<CacheTab::CacheLevel> levels {CacheTab::Instruction, CacheTab::L1, CacheTab::L2};
+    const QList<QAction *>            choices =
+        addExclusiveChoices(this, level, {"Instruction", "L1", "L2"});
+
+    for (int i = 0; i < choices.size(); ++i)
+    {
+        const CacheTab::CacheLevel target = levels.at(i);
+        connect(choices.at(i), &QAction::triggered, cacheTab,
+                [cacheTab, target] { cacheTab->setCacheLevel(target); });
+    }
+
+    connect(cacheTab, &CacheTab::cacheLevelChangedSignal, this,
+            [choices, levels](CacheTab::CacheLevel changed)
+            { checkChoice(choices, levels.indexOf(changed)); });
+
+    checkChoice(choices, levels.indexOf(cacheTab->currentCacheLevel()));
+
+    // No Policy group. "Custom policy..." cannot be offered here faithfully:
+    // CacheConfigWidget::onCustomPolicyClicked() is only ever reached from
+    // the replacement-policy combo having *already* moved to Custom, and it
+    // relies on that. Called while another policy is selected it would load
+    // the script into the cache while the combo still reads the old policy,
+    // and the next unrelated config edit would silently reconfigure the
+    // cache back. Cancelling is worse: the handler forces the combo to LRU
+    // without emitting configChangedSignal, so the widget would claim LRU
+    // while the cache kept running whatever was selected before. Reported
+    // rather than wired; see the Stage 3 report.
 }
 
 void MainWindow::setCurrentTab(TabIndex index)

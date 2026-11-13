@@ -4,10 +4,40 @@
 #include "cache_config_widget.h"
 #include "ui_cache_tab.h"
 #include <QSignalBlocker>
+#include <QTabWidget>
 #include <algorithm>
+#include <iterator>
 
 namespace Kites
 {
+namespace
+{
+// The inner tab widget's page order, which is deliberately not the order of
+// the CacheLevel enum: the enum indexes m_cacheModels (L1, L2, Instruction)
+// while the .ui puts the instruction cache first. One table, read both ways,
+// so the two orders cannot be confused for each other.
+constexpr CacheTab::CacheLevel tabOrder[] = {
+    CacheTab::Instruction,
+    CacheTab::L1,
+    CacheTab::L2,
+};
+
+int tabIndexFor(CacheTab::CacheLevel level)
+{
+    for (int index = 0; index < static_cast<int>(std::size(tabOrder)); ++index)
+        if (tabOrder[index] == level)
+            return index;
+    return -1;
+}
+
+CacheTab::CacheLevel levelForTabIndex(int index)
+{
+    if (index < 0 || index >= static_cast<int>(std::size(tabOrder)))
+        return CacheTab::CacheLevelCount;
+    return tabOrder[index];
+}
+} // namespace
+
 CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
    : KitesTab(parent), m_memoryController(memoryController),ui(new Ui::CacheTab)
 {
@@ -44,6 +74,11 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->tabWidget->setTabText(2, "L2 Cache");
 
     ui->tabWidget->setCurrentIndex(0); // show Instruction cache by default
+
+    // Connected after the default is set, so construction does not announce
+    // a change nobody asked for.
+    connect(ui->tabWidget, &QTabWidget::currentChanged, this,
+            [this](int index) { emit cacheLevelChangedSignal(levelForTabIndex(index)); });
     // ui->splitter->setStretchFactor(0, 0);
     // ui->splitter->setStretchFactor(1, 1);
 
@@ -89,6 +124,18 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
 //             break;
 //     }
 // }
+
+void CacheTab::setCacheLevel(CacheLevel level)
+{
+    const int index = tabIndexFor(level);
+    if (index >= 0)
+        ui->tabWidget->setCurrentIndex(index);
+}
+
+CacheTab::CacheLevel CacheTab::currentCacheLevel() const
+{
+    return levelForTabIndex(ui->tabWidget->currentIndex());
+}
 
 void CacheTab::changeMemoryController(MemoryController *memoryController)
 {
