@@ -97,7 +97,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | Path | Purpose |
 |---|---|
 | `src/ui/main_window/` | `MainWindow` — hosts the tabs in a `QStackedWidget`, owns the ribbon, menubar, status bar and Problems dock, and drives assembly and run. `setCurrentTab()` is the only writer of the visible tab. |
-| `src/ui/ribbon/` | The chrome above the content: `ribbon_bar.*` (the tab strip and the panel below it), `ribbon_page.*` (one page per tab, a row of groups) and `ribbon_group.*` (a labelled block of buttons). It owns no command logic — every button is driven by a `QAction` `MainWindow` supplies, through `QToolButton::setDefaultAction()`. Replaced the left sidebar and the main toolbar. |
+| `src/ui/ribbon/` | The chrome above the content: `ribbon_bar.*` (the tab strip, the panel below it and the overflow chevron), `ribbon_page.*` (one page per tab, a row of groups), `ribbon_group.*` (a labelled block of buttons, small ones stacked in columns) and `ribbon_layout.*` (a pure function deciding what fits). It owns no command logic — every button is driven by a `QAction` `MainWindow` supplies, through `QToolButton::setDefaultAction()`. Replaced the left sidebar and the main toolbar. |
 | `src/ui/editor_tab/` | Source editor tab: `main_editor.*` (the editor widget), `disassembly_editor.h`, `break_point_gutter_column.h`, and `editor_tab.*` which owns the Input/Expanded panes and the diagnostic squiggles. |
 | `src/ui/memory_tab/` | Memory view: `memory_model.*`, `memory_table_view.*`, `memory_tab.*`. |
 | `src/ui/register_table/` | Register panel: `register_model.*` and `register_container.*`. |
@@ -126,6 +126,12 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | A given tab's widget | `src/ui/<name>_tab/<name>_tab.cpp` (e.g. `src/ui/cache_tab/cache_tab.cpp`); the register panel is the exception, at `src/ui/register_table/register_container.cpp` |
 | The main window and the menus | `src/ui/main_window/main_window.cpp` |
 | The ribbon's own widgets (strip, panel, groups) | `src/ui/ribbon/` — `ribbon_bar.cpp`, `ribbon_page.cpp`, `ribbon_group.cpp` |
+| What the ribbon shows when the window is narrow | `computeRibbonLayout()` in `src/ui/ribbon/ribbon_layout.cpp` — a pure function of the available width and each group's measured widths. Degrades: everything full → everything compact → page groups into the overflow menu, rightmost first. Run and File never overflow. |
+| Why the ribbon cannot oscillate while resizing | the same function: it reads no widget, no current geometry and no previous result, so hiding a group cannot change the answer. Tested over a 0–2000 px sweep in `test/ribbon_layout_test.cpp` |
+| The overflow chevron and its menu | `RibbonBar::applyOverflowLayout()` and `rebuildOverflowMenu()` in `src/ui/ribbon/ribbon_bar.cpp`. The menu is built when it opens, one submenu per overflowed group, from the groups' own `QAction`s |
+| How wide a group is, in each mode | `RibbonGroup::fullWidth()` / `compactWidth()` in `src/ui/ribbon/ribbon_group.cpp` — measured from the live widgets, cached, dropped on a style or font change |
+| Why a group cannot overflow | `RibbonGroup::isOverflowable()` — false once the group holds anything that is not a `QToolButton`, because a menu entry is a `QAction` and a widget has one parent. The Run group's speed spin box is the case |
+| What sets the window's minimum width | the content splitter, not the ribbon: `RibbonPage::minimumSizeHint()` is zero wide and `RibbonBar::minimumSizeHint()` is `ribbonMinimumWidth()`. See `docs/audit/known_issues.md` |
 | Which tabs exist, and switching between them | `MainWindow::TabIndex` and `setUpRibbon()` / `setCurrentTab()` in `src/ui/main_window/main_window.cpp` |
 | What is on a given ribbon page | `setUpEditorPage()`, `setUpMemoryPage()`, `setUpProcessorPage()`, `setUpCachePage()`, `setUpCompilerPage()` in `src/ui/main_window/main_window.cpp`. The Profiler page is deliberately empty. |
 | The Run and File groups, shown on every tab | `MainWindow::setUpPersistentGroups()` in `src/ui/main_window/main_window.cpp`; they live beside the pages, in `RibbonBar`, so there is one instance of each button rather than one per tab |

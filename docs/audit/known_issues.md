@@ -215,37 +215,50 @@ Recorded because they changed reported columns on directive lines.
 - **Why it is this way**: the alternative puts a couple of dozen chrome
   controls in front of the editor on every `Tab` press, which is worse for
   the keyboard user the ribbon would otherwise be serving.
+- **One exception**: the overflow chevron is `Qt::TabFocus`. It is the only
+  keyboard route to a command whose group has moved into the menu, and a
+  `QMenu` navigates by keyboard once it is open, so leaving it out would
+  have made those commands unreachable rather than merely inconvenient.
 - **Consequence**: a keyboard-only user reaches commands through the shortcuts
   (`F5` Run, `F9` Debug Run, `F6` Pause, `F10` Step, `Ctrl+O`, `Ctrl+S`,
-  `Ctrl+Shift+M`) and through the menu bar, which still carries File,
-  Settings, Help and View. **Commands that exist only on the ribbon have
-  neither.** Those are: the Memory display base and Search, the register
-  display base, the cache level, Compile and Copy to Clipboard, and the
-  Editor/Expanded view toggle. Each of them mirrors a widget that is still
-  inside its tab and still reachable by `Tab`, so none is unreachable - but
-  the ribbon itself is not a keyboard route to any of them.
+  `Ctrl+Shift+M`), through the menu bar, which still carries File, Settings,
+  Help and View, and - when the window is narrow enough for a group to
+  overflow - through the chevron. **Commands that exist only on the ribbon
+  and whose group is NOT overflowed have none of those three.** Those are:
+  the Memory display base and Search, the register display base, the cache
+  level, Compile and Copy to Clipboard, and the Editor/Expanded view toggle.
+  Each of them mirrors a widget that is still inside its tab and still
+  reachable by `Tab`, so none is unreachable - but the ribbon itself is not
+  a keyboard route to any of them at a comfortable window width.
 - **Status**: accepted design, recorded rather than fixed. A proper fix is
   ribbon key tips (Office's Alt-sequence) or making each group a single tab
   stop with arrow navigation inside it; neither is in the current scope.
 
 ---
 
-## 11. The ribbon forces a 1623 px minimum window width
+## 11. The window cannot be narrower than 799 px
 
-- **Where**: `src/ui/ribbon/ribbon_bar.cpp` (the persistent area and the page
-  `QStackedWidget` sit side by side in one row).
-- **Measured** (1x, Fusion, `kites-dark`): persistent `Run` 851 px + `File`
-  263 px = 1114 px, plus the widest page (`Processor`, 509 px) = **1623 px**,
-  which is also the whole window's `minimumSizeHint()`. A `QStackedWidget`
-  takes the largest of its pages, so the widest page sets the floor for every
-  tab. Compact mode (`RibbonGroup::setCompact()`) reaches 1326 px, which is
-  still above the 1314 px floor the ribbon had before the per-tab pages were
-  filled.
-- **Consequence**: the window cannot be opened at 1200 px or sized to fit a
-  1366 px display. Nothing is clipped, because the layout refuses to go
-  narrower rather than cutting anything off.
-- **Status**: not fixed. Surveyed under Stage 4B with options (an overflow
-  chevron, a horizontal scroll area, or a hybrid); no code written yet.
+- **Where**: `src/ui/main_window/main_window.cpp` - the content splitter,
+  holding the tab stack and `RegisterContainer`.
+- **Measured** (1x, Fusion, `kites-dark`): tab stack 573 px + register panel
+  225 px + the splitter handle = **799 px**, which is the whole window's
+  `minimumSizeHint()`.
+- **The ribbon is no longer part of this.** It used to force 1623 px, because
+  a `QStackedWidget` takes the largest of its children's minimums and the
+  busiest page therefore set the floor for every tab. `RibbonPage` now
+  reports a zero horizontal minimum and `RibbonBar` reports
+  `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron -
+  which is about 700 px and so never binds. See `src/ui/ribbon/ribbon_layout.h`.
+- **Below 799 px** the window simply refuses to shrink. Nothing is clipped
+  and nothing is hidden; the layout stops rather than cutting anything off.
+- **To go lower**, the register panel (minimum 225 px, maximum 350 px) would
+  need a smaller minimum or a way to collapse, and the tab stack's 573 px
+  would need looking at. Both are content changes, not ribbon changes, and
+  neither is in scope here.
+- **If a larger font** pushes the persistent groups plus the chevron past
+  799 px, the floor rises to that instead. That is deliberate: the ribbon
+  reports a larger minimum rather than clipping the one group that must
+  always be reachable.
 
 ---
 
