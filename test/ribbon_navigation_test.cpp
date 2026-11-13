@@ -45,6 +45,7 @@
 #include <QGraphicsView>
 #include <QGuiApplication>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -1425,4 +1426,126 @@ TEST(RibbonStage3, EveryButtonHasTheLabelAndSizeItShould)
 
     EXPECT_EQ(persistent, render(kPersistentButtons));
     EXPECT_EQ(onPages, render(kPageButtons));
+}
+
+// ══════════════════ Stage 4A: retiring the old toolbar ════════════════════
+
+namespace
+{
+/// The seven execution actions, resolved from the ribbon's persistent Run
+/// group rather than from the toolbar. This is the mapping the toolbar's
+/// retirement turns on: Stage 2 proved these buttons carry the very same
+/// QAction objects the toolbar held, so naming them here is naming those.
+///
+/// The Run group's order is not the toolbar's. The toolbar read
+/// Processor | Run Debug | Pause Step | Undo Redo; the group leads with the
+/// two large buttons and puts Processor last.
+QList<QAction *> executionActions(RibbonBar *bar)
+{
+    QList<QAction *> result;
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    if (!run)
+        return result;
+    for (QToolButton *button : run->buttons())
+        if (QAction *a = button->defaultAction())
+            result.append(a);
+    return result; // Run, Debug Run, Pause, Step, Undo, Redo, Processor
+}
+} // namespace
+
+TEST(RibbonStage4, ExecutionActionsOutliveTheToolbar)
+{
+    // The premise the retirement rests on: no execution QAction is owned by
+    // the QToolBar, so deleting it cannot take one with it. Proved by doing
+    // it, not by reading the constructor.
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    const QList<QAction *> actions = executionActions(bar);
+    ASSERT_EQ(actions.size(), 7);
+
+    // Every one is parented to the window, not to a toolbar.
+    for (QAction *a : actions)
+        EXPECT_EQ(a->parent(), &window)
+            << "'" << a->text().toStdString() << "' is owned by " << a->parent()->metaObject()->className();
+
+    // Remember them as QObjects so a dangling pointer is observable through
+    // a guard rather than by dereferencing freed memory.
+    QList<QPointer<QAction>> guards;
+    QStringList              labels;
+    for (QAction *a : actions)
+    {
+        guards.append(QPointer<QAction>(a));
+        labels << a->text();
+    }
+
+    for (QToolBar *toolbar : window.findChildren<QToolBar *>())
+        delete toolbar;
+    EXPECT_TRUE(window.findChildren<QToolBar *>().isEmpty());
+
+    for (int i = 0; i < guards.size(); ++i)
+        EXPECT_FALSE(guards.at(i).isNull()) << "'" << labels.at(i).toStdString() << "' died with the toolbar";
+
+    // ...and the theme re-tint pass, which walks findChildren<QAction*> on
+    // the window, still reaches each of them.
+    const QList<QAction *> stillChildren = window.findChildren<QAction *>();
+    for (int i = 0; i < guards.size(); ++i)
+    {
+        if (guards.at(i).isNull())
+            continue;
+        EXPECT_TRUE(stillChildren.contains(guards.at(i).data()))
+            << "'" << labels.at(i).toStdString() << "' is no longer found by the re-tint pass";
+    }
+
+    // The pass itself runs clean and leaves the tags in place.
+    window.themeChangedSlot(QStringLiteral("kites-dark"));
+    for (int i = 0; i < guards.size(); ++i)
+        if (!guards.at(i).isNull() && labels.at(i) != QStringLiteral("Problems"))
+            EXPECT_NE(themedIconOf(guards.at(i).data()), Icon::IconCount)
+                << "'" << labels.at(i).toStdString() << "' lost its icon tag";
+
+    // The ribbon buttons still work off those same actions afterwards.
+    for (QToolButton *button : persistentGroupNamed(bar, "Run")->buttons())
+        EXPECT_NE(button->defaultAction(), nullptr);
+}
+
+TEST(RibbonStage4, EveryToolbarCommandIsOnTheRibbonAsTheSameObject)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // Named by role, in the Run group's order.
+    const QList<QAction *> actions = executionActions(bar);
+    ASSERT_EQ(actions.size(), 7);
+    QStringList labels;
+    for (QAction *a : actions)
+        labels << a->text();
+    EXPECT_EQ(labels, (QStringList{"Run", "Debug Run", "Pause", "Step", "Undo", "Redo",
+                                   "Processor"}));
+
+    // The speed control is a widget, not an action, and lives in the group.
+    QSpinBox *spin = speedSpin(window);
+    ASSERT_NE(spin, nullptr);
+    EXPECT_TRUE(bar->isAncestorOf(spin));
+    EXPECT_EQ(spin->minimum(), 1);
+    EXPECT_EQ(spin->maximum(), 10000);
+
+    // Open, Save and Problems are on the ribbon too and still in the menus.
+    const QList<QAction *> onRibbon = ribbonActions(bar);
+    QAction *open = menuEntry(window, 0, 0);
+    QAction *save = menuEntry(window, 0, 1);
+    QAction *problems = window.findChild<ProblemsDock *>()->toggleViewAction();
+    ASSERT_NE(open, nullptr);
+    ASSERT_NE(save, nullptr);
+    EXPECT_TRUE(onRibbon.contains(open));
+    EXPECT_TRUE(onRibbon.contains(save));
+    EXPECT_TRUE(onRibbon.contains(problems));
+
+    // The menu bar is untouched: File, Settings, Help, View, in that order.
+    QStringList menus;
+    for (QAction *a : window.menuBar()->actions())
+        menus << a->text();
+    EXPECT_EQ(menus, (QStringList{"&File", "&Settings", "&Help", "&View"}));
 }
