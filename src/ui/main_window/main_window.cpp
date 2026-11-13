@@ -65,9 +65,12 @@ QList<QAction *> addExclusiveChoices(QObject *owner, RibbonGroup *group, const Q
         auto *action = new QAction(label, owner);
         action->setCheckable(true);
         actionGroup->addAction(action);
-        group->addSmall(action);
         actions.append(action);
     }
+    // One segmented run rather than loose buttons in the column grid. None
+    // of these has an icon, and three separate text buttons do not read as
+    // one choice; this matches the pair in the editor's Input header.
+    group->addSegmented(actions);
     return actions;
 }
 
@@ -459,8 +462,9 @@ void MainWindow::setUpEditorPage()
     m_editorViewAction->setToolTip("Show the source you wrote");
     m_expandedViewAction->setToolTip("Show pseudo-instructions expanded");
 
-    view->addSmall(m_editorViewAction);
-    view->addSmall(m_expandedViewAction);
+    // The same segmented treatment as the other exclusive, icon-less
+    // choices, and the same shape as the pair this one mirrors in the tab.
+    view->addSegmented({m_editorViewAction, m_expandedViewAction});
 
     // Ribbon -> tab. QAction::triggered fires only on a real activation, not
     // on setChecked(), so the mirror below cannot drive this back.

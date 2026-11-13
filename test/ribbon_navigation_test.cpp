@@ -1630,10 +1630,12 @@ TEST(RibbonStage4B1, SmallButtonsStackIntoColumns)
     // Undo+Redo, Processor+the speed spin box. Each is packed on its own.
     EXPECT_EQ(run->columnSizes(), expectedColumns({2, 2, 2}, capacity));
 
-    // Groups with no separators pack as one run.
+    // Groups with no separators pack as one run. The exclusive icon-less
+    // choices are NOT here: since Stage 5 they are laid out as a single
+    // segmented run rather than packed into the column grid, so they have
+    // no columns at all. SegmentedChoicesAreOneRun below covers them.
     const QList<QPair<QString, int>> plain = {
-        {"View", 2}, {"Find", 1}, {"Display", 3}, {"Datapath", 1},
-        {"Registers", 3}, {"Level", 3}, {"Output", 1}, {"File", 1},
+        {"Find", 1}, {"Datapath", 1}, {"Output", 1}, {"File", 1},
     };
     for (const auto &[caption, items] : plain)
     {
@@ -2178,4 +2180,122 @@ TEST(RibbonStage4B2, CompactButtonsKeepTheirLabelAndTooltip)
     EXPECT_FALSE(chevron->accessibleName().isEmpty());
     EXPECT_FALSE(chevron->toolTip().isEmpty());
     EXPECT_EQ(chevron->focusPolicy(), Qt::TabFocus);
+}
+
+// ═════════════════════ Stage 5: the classic button look ══════════════════
+
+TEST(RibbonStage5, SegmentedChoicesAreOneRun)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // Every exclusive set with no icons is one segmented control, not loose
+    // buttons in the column grid.
+    const QStringList segmented = {"View", "Display", "Registers", "Level"};
+    for (const QString &caption : segmented)
+    {
+        RibbonGroup *group = anyGroupNamed(bar, caption);
+        ASSERT_NE(group, nullptr) << caption.toStdString();
+        EXPECT_TRUE(group->columnSizes().isEmpty())
+            << "'" << caption.toStdString() << "' is still packed into columns";
+
+        const QList<QToolButton *> buttons = group->buttons();
+        ASSERT_GE(buttons.size(), 2) << caption.toStdString();
+
+        QStringList positions;
+        for (QToolButton *button : buttons)
+        {
+            positions << button->property("ribbonSegment").toString();
+            // No icon is what makes these a segmented set rather than
+            // buttons; if one gains an icon this stops being the right look.
+            EXPECT_EQ(themedIconOf(button->defaultAction()), Icon::IconCount)
+                << "'" << button->text().toStdString() << "' has an icon now";
+            EXPECT_TRUE(button->isCheckable());
+        }
+        QStringList expected;
+        for (int i = 0; i < buttons.size(); ++i)
+            expected << (i == 0 ? "first" : i == buttons.size() - 1 ? "last" : "middle");
+        EXPECT_EQ(positions, expected) << "'" << caption.toStdString() << "'";
+
+        // They sit side by side, at one height, sharing a parent - which is
+        // what lets the stylesheet join them into one outline.
+        for (QToolButton *button : buttons)
+            EXPECT_EQ(button->parentWidget(), buttons.first()->parentWidget());
+    }
+
+    // Commands with no icon that are NOT an exclusive choice stay plain.
+    for (const QString &caption : {QStringLiteral("Find"), QStringLiteral("Output")})
+    {
+        RibbonGroup *group = anyGroupNamed(bar, caption);
+        ASSERT_NE(group, nullptr);
+        for (QToolButton *button : group->buttons())
+            EXPECT_FALSE(button->property("ribbonSegment").isValid())
+                << "'" << button->text().toStdString() << "' was made a segment";
+    }
+}
+
+TEST(RibbonStage5, ButtonsInAColumnShareAWidthAndLargeOnesShareAFloor)
+{
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // Every large button starts from the same floor, so Run and Open do not
+    // sit noticeably narrower than Debug Run. The floor is derived from the
+    // icon size and the font; the test asks the group for it rather than
+    // naming a pixel count.
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+    int large = 0;
+    auto checkLarge = [&large](RibbonGroup *group)
+    {
+        for (QToolButton *button : group->buttons())
+            if (button->toolButtonStyle() == Qt::ToolButtonTextUnderIcon)
+            {
+                EXPECT_GE(button->minimumWidth(), 1) << button->text().toStdString();
+                ++large;
+            }
+    };
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        checkLarge(bar->persistentGroup(i));
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            checkLarge(group);
+    EXPECT_GT(large, 0);
+
+    // All large buttons share one floor, whichever group they are in.
+    QList<int> floors;
+    auto collectFloors = [&floors](RibbonGroup *group)
+    {
+        for (QToolButton *button : group->buttons())
+            if (button->toolButtonStyle() == Qt::ToolButtonTextUnderIcon)
+                floors << button->minimumWidth();
+    };
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        collectFloors(bar->persistentGroup(i));
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            collectFloors(group);
+    for (int f : floors)
+        EXPECT_EQ(f, floors.first()) << "large buttons do not share one minimum width";
+
+    // Buttons stacked in one column end up the same width, because the
+    // column's layout stretches them to its own width.
+    window.setCurrentTab(MainWindow::EditorTabIndex);
+    QApplication::processEvents();
+    for (QToolButton *button : run->buttons())
+        if (button->toolButtonStyle() != Qt::ToolButtonTextUnderIcon)
+        {
+            QWidget *column = button->parentWidget();
+            ASSERT_NE(column, nullptr);
+            for (QObject *sibling : column->children())
+                if (auto *other = qobject_cast<QToolButton *>(sibling))
+                    EXPECT_EQ(other->width(), button->width())
+                        << "'" << other->text().toStdString() << "' and '"
+                        << button->text().toStdString() << "' share a column but not a width";
+        }
 }

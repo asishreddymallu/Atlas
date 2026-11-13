@@ -6,6 +6,7 @@
 #include <QEvent>
 #include <QLayout>
 #include <QLayoutItem>
+#include <QSizePolicy>
 #include <QFrame>
 #include <QIcon>
 #include <QPixmap>
@@ -224,16 +225,70 @@ void RibbonGroup::addToColumn(QWidget *widget)
     // band. Forcing one would fight the stylesheet and clip the icons.
     widget->setProperty(stackedProperty, true);
 
+    // Everything in a column takes the column's width, which is the widest
+    // item's. A QToolButton is Minimum horizontally by default and would
+    // otherwise shrink to its own label, leaving a ragged right edge - and
+    // leaving the speed spin box narrower than the Processor button above
+    // it. The column host is only as wide as its widest child, so this
+    // cannot make the group greedy.
+    QSizePolicy policy = widget->sizePolicy();
+    policy.setHorizontalPolicy(QSizePolicy::MinimumExpanding);
+    widget->setSizePolicy(policy);
+
     m_column->insertWidget(m_columnCount, widget);
     ++m_columnCount;
     m_columnSizes.last() = m_columnCount;
 }
 
+int RibbonGroup::largeMinimumWidth() const
+{
+    // The icon, plus six characters' worth of label either side of it. Six
+    // 'n's is the usual stand-in for a readable minimum; at the current font
+    // it comes to about the width of "Debug Run" minus its longest word, so
+    // Run and Open stop looking like half-buttons next to it.
+    return largeRibbonIconSize + 6 * fontMetrics().horizontalAdvance(QLatin1Char('n'));
+}
+
 QToolButton *RibbonGroup::addLarge(QAction *action)
 {
     QToolButton *button = makeButton(action, Qt::ToolButtonTextUnderIcon);
+    // A minimum, not a fixed width: a longer label still gets the room it
+    // needs, and every large button starts from the same floor.
+    button->setMinimumWidth(largeMinimumWidth());
     addFullHeight(button);
     return button;
+}
+
+QList<QToolButton *> RibbonGroup::addSegmented(const QList<QAction *> &actions)
+{
+    QList<QToolButton *> buttons;
+    if (actions.isEmpty())
+        return buttons;
+
+    endColumn();
+
+    auto *host = new QWidget(this);
+    auto *row  = new QHBoxLayout(host);
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(0); // the segments touch; their shared borders are removed
+
+    for (int i = 0; i < actions.size(); ++i)
+    {
+        QToolButton *button = makeButton(actions.at(i), Qt::ToolButtonTextBesideIcon);
+        const char  *where  = actions.size() == 1 ? "only"
+                              : i == 0            ? "first"
+                              : i == actions.size() - 1 ? "last"
+                                                        : "middle";
+        button->setProperty("ribbonSegment", QLatin1String(where));
+        // Same height rule as a stacked button, so a segmented run lines up
+        // with the columns beside it.
+        button->setProperty(stackedProperty, true);
+        row->addWidget(button);
+        buttons.append(button);
+    }
+
+    m_row->insertWidget(m_row->count() - 1, host, 0, Qt::AlignVCenter);
+    return buttons;
 }
 
 QToolButton *RibbonGroup::addSmall(QAction *action)
@@ -367,12 +422,14 @@ void RibbonGroup::measure()
 {
     if (m_fullWidth >= 0 && m_compactWidth >= 0)
         return;
+    // Re-entrant: setCompact() below changes button styles, which asks the
+    // parent chain for a new size, which asks this group for its widths
+    // again. Without the guard the inner call runs on half-set state.
+    if (m_measuring)
+        return;
+    m_measuring = true;
 
-    const bool wasCompact  = m_compact;
-    const bool wasUpdating = updatesEnabled();
-    // Nothing is painted between here and the restore, so flipping the mode
-    // twice cannot show.
-    setUpdatesEnabled(false);
+    const bool wasCompact = m_compact;
 
     setCompact(false);
     m_fullWidth = currentWidth();
@@ -380,8 +437,16 @@ void RibbonGroup::measure()
     m_compactWidth = currentWidth();
 
     setCompact(wasCompact);
-    currentWidth(); // re-resolve the layout for the mode we are leaving in
-    setUpdatesEnabled(wasUpdating);
+
+    // Deliberately NOT wrapped in setUpdatesEnabled(false)/(true).
+    //
+    // It was, and it is how the page groups went invisible: a group is
+    // measured while its page is not the current one, the re-entrant call
+    // above captured updatesEnabled() as already false, and the restore put
+    // false back for good. The whole flip is synchronous and Qt coalesces
+    // the repaint requests it raises, so the intermediate mode is never
+    // painted and there is nothing to suppress.
+    m_measuring = false;
 }
 
 int RibbonGroup::fullWidth()

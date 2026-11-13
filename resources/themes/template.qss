@@ -238,75 +238,124 @@ QToolTip {
     padding: 4px 8px;
 }
 
-/* ── Toolbars ──────────────────────────────────────────────────── */
-QToolBar {
-    background-color: {{background}};
-    border: none;
-    border-bottom: 1px solid {{border}};
-    padding: 6px 8px;   /* spacing scale: 8 outer, 6 vertical */
-    spacing: 2px;
-}
-QToolBar::separator {
-    background-color: {{border}};
-    width: 1px;
-    margin: 6px 8px;
-}
-/* Toolbar buttons are flat (Zed-style): no resting border or fill, state is
- * carried by the hover/pressed tint alone. More specific than the generic
- * QPushButton/QToolButton rule above so it wins there, without touching
- * QToolButtons elsewhere (e.g. the collapsible section headers). */
-QToolBar QToolButton {
-    background-color: transparent;
-    border: 1px solid transparent;
-    border-radius: 6px;
-    padding: 6px 8px;
-    min-height: 20px;
-}
-QToolBar QToolButton:hover {
-    background-color: {{currentLine}};
-}
-QToolBar QToolButton:pressed,
-QToolBar QToolButton:checked {
-    background-color: {{selection}};
-}
-QToolBar QToolButton:disabled {
-    color: {{mutedForeground}};
-    background-color: transparent;
-}
-
-/* ── Ribbon ────────────────────────────────────────────────────
- * The ribbon's checkable buttons (the Editor/Expanded pair, the display-base
- * and cache-level pickers) mirror a widget inside the tab and have to show
- * which one is current. The rules above only reach a checked QToolButton
- * under a QToolBar, so without this a checked ribbon button draws exactly
- * like an unchecked one.
+/* ── Ribbon buttons ────────────────────────────────────────────
+ * Office-style: at rest a ribbon button is an icon and a label on the panel,
+ * with no box of its own. A group then reads as its contents rather than as
+ * a row of dark rectangles, and the only things carrying a border are the
+ * ones carrying state.
  *
- * The accent border is the indicator that carries the state: it clears 3:1
- * against the panel ground in all four themes, where the selection fill on
- * its own does not. The fill reinforces it and keeps {{foreground}} above
- * 4.5:1. Scoped by the panel's object name so no other QToolButton moves.
- * Stage 5 refines the look. */
-#ribbonPanel QToolButton:checked {
+ * Every rule here is scoped to #ribbonPanel, so the generic QPushButton /
+ * QToolButton styling above is untouched everywhere else.
+ *
+ * One radius for the whole ribbon. 4 px reads as a rectangle at 20 px tall
+ * and is large enough not to look accidental. */
+#ribbonPanel QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;   /* reserved, so hover cannot shift text */
+    border-radius: 4px;
+    color: {{foreground}};
+    padding: 2px 8px;
+    min-height: 0px;
+}
+#ribbonPanel QToolButton:hover {
+    background-color: {{currentLine}};
+    border: 1px solid {{border}};
+}
+#ribbonPanel QToolButton:pressed {
+    background-color: {{selection}};
+    border: 1px solid {{border}};
+    /* a hairline of inset: the fill sits down by one pixel */
+    padding-top: 3px;
+    padding-bottom: 1px;
+}
+/* Checked is the state a mirrored control carries, so it keeps the accent
+ * border that measures above 3:1 against the panel in every theme; the fill
+ * reinforces it and keeps {{foreground}} above 4.5:1. */
+#ribbonPanel QToolButton:checked,
+#ribbonPanel QToolButton:checked:hover {
     background-color: {{selection}};
     border: 1px solid {{accent}};
 }
+/* No border and no fill when disabled - a disabled command should recede,
+ * not draw an empty box. Its icon is tinted to the same muted colour by
+ * IconManager rather than left to Qt's fade, which lands under 3:1. */
+#ribbonPanel QToolButton:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+    border: 1px solid transparent;
+}
+/* The ribbon is reached by mouse, menu or shortcut and its buttons are
+ * Qt::NoFocus, so they must not draw a ring they can never earn. The
+ * chevron is the exception: it is the one tab stop on the panel. */
+#ribbonPanel QToolButton#ribbonOverflowButton:focus {
+    border: 1px solid {{accent}};
+}
 
-/* Small ribbon buttons stack in columns of two or three, so their height has
- * to come down to the icon plus a hairline - the generic button rule's 5 px
- * of vertical padding and 22 px min-height would need 115 px for a column of
- * three, in a panel band that is 69 px tall.
+/* Small ribbon buttons stack in columns, so their height has to come down to
+ * the icon plus a hairline: the generic button rule's 5 px of vertical
+ * padding and 22 px min-height would need 115 px for a column of three, in a
+ * band about 70 px tall.
  *
- * Geometry only: no colour, no border, nothing the theme owns. Horizontal
- * padding is untouched. Deliberately not scoped to #ribbonPanel, so the
- * probe RibbonGroup measures the grid with is subject to the same rule as
- * the real buttons. */
+ * Geometry only - no colour, no border. Deliberately not scoped to
+ * #ribbonPanel, so the probe RibbonGroup measures the grid with is subject
+ * to the same rule as the real buttons. */
 QToolButton[ribbonStacked="true"] {
     padding-top: 1px;
     padding-bottom: 1px;
     min-height: 0px;
 }
 
-/* step-interval spinbox lives in the toolbar */
+/* ── Ribbon segmented choices ──────────────────────────────────
+ * An exclusive set with no icons - the display bases, the cache levels, the
+ * Editor/Expanded pair - should read as one control rather than three loose
+ * buttons, matching the segmented pair in the editor's Input header.
+ * `ribbonSegment` marks membership; first/middle/last round the ends and
+ * drop the shared borders so the run draws as a single outline. */
+#ribbonPanel QToolButton[ribbonSegment] {
+    background-color: transparent;
+    color: {{mutedForeground}};
+    border: 1px solid {{border}};
+    border-radius: 0;
+}
+#ribbonPanel QToolButton[ribbonSegment="first"] {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+    border-right: none;
+}
+#ribbonPanel QToolButton[ribbonSegment="middle"] {
+    border-right: none;
+}
+#ribbonPanel QToolButton[ribbonSegment="last"] {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+#ribbonPanel QToolButton[ribbonSegment="only"] {
+    border-radius: 4px;
+}
+#ribbonPanel QToolButton[ribbonSegment]:hover {
+    color: {{foreground}};
+    background-color: {{currentLine}};
+}
+#ribbonPanel QToolButton[ribbonSegment]:checked {
+    color: {{foreground}};
+    background-color: {{selection}};
+    border-color: {{accent}};
+}
+#ribbonPanel QToolButton[ribbonSegment]:disabled {
+    color: {{mutedForeground}};
+    background-color: transparent;
+}
+
+/* In the ribbon the spin box shares a column with a stacked button, so it
+ * takes the same cell height - otherwise the Processor/speed column is a
+ * third taller than the columns beside it. */
+#ribbonPanel QSpinBox {
+    padding-top: 1px;
+    padding-bottom: 1px;
+    min-height: 0px;
+}
+
+/* execution-speed spin box, in the ribbon's Run group */
 QSpinBox {
     background-color: {{surface}};
     color: {{foreground}};

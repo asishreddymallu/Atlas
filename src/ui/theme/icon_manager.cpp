@@ -45,17 +45,40 @@ QIcon IconManager::getIcon(Icon icon, QSize size) const
 
     auto cached = m_pixmapCache.constFind(cacheKey);
     if (cached != m_pixmapCache.constEnd())
-        return QIcon(cached.value());
+    {
+        QIcon result(cached.value());
+        result.addPixmap(m_disabledCache.value(cacheKey), QIcon::Disabled, QIcon::Off);
+        result.addPixmap(m_disabledCache.value(cacheKey), QIcon::Disabled, QIcon::On);
+        return result;
+    }
 
     QIcon baseIcon(m_iconPaths[toIndex(icon)]);
-    QPixmap pixmap = baseIcon.pixmap(size, devicePixelRatio);
-    QPainter painter(&pixmap);
-    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-    painter.fillRect(pixmap.rect(), iconColor);
-    painter.end();
+
+    auto tinted = [&](const QColor &colour)
+    {
+        QPixmap  pixmap = baseIcon.pixmap(size, devicePixelRatio);
+        QPainter painter(&pixmap);
+        painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        painter.fillRect(pixmap.rect(), colour);
+        painter.end();
+        return pixmap;
+    };
+
+    const QPixmap pixmap = tinted(iconColor);
+
+    // A disabled icon is tinted explicitly rather than left to Qt, which
+    // fades the normal pixmap towards the background and lands well under
+    // 3:1. mutedForeground is the theme's own "present but quiet" colour and
+    // clears 4.5:1 against the window in all four themes.
+    QIcon result(pixmap);
+    result.addPixmap(tinted(themeManager.getEditorMutedForegroundColor()), QIcon::Disabled,
+                     QIcon::Off);
+    result.addPixmap(tinted(themeManager.getEditorMutedForegroundColor()), QIcon::Disabled,
+                     QIcon::On);
 
     m_pixmapCache.insert(cacheKey, pixmap);
-    return QIcon(pixmap);
+    m_disabledCache.insert(cacheKey, tinted(themeManager.getEditorMutedForegroundColor()));
+    return result;
 }
 
 void setThemedIcon(QAction *action, Icon icon, QSize size)

@@ -65,6 +65,8 @@ private:
     // the key, otherwise a pixmap rasterised for a 1x screen is reused on a
     // HiDPI one and the icon comes back soft
     mutable QHash<QString, QPixmap> m_pixmapCache;
+    // The same pixmaps tinted for the disabled state, under the same keys.
+    mutable QHash<QString, QPixmap> m_disabledCache;
 };
 
 // Tags `action` with `icon` and applies the tinted pixmap. Prefer this over

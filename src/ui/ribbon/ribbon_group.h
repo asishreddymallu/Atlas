@@ -43,6 +43,19 @@ class RibbonGroup : public QWidget
     /// column is full, then a new column starts to its right.
     QToolButton *addSmall(QAction *action);
 
+    /**
+     * @brief One exclusive choice shown as a single segmented control.
+     *
+     * The display bases, the cache levels and the Editor/Expanded pair have
+     * no icons, and three loose text buttons do not read as one choice. They
+     * go in a single horizontal run with their shared borders removed, the
+     * way the segmented pair in the editor's Input header does, instead of
+     * being packed into the column grid.
+     *
+     * Returns the buttons, in the order given.
+     */
+    QList<QToolButton *> addSegmented(const QList<QAction *> &actions);
+
     /// A plain widget (a spin box, say). Stacks with the small buttons, in
     /// the same column grid, and is sized to the same cell.
     void addWidget(QWidget *widget);
@@ -120,6 +133,10 @@ class RibbonGroup : public QWidget
     void endColumn();
     /// Appends a full-height item (a large button or a separator).
     void addFullHeight(QWidget *widget);
+    /// The width every large button is at least, so Run and Open do not sit
+    /// noticeably narrower than Debug Run. Derived from the icon size and
+    /// the font, never a typed-in pixel count.
+    int largeMinimumWidth() const;
 
     QHBoxLayout         *m_row     {nullptr};
     QLabel              *m_caption {nullptr};
@@ -135,6 +152,8 @@ class RibbonGroup : public QWidget
 
     // Set the moment anything that is not a QToolButton is added.
     bool m_hasPlainWidget {false};
+    // Guards measure() against re-entering itself through a layout request.
+    bool m_measuring {false};
     // Cached measurements; -1 means "not measured since the last change".
     int  m_fullWidth    {-1};
     int  m_compactWidth {-1};
