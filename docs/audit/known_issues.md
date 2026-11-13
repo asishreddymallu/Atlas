@@ -201,3 +201,89 @@ Recorded because they changed reported columns on directive lines.
 - **Status**: not fixed. Deleting line 42, or setting `TEST_DIR`, is a build
   change and this work package is documentation only. Noted so the configure-
   time cost is not mistaken for a CMake or filesystem problem.
+
+---
+
+## 10. Ribbon buttons are not in the keyboard tab chain
+
+- **Where**: `src/ui/ribbon/ribbon_group.cpp` (`makeButton()` sets
+  `Qt::NoFocus`), `src/ui/ribbon/ribbon_bar.cpp` (the `QTabBar` is
+  `Qt::TabFocus`).
+- **What**: the tab strip is the chrome's single tab stop. Arrow keys move
+  between tabs from there; `Tab` then moves into the content. None of the
+  ribbon's ~25 buttons can be reached by `Tab`.
+- **Why it is this way**: the alternative puts a couple of dozen chrome
+  controls in front of the editor on every `Tab` press, which is worse for
+  the keyboard user the ribbon would otherwise be serving.
+- **Consequence**: a keyboard-only user reaches commands through the shortcuts
+  (`F5` Run, `F9` Debug Run, `F6` Pause, `F10` Step, `Ctrl+O`, `Ctrl+S`,
+  `Ctrl+Shift+M`) and through the menu bar, which still carries File,
+  Settings, Help and View. **Commands that exist only on the ribbon have
+  neither.** Those are: the Memory display base and Search, the register
+  display base, the cache level, Compile and Copy to Clipboard, and the
+  Editor/Expanded view toggle. Each of them mirrors a widget that is still
+  inside its tab and still reachable by `Tab`, so none is unreachable - but
+  the ribbon itself is not a keyboard route to any of them.
+- **Status**: accepted design, recorded rather than fixed. A proper fix is
+  ribbon key tips (Office's Alt-sequence) or making each group a single tab
+  stop with arrow navigation inside it; neither is in the current scope.
+
+---
+
+## 11. The ribbon forces a 1623 px minimum window width
+
+- **Where**: `src/ui/ribbon/ribbon_bar.cpp` (the persistent area and the page
+  `QStackedWidget` sit side by side in one row).
+- **Measured** (1x, Fusion, `kites-dark`): persistent `Run` 851 px + `File`
+  263 px = 1114 px, plus the widest page (`Processor`, 509 px) = **1623 px**,
+  which is also the whole window's `minimumSizeHint()`. A `QStackedWidget`
+  takes the largest of its pages, so the widest page sets the floor for every
+  tab. Compact mode (`RibbonGroup::setCompact()`) reaches 1326 px, which is
+  still above the 1314 px floor the ribbon had before the per-tab pages were
+  filled.
+- **Consequence**: the window cannot be opened at 1200 px or sized to fit a
+  1366 px display. Nothing is clipped, because the layout refuses to go
+  narrower rather than cutting anything off.
+- **Status**: not fixed. Surveyed under Stage 4B with options (an overflow
+  chevron, a horizontal scroll area, or a hybrid); no code written yet.
+
+---
+
+## 12. "Custom policy..." is not on the Cache ribbon page
+
+- **Where**: `src/ui/cache_tab/cache_config_widget.cpp` -
+  `onCustomPolicyClicked()` and the `repPolComboBox` handler above it.
+- **What**: the handler is only ever reached from the replacement-policy combo
+  having *already* moved to `Custom`, and it depends on that. Called while
+  another policy is selected it leaves the widget and the cache disagreeing:
+  on success the script loads into the cache while the combo still reads the
+  old policy, and the next unrelated config edit emits `configChangedSignal`
+  and reconfigures the cache straight back; on cancel it forces the combo to
+  LRU with the signal blocked and emits nothing, so the widget claims LRU
+  while the cache keeps running what was selected before; and the load-failure
+  path reverts to `m_lastSelectedPolicy`, which is only written when a
+  non-`Custom` policy is chosen through the combo.
+- **Status**: deliberately not wired to a ribbon button. The in-tab combo is
+  unchanged and remains the only route. A safe wrapper would replay the combo
+  path rather than the dialog - move `repPolComboBox` to `Custom` unblocked
+  and let the existing handler run - but two things need deciding first: what
+  should happen when `Custom` is already selected (`setCurrentIndex()` would
+  be a no-op), and whether the combo's index may be treated as the
+  `ReplacementPolicy` value, since the widget writes by index
+  (`setCurrentIndex(static_cast<int>(policy))`) and reads by data
+  (`currentData().value<ReplacementPolicy>()`).
+
+---
+
+## 13. Dead `QToolBar` rules left in `template.qss`
+
+- **Where**: `resources/themes/template.qss` - the `QToolBar`,
+  `QToolBar::separator`, `QToolBar QToolButton` and its `:hover`, `:pressed`,
+  `:checked` and `:disabled` rules.
+- **What**: the main toolbar was retired when the ribbon took over its
+  commands, and `MainWindow` creates no `QToolBar` at all now, so these rules
+  match nothing.
+- **Status**: deliberately left in place. Deleting them is a visual change to
+  be made once, on the final layout, and that is Stage 5's call. The comment
+  above `#ribbonPanel QToolButton:checked` explains why the ribbon needed its
+  own `:checked` rule: the toolbar-scoped one never reached it.

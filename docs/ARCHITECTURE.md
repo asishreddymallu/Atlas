@@ -96,7 +96,8 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 
 | Path | Purpose |
 |---|---|
-| `src/ui/main_window/` | `MainWindow` — hosts the tabs in a `QStackedWidget`, owns the toolbar, menubar, sidebar, status bar and Problems dock, and drives assembly and run. |
+| `src/ui/main_window/` | `MainWindow` — hosts the tabs in a `QStackedWidget`, owns the ribbon, menubar, status bar and Problems dock, and drives assembly and run. `setCurrentTab()` is the only writer of the visible tab. |
+| `src/ui/ribbon/` | The chrome above the content: `ribbon_bar.*` (the tab strip and the panel below it), `ribbon_page.*` (one page per tab, a row of groups) and `ribbon_group.*` (a labelled block of buttons). It owns no command logic — every button is driven by a `QAction` `MainWindow` supplies, through `QToolButton::setDefaultAction()`. Replaced the left sidebar and the main toolbar. |
 | `src/ui/editor_tab/` | Source editor tab: `main_editor.*` (the editor widget), `disassembly_editor.h`, `break_point_gutter_column.h`, and `editor_tab.*` which owns the Input/Expanded panes and the diagnostic squiggles. |
 | `src/ui/memory_tab/` | Memory view: `memory_model.*`, `memory_table_view.*`, `memory_tab.*`. |
 | `src/ui/register_table/` | Register panel: `register_model.*` and `register_container.*`. |
@@ -123,7 +124,13 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | The Problems dock | `src/ui/problems_panel/problems_dock.cpp`, model in `problems_model.cpp` |
 | Editor squiggles and diagnostic navigation | `src/ui/editor_tab/editor_tab.cpp` |
 | A given tab's widget | `src/ui/<name>_tab/<name>_tab.cpp` (e.g. `src/ui/cache_tab/cache_tab.cpp`); the register panel is the exception, at `src/ui/register_table/register_container.cpp` |
-| The main window, toolbar, menus | `src/ui/main_window/main_window.cpp` |
+| The main window and the menus | `src/ui/main_window/main_window.cpp` |
+| The ribbon's own widgets (strip, panel, groups) | `src/ui/ribbon/` — `ribbon_bar.cpp`, `ribbon_page.cpp`, `ribbon_group.cpp` |
+| Which tabs exist, and switching between them | `MainWindow::TabIndex` and `setUpRibbon()` / `setCurrentTab()` in `src/ui/main_window/main_window.cpp` |
+| What is on a given ribbon page | `setUpEditorPage()`, `setUpMemoryPage()`, `setUpProcessorPage()`, `setUpCachePage()`, `setUpCompilerPage()` in `src/ui/main_window/main_window.cpp`. The Profiler page is deliberately empty. |
+| The Run and File groups, shown on every tab | `MainWindow::setUpPersistentGroups()` in `src/ui/main_window/main_window.cpp`; they live beside the pages, in `RibbonBar`, so there is one instance of each button rather than one per tab |
+| The execution actions (Run, Debug Run, Pause, Step, Undo, Redo, Processor) and the speed control | `MainWindow::setUpExecutionActions()` in `src/ui/main_window/main_window.cpp` — the old main toolbar's, which the ribbon now shows |
+| Tagging an icon so a theme change re-tints it | `setThemedIcon()` in `src/ui/theme/icon_manager.h`; the pass is `MainWindow::themeChangedSlot()` |
 | Theme colours | `resources/themes/*.json` — `tokyo_night.json`, `tokyo_night_storm.json`, `kites_dark.json`, `kites_light.json` |
 | The stylesheet template | `resources/themes/template.qss` |
 | Theme loading / token substitution | `src/ui/theme/theme_manager.cpp` |
