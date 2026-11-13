@@ -1,11 +1,15 @@
 #pragma once
+#include "ui/ribbon/ribbon_layout.h"
 #include "ui/theme/icon_manager.h"
 
 #include <QList>
 #include <QString>
 #include <QWidget>
 
+class QMenu;
+class QResizeEvent;
 class QStackedWidget;
+class QToolButton;
 class QTabBar;
 
 namespace Kites
@@ -68,15 +72,57 @@ class RibbonBar : public QWidget
      */
     void retintIcons();
 
+    /**
+     * @brief The overflow chevron, shown only when something is behind it.
+     *
+     * A tab stop, unlike every other button on the ribbon. That is a
+     * deliberate exception to the one-chrome-stop rule: it is the only
+     * keyboard route to a command whose group has moved into the menu, and
+     * a QMenu is navigable by keyboard once it is open.
+     */
+    QToolButton *overflowButton() const;
+
+    /// The current page's groups that are in the menu rather than on the
+    /// panel, in page order. Held explicitly, never read back from
+    /// isVisible() - which is false for every widget in a window that has
+    /// not been shown.
+    QList<RibbonGroup *> overflowedGroups() const;
+
+    /// Recomputes what fits at the current width and applies it. Called on
+    /// resize and on a page change; safe to call at any time.
+    void applyOverflowLayout();
+
+    QSize minimumSizeHint() const override;
+
+  protected:
+    void resizeEvent(QResizeEvent *event) override;
+
   signals:
     /// The visible tab changed, whether by click, by keyboard or by
     /// setCurrentIndex().
     void currentChanged(int index);
 
   private:
+    /// Fills the chevron's menu from the CURRENT overflow set, so it can
+    /// never show a group that has since come back onto the panel.
+    void rebuildOverflowMenu();
+    /// Builds the layout function's input from the live groups.
+    RibbonLayoutInput layoutInput() const;
+
     QTabBar        *m_tabBar     {nullptr};
     QStackedWidget *m_pages      {nullptr};
     QWidget        *m_persistent {nullptr};
+    QToolButton    *m_chevron    {nullptr};
+    QMenu          *m_overflowMenu {nullptr};
+
+    // The current page's hidden groups, held explicitly rather than read
+    // back from isVisible() - which is false for every widget in a window
+    // that has not been shown, and would make the tests lie.
+    QList<RibbonGroup *> m_overflowed;
+    RibbonLayoutResult   m_applied;
+    bool                 m_hasApplied {false};
+    // Guards against a resize triggered by our own show/hide re-entering.
+    bool m_applying {false};
 
     QList<Icon>          m_tabIcons;
     QList<RibbonGroup *> m_persistentGroups;

@@ -45,28 +45,6 @@ constexpr const char *stackedProperty = "ribbonStacked";
 // is whatever a large icon-over-text button asks for under the current style,
 // font and device pixel ratio. The probe is built and thrown away; it is the
 // same question the real large buttons answer when they are laid out.
-// Drops the cached size hint of a layout and of every layout under it.
-// Drops every cached size hint under `widget`, deepest first.
-//
-// QLayout::invalidate() on the outer layout alone is not enough: it marks
-// only itself dirty, and the buttons sit three layouts down - the group's,
-// the content column's, the row's, then a column host's. Walking down and
-// calling updateGeometry() on the way back up is what marks each parent
-// layout dirty, so the next sizeHint() is computed rather than remembered.
-void refreshGeometry(QWidget *widget)
-{
-    if (!widget)
-        return;
-    if (QLayout *own = widget->layout())
-    {
-        for (int i = 0; i < own->count(); ++i)
-            if (QWidget *child = own->itemAt(i)->widget())
-                refreshGeometry(child);
-        own->invalidate();
-    }
-    widget->updateGeometry();
-}
-
 int contentHeight()
 {
     QToolButton probe;
@@ -149,6 +127,7 @@ RibbonGroup::RibbonGroup(const QString &caption, QWidget *parent) : QWidget(pare
     column->addWidget(m_caption, 0);
 
     auto *divider = new QFrame(this);
+    m_divider     = divider;
     divider->setObjectName("ribbonGroupDivider");
     divider->setFrameShape(QFrame::VLine);
     divider->setFrameShadow(QFrame::Plain);
@@ -328,18 +307,64 @@ bool RibbonGroup::isCompact() const
 
 int RibbonGroup::currentWidth()
 {
-    // Recursive, and that matters: QLayout::invalidate() drops only its own
-    // cached hint, and the buttons sit three layouts down - the group's, the
-    // content column's, the row's, then the column host's. Invalidating just
-    // the outer one gives back the previous answer.
-    refreshGeometry(this);
+    // Summed from the slots rather than read from sizeHint().
+    //
+    // Inside a window that is already shown, updateGeometry() only POSTS a
+    // layout request, so a sizeHint() read in the same breath still answers
+    // from before the change - a group whose button had just grown reported
+    // its old width, and the overflow decision was made on stale numbers.
+    // Forcing the layout with activate() does not reach the nested column
+    // layouts either.
+    //
+    // Every leaf widget's own sizeHint() is current, always, so the sum is.
+    // The margins and spacings are read from the layouts rather than
+    // written down, so this stays in step with the constructor.
+    int row   = 0;
+    int slotCount = 0;
+    for (int i = 0; i < m_row->count(); ++i)
+    {
+        QWidget *slot = m_row->itemAt(i)->widget();
+        if (!slot) // the trailing stretch
+            continue;
+
+        int slotWidth = 0;
+        if (QLayout *inner = slot->layout())
+        {
+            // A column host: as wide as its widest cell.
+            for (int j = 0; j < inner->count(); ++j)
+                if (QWidget *cell = inner->itemAt(j)->widget())
+                    slotWidth = std::max(slotWidth, cell->sizeHint().width());
+        }
+        else
+        {
+            // A large button or a separator.
+            slotWidth = slot->sizeHint().width();
+        }
+
+        if (slotWidth <= 0)
+            continue;
+        row += slotWidth;
+        ++slotCount;
+    }
+    if (slotCount > 1)
+        row += m_row->spacing() * (slotCount - 1);
+
+    // The caption sits under the row and can be the wider of the two.
+    int content = std::max(row, m_caption->sizeHint().width());
+
+    if (QLayout *column = m_caption->parentWidget()->layout())
+    {
+        const QMargins margins = column->contentsMargins();
+        content += margins.left() + margins.right();
+    }
     if (QLayout *own = layout())
-        own->activate();
-    // sizeHint, not minimumSizeHint: the question the layout function asks is
-    // how wide this group wants to be, and a QToolButton's minimumSizeHint
-    // is its icon alone - it would happily elide every label away and report
-    // the same number for "Run" and "Copy to Clipboard".
-    return sizeHint().width();
+    {
+        const QMargins margins = own->contentsMargins();
+        content += margins.left() + margins.right() + own->spacing();
+    }
+    if (m_divider)
+        content += m_divider->sizeHint().width();
+    return content;
 }
 
 void RibbonGroup::measure()

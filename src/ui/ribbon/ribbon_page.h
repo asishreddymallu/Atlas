@@ -37,6 +37,18 @@ class RibbonPage : public QWidget
     void setCompact(bool compact);
     bool isCompact() const;
 
+    /**
+     * @brief Zero horizontal minimum, deliberately.
+     *
+     * The pages live in a QStackedWidget, which takes the largest of its
+     * children's minimums - so without this the busiest page would set the
+     * floor for every tab, and the window could never be narrower than the
+     * Processor page needs. Every group on a page can go into the overflow
+     * menu instead, so a page genuinely needs no width of its own. The
+     * height is left alone.
+     */
+    QSize minimumSizeHint() const override;
+
   private:
     QHBoxLayout         *m_row {nullptr};
     QList<RibbonGroup *> m_groups;

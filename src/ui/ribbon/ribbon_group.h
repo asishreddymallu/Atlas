@@ -5,6 +5,7 @@
 
 class QAction;
 class QEvent;
+class QFrame;
 class QHBoxLayout;
 class QVBoxLayout;
 class QLabel;
@@ -122,6 +123,7 @@ class RibbonGroup : public QWidget
 
     QHBoxLayout         *m_row     {nullptr};
     QLabel              *m_caption {nullptr};
+    QFrame              *m_divider {nullptr};
     QList<QToolButton *> m_buttons;
     bool                 m_compact {false};
 

@@ -53,4 +53,8 @@ bool RibbonPage::isCompact() const
 {
     return m_compact;
 }
+QSize RibbonPage::minimumSizeHint() const
+{
+    return QSize(0, QWidget::minimumSizeHint().height());
+}
 } // namespace Kites

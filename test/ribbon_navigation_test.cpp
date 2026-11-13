@@ -505,12 +505,22 @@ QAction *executionAction(RibbonBar *bar, const QString &label)
     return nullptr;
 }
 
-/// Every action bound to a button anywhere on the ribbon.
+/// Every action bound to a button anywhere on the ribbon, skipping groups
+/// that have been moved into the overflow menu.
+///
+/// Re-scoped in Stage 4B2: an overflowed group's buttons still exist and
+/// still carry their actions, but the action is reachable through the menu
+/// instead, so counting both would report every overflowed action twice.
+/// The predicate is isHidden(), not isVisible() - isVisible() is false for
+/// every widget in a window that was never shown, which would make this
+/// return nothing at all and every assertion built on it vacuous.
 QList<QAction *> ribbonActions(RibbonBar *bar)
 {
     QList<QAction *> result;
     auto collect = [&result](RibbonGroup *group)
     {
+        if (group->isHidden())
+            return;
         for (QToolButton *button : group->buttons())
             if (QAction *a = button->defaultAction())
                 result.append(a);
@@ -1866,4 +1876,306 @@ TEST(RibbonStage4B2, OnlyGroupsOfPlainButtonsCanOverflow)
     auto *spin = new QSpinBox;
     fresh.addWidget(spin);
     EXPECT_FALSE(fresh.isOverflowable()) << "a group given a widget still claims it can overflow";
+}
+
+// ═══════════════ Stage 4B2: the overflow chevron and its menu ═════════════
+
+namespace
+{
+/// Sizes the window and lets the ribbon settle. Returns the bar.
+RibbonBar *settleAt(MainWindow &window, int width, int height = 800)
+{
+    window.resize(width, height);
+    window.show();
+    QApplication::processEvents();
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    if (bar)
+        bar->applyOverflowLayout();
+    QApplication::processEvents();
+    return bar;
+}
+
+/// Every action the chevron's menu offers, flattened, in menu order.
+QList<QAction *> menuActions(RibbonBar *bar)
+{
+    QList<QAction *> result;
+    QMenu           *menu = bar->overflowButton()->menu();
+    if (!menu)
+        return result;
+    emit menu->aboutToShow(); // the menu is built when it opens
+    for (QAction *entry : menu->actions())
+        if (QMenu *submenu = entry->menu())
+            for (QAction *a : submenu->actions())
+                result.append(a);
+    return result;
+}
+
+/// A page's groups' actions, whether shown or overflowed.
+QList<QAction *> allPageActions(RibbonBar *bar, int page)
+{
+    QList<QAction *> result;
+    for (RibbonGroup *group : bar->page(page)->groups())
+        for (QToolButton *button : group->buttons())
+            if (QAction *a = button->defaultAction())
+                result.append(a);
+    return result;
+}
+
+/// Puts the window at its narrowest and makes sure something really has
+/// overflowed on `page`.
+///
+/// The width alone cannot be relied on: kites_test links no stylesheet and
+/// no icons, so every group is far narrower here than in the application and
+/// a width that crowds the real ribbon leaves this one roomy. If the floor
+/// is not enough, a group is widened until it is - which is deterministic in
+/// any environment, where a hard-coded 800 is not.
+RibbonBar *forceOverflow(MainWindow &window, RibbonBar *bar, MainWindow::TabIndex page,
+                         int atLeast);
+
+RibbonBar *settleForOverflow(MainWindow &window, MainWindow::TabIndex page)
+{
+    RibbonBar *bar = settleAt(window, 1700);
+    if (!bar)
+        return nullptr;
+    window.setCurrentTab(page);
+
+    settleAt(window, window.minimumSizeHint().width());
+    window.setCurrentTab(page);
+    bar->applyOverflowLayout();
+    if (!bar->overflowedGroups().isEmpty())
+        return bar;
+
+    return forceOverflow(window, bar, page, 1);
+}
+
+/// Widens groups on `page` until at least `atLeast` of them are in the menu.
+/// Every group gets a filler, so the order the menu lists them in is a real
+/// claim rather than one about a single-element list.
+RibbonBar *forceOverflow(MainWindow &window, RibbonBar *bar, MainWindow::TabIndex page,
+                         int atLeast)
+{
+    const QList<RibbonGroup *> groups = bar->page(static_cast<int>(page))->groups();
+    if (groups.size() < atLeast)
+        return bar;
+    for (RibbonGroup *group : groups)
+        group->addSmall(new QAction(QString(400, QLatin1Char('W')), &window));
+
+    settleAt(window, window.minimumSizeHint().width());
+    window.setCurrentTab(page);
+    bar->applyOverflowLayout();
+    return bar;
+}
+
+/// What the layout decided, as a comparable string.
+QString layoutSignature(RibbonBar *bar)
+{
+    QStringList parts;
+    parts << (bar->persistentGroup(0)->isCompact() ? "compact" : "full");
+    parts << (bar->overflowButton()->isHidden() ? "no-chevron" : "chevron");
+    QStringList menu;
+    for (RibbonGroup *group : bar->overflowedGroups())
+        menu << group->caption();
+    parts << menu.join('+');
+    return parts.join('|');
+}
+} // namespace
+
+TEST(RibbonStage4B2, EveryActionIsReachableByExactlyOneRoute)
+{
+    MainWindow window;
+    RibbonBar *bar = settleAt(window, 1700);
+    ASSERT_NE(bar, nullptr);
+
+    for (int width = 800; width <= 1700; width += 10)
+    {
+        settleAt(window, width);
+        for (int page = 0; page < bar->count(); ++page)
+        {
+            window.setCurrentTab(static_cast<MainWindow::TabIndex>(page));
+            bar->applyOverflowLayout();
+
+            const QList<QAction *> onPanel = ribbonActions(bar); // non-hidden only
+            const QList<QAction *> inMenu  = menuActions(bar);
+
+            for (QAction *a : allPageActions(bar, page))
+            {
+                const bool shown  = onPanel.contains(a);
+                const bool hidden = inMenu.contains(a);
+                EXPECT_NE(shown, hidden)
+                    << "'" << a->text().toStdString() << "' is "
+                    << (shown ? "on the panel AND in the menu" : "in neither")
+                    << " at width " << width << " on page " << page;
+            }
+
+            // Run is always on the panel. It holds the spin box, so it can
+            // never be shown as menu entries.
+            EXPECT_FALSE(persistentGroupNamed(bar, "Run")->isHidden())
+                << "the Run group vanished at width " << width;
+            for (RibbonGroup *group : bar->overflowedGroups())
+                EXPECT_NE(group->caption(), QStringLiteral("Run"));
+        }
+    }
+}
+
+TEST(RibbonStage4B2, MenuEntriesAreTheSameObjectsAsTheHiddenButtons)
+{
+    MainWindow window;
+    RibbonBar *bar = settleForOverflow(window, MainWindow::ProcessorTabIndex);
+    ASSERT_NE(bar, nullptr);
+
+    // Two, so the order assertion below is about an actual sequence.
+    forceOverflow(window, bar, MainWindow::ProcessorTabIndex, 2);
+    ASSERT_GE(bar->overflowedGroups().size(), 2) << "fewer than two groups overflowed";
+    EXPECT_FALSE(bar->overflowButton()->isHidden());
+
+    QList<QAction *> expected;
+    for (RibbonGroup *group : bar->overflowedGroups())
+        for (QToolButton *button : group->buttons())
+            expected.append(button->defaultAction());
+
+    // Pointer identity, in order. A clone would compare equal by label and
+    // carry a second copy of the checked state.
+    EXPECT_EQ(menuActions(bar), expected);
+
+    // The submenus are titled with their group captions, in page order.
+    QStringList titles;
+    for (QAction *entry : bar->overflowButton()->menu()->actions())
+        if (entry->menu())
+            titles << entry->text();
+    QStringList captions;
+    for (RibbonGroup *group : bar->overflowedGroups())
+        captions << group->caption();
+    EXPECT_EQ(titles, captions);
+
+    // Nothing in the menu gained a shortcut.
+    for (QAction *a : menuActions(bar))
+        EXPECT_TRUE(a->shortcut().isEmpty()) << "'" << a->text().toStdString() << "'";
+}
+
+TEST(RibbonStage4B2, AMenuEntryStillDrivesTheWidgetInTheTab)
+{
+    MainWindow window;
+    RibbonBar *bar = settleForOverflow(window, MainWindow::ProcessorTabIndex);
+    ASSERT_NE(bar, nullptr);
+
+    auto *registers = window.findChild<RegisterContainer *>();
+    ASSERT_NE(registers, nullptr);
+    auto *combo = registers->findChild<QComboBox *>("displayType");
+    ASSERT_NE(combo, nullptr);
+
+    QAction *binary = nullptr;
+    for (QAction *a : menuActions(bar))
+        if (a->text() == QStringLiteral("Binary"))
+            binary = a;
+    ASSERT_NE(binary, nullptr) << "the Registers group is not in the menu at 800 px";
+
+    // menu -> tab
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Hexadecimal"));
+    binary->trigger();
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Binary")) << "the menu entry did nothing";
+    EXPECT_TRUE(binary->isChecked());
+
+    // tab -> menu: the mirror still reaches the action behind the entry.
+    combo->setCurrentText(QStringLiteral("Decimal/Float"));
+    EXPECT_FALSE(binary->isChecked()) << "the in-tab combo no longer updates the menu entry";
+
+    QAction *decimal = nullptr;
+    for (QAction *a : menuActions(bar))
+        if (a->text() == QStringLiteral("Decimal/Float"))
+            decimal = a;
+    ASSERT_NE(decimal, nullptr);
+    EXPECT_TRUE(decimal->isChecked());
+    EXPECT_TRUE(decimal->isCheckable()) << "an exclusive choice lost its check mark in the menu";
+}
+
+TEST(RibbonStage4B2, TheLayoutDoesNotDependOnHowTheWindowGotThere)
+{
+    // Path independence. The layout function is pure, so a window squeezed
+    // down to a width must look exactly like one created at it.
+    MainWindow sweeping;
+    RibbonBar *bar = settleAt(sweeping, 1700);
+    ASSERT_NE(bar, nullptr);
+    sweeping.setCurrentTab(MainWindow::ProcessorTabIndex);
+    bar->applyOverflowLayout();
+
+    QList<int> widths;
+    for (int w = 1700; w >= 800; w -= 50)
+        widths << w;
+    for (int w = 850; w <= 1700; w += 50)
+        widths << w;
+
+    for (int width : widths)
+    {
+        settleAt(sweeping, width);
+        sweeping.setCurrentTab(MainWindow::ProcessorTabIndex);
+        bar->applyOverflowLayout();
+        const QString reached = layoutSignature(bar);
+
+        MainWindow fresh;
+        RibbonBar *freshBar = settleAt(fresh, width);
+        ASSERT_NE(freshBar, nullptr);
+        fresh.setCurrentTab(MainWindow::ProcessorTabIndex);
+        freshBar->applyOverflowLayout();
+
+        EXPECT_EQ(reached, layoutSignature(freshBar))
+            << "resizing to " << width << " did not land where starting there does";
+    }
+}
+
+TEST(RibbonStage4B2, TheSpinBoxSurvivesEveryWidth)
+{
+    MainWindow window;
+    RibbonBar *bar = settleAt(window, 1700);
+    ASSERT_NE(bar, nullptr);
+
+    for (int width = 800; width <= 1700; width += 25)
+    {
+        settleAt(window, width);
+        int count = 0;
+        for (QSpinBox *candidate : window.findChildren<QSpinBox *>())
+            if (candidate->suffix() == QStringLiteral(" ms"))
+                ++count;
+        ASSERT_EQ(count, 1) << "the spin box was duplicated or lost at " << width;
+
+        QSpinBox *spin = speedSpin(window);
+        ASSERT_NE(spin, nullptr);
+        EXPECT_TRUE(persistentGroupNamed(bar, "Run")->isAncestorOf(spin))
+            << "the spin box left the Run group at " << width;
+        EXPECT_FALSE(persistentGroupNamed(bar, "Run")->isHidden());
+    }
+}
+
+TEST(RibbonStage4B2, CompactButtonsKeepTheirLabelAndTooltip)
+{
+    MainWindow window;
+    RibbonBar *bar = settleForOverflow(window, MainWindow::ProcessorTabIndex);
+    ASSERT_NE(bar, nullptr);
+    ASSERT_TRUE(bar->persistentGroup(0)->isCompact())
+        << "the panel is not compact even at the window's floor";
+
+    int examined = 0;
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        for (QToolButton *button : bar->persistentGroup(i)->buttons())
+        {
+            // text() stays set even when the button draws icon-only, and
+            // that is what QAccessibleToolButton reports as the name when
+            // accessibleName is empty. Leaving it empty is deliberate: Run
+            // and Pause reword themselves at runtime, and a name copied
+            // once would go stale.
+            EXPECT_FALSE(button->text().isEmpty())
+                << "a compact button has no label left to announce";
+            EXPECT_FALSE(button->toolTip().isEmpty())
+                << "'" << button->text().toStdString() << "' lost its tooltip when compacted";
+            EXPECT_TRUE(button->accessibleName().isEmpty() ||
+                        !button->accessibleName().isEmpty());
+            ++examined;
+        }
+    EXPECT_GT(examined, 0);
+
+    // The chevron itself is announced, and is the one tab stop on the panel.
+    QToolButton *chevron = bar->overflowButton();
+    ASSERT_NE(chevron, nullptr);
+    EXPECT_FALSE(chevron->accessibleName().isEmpty());
+    EXPECT_FALSE(chevron->toolTip().isEmpty());
+    EXPECT_EQ(chevron->focusPolicy(), Qt::TabFocus);
 }

@@ -3,7 +3,11 @@
 #include "ribbon_group.h"
 #include "ribbon_page.h"
 
+#include <QAction>
 #include <QHBoxLayout>
+#include <QMenu>
+#include <QResizeEvent>
+#include <QToolButton>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QVBoxLayout>
@@ -49,8 +53,34 @@ RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
 
     m_pages = new QStackedWidget(panel);
 
+    // Right of the pages: the overflow chevron. A style arrow rather than a
+    // text glyph, because which glyphs a font has varies and a missing one
+    // would draw a box. No new SVG either - this is a control, not an idea
+    // the icon set has a picture for.
+    m_chevron = new QToolButton(panel);
+    m_chevron->setObjectName("ribbonOverflowButton");
+    m_chevron->setArrowType(Qt::DownArrow);
+    m_chevron->setPopupMode(QToolButton::InstantPopup);
+    m_chevron->setAutoRaise(true);
+    m_chevron->setToolTip(QObject::tr("More commands on this tab"));
+    m_chevron->setAccessibleName(QObject::tr("More commands"));
+    m_chevron->setAccessibleDescription(
+        QObject::tr("Commands that do not fit on the ribbon at this window width"));
+    // The one ribbon button that IS a tab stop. Everything behind it is
+    // reachable no other way from the keyboard, and a menu navigates by
+    // keyboard once it is open. Recorded in docs/audit/known_issues.md.
+    m_chevron->setFocusPolicy(Qt::TabFocus);
+    m_chevron->hide();
+
+    m_overflowMenu = new QMenu(m_chevron);
+    m_chevron->setMenu(m_overflowMenu);
+    // Built when it opens, from the overflow set as it is at that moment, so
+    // a menu can never list a group that is back on the panel.
+    connect(m_overflowMenu, &QMenu::aboutToShow, this, &RibbonBar::rebuildOverflowMenu);
+
     panelRow->addWidget(m_persistent, 0);
     panelRow->addWidget(m_pages, 1);
+    panelRow->addWidget(m_chevron, 0, Qt::AlignVCenter);
 
     column->addWidget(m_tabBar, 0);
     column->addWidget(panel, 1);
@@ -63,8 +93,107 @@ RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
             [this](int index)
             {
                 m_pages->setCurrentIndex(index);
+                // The new page has its own groups and its own widths, so what
+                // fits has to be decided again before it is seen.
+                applyOverflowLayout();
                 emit currentChanged(index);
             });
+}
+
+QToolButton *RibbonBar::overflowButton() const
+{
+    return m_chevron;
+}
+
+QList<RibbonGroup *> RibbonBar::overflowedGroups() const
+{
+    return m_overflowed;
+}
+
+RibbonLayoutInput RibbonBar::layoutInput() const
+{
+    RibbonLayoutInput input;
+    input.availableWidth = width();
+    input.chevronWidth   = m_chevron->sizeHint().width();
+
+    for (RibbonGroup *group : m_persistentGroups)
+        input.persistent.append(
+            {group->fullWidth(), group->compactWidth(), group->isOverflowable()});
+
+    if (auto *page = qobject_cast<RibbonPage *>(m_pages->currentWidget()))
+        for (RibbonGroup *group : page->groups())
+            input.pageGroups.append(
+                {group->fullWidth(), group->compactWidth(), group->isOverflowable()});
+    return input;
+}
+
+void RibbonBar::applyOverflowLayout()
+{
+    // Hiding a group changes this widget's width, which arrives back here as
+    // a resize. The result is a pure function of the width, so the second
+    // pass computes the same answer and applying it changes nothing - but
+    // there is no reason to walk the tree twice.
+    if (m_applying)
+        return;
+    m_applying = true;
+
+    const RibbonLayoutInput  input  = layoutInput();
+    const RibbonLayoutResult result = computeRibbonLayout(input);
+
+    auto *page = qobject_cast<RibbonPage *>(m_pages->currentWidget());
+    const QList<RibbonGroup *> pageGroups = page ? page->groups() : QList<RibbonGroup *>{};
+
+    for (RibbonGroup *group : m_persistentGroups)
+        group->setCompact(result.compact);
+    for (RibbonGroup *group : pageGroups)
+        group->setCompact(result.compact);
+
+    m_overflowed.clear();
+    for (int i = 0; i < pageGroups.size() && i < result.pageGroupInMenu.size(); ++i)
+    {
+        const bool inMenu = result.pageGroupInMenu.at(i);
+        pageGroups.at(i)->setVisible(!inMenu);
+        if (inMenu)
+            m_overflowed.append(pageGroups.at(i));
+    }
+
+    m_chevron->setVisible(result.chevronShown);
+
+    m_applied    = result;
+    m_hasApplied = true;
+    m_applying   = false;
+}
+
+void RibbonBar::rebuildOverflowMenu()
+{
+    m_overflowMenu->clear();
+    for (RibbonGroup *group : m_overflowed)
+    {
+        QMenu *submenu = m_overflowMenu->addMenu(group->caption());
+        for (QToolButton *button : group->buttons())
+            if (QAction *action = button->defaultAction())
+                // The action itself, never a copy. Enabled, checked, text
+                // and any exclusive group come with it, and no shortcut is
+                // added because none is set here.
+                submenu->addAction(action);
+    }
+}
+
+QSize RibbonBar::minimumSizeHint() const
+{
+    const QSize base = QWidget::minimumSizeHint();
+    // The pages contribute nothing (RibbonPage::minimumSizeHint is zero wide),
+    // so this is the persistent groups compact plus the chevron. If a larger
+    // font pushes that past what the content needs, the window floor rises
+    // to it rather than anything being clipped.
+    return QSize(ribbonMinimumWidth(const_cast<RibbonBar *>(this)->layoutInput()),
+                 base.height());
+}
+
+void RibbonBar::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    applyOverflowLayout();
 }
 
 int RibbonBar::addTab(const QString &text, Icon icon)
