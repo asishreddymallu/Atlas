@@ -236,27 +236,29 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 11. The window cannot be narrower than 799 px
+## 11. The window cannot be narrower than 849 px
 
 - **Where**: `src/ui/main_window/main_window.cpp` - the content splitter,
   holding the tab stack and `RegisterContainer`.
-- **Measured** (1x, Fusion, `kites-dark`): tab stack 573 px + register panel
-  225 px + the splitter handle = **799 px**, which is the whole window's
-  `minimumSizeHint()`.
+- **Measured** (1x, Fusion, `kites-dark`, 14 px base font): the content
+  splitter's tab stack plus the register panel plus the handle come to
+  **849 px**, which is the whole window's `minimumSizeHint()`. It was 799 px
+  at the 13 px font; the text size moved it, not the ribbon.
 - **The ribbon is no longer part of this.** It used to force 1623 px, because
   a `QStackedWidget` takes the largest of its children's minimums and the
   busiest page therefore set the floor for every tab. `RibbonPage` now
   reports a zero horizontal minimum and `RibbonBar` reports
   `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron -
-  which is about 700 px and so never binds. See `src/ui/ribbon/ribbon_layout.h`.
-- **Below 799 px** the window simply refuses to shrink. Nothing is clipped
+  which is **617 px** since the buttons lost their padding in Stage 5, and so
+  never binds. See `src/ui/ribbon/ribbon_layout.h`.
+- **Below 849 px** the window simply refuses to shrink. Nothing is clipped
   and nothing is hidden; the layout stops rather than cutting anything off.
 - **To go lower**, the register panel (minimum 225 px, maximum 350 px) would
   need a smaller minimum or a way to collapse, and the tab stack's 573 px
   would need looking at. Both are content changes, not ribbon changes, and
   neither is in scope here.
-- **If a larger font** pushes the persistent groups plus the chevron past
-  799 px, the floor rises to that instead. That is deliberate: the ribbon
+- **If a larger font** pushes the persistent groups plus the chevron past the
+  content's own minimum, the floor rises to that instead. That is deliberate: the ribbon
   reports a larger minimum rather than clipping the one group that must
   always be reachable.
 
@@ -288,15 +290,38 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 13. Dead `QToolBar` rules left in `template.qss`
+## 13. Resolved: the dead `QToolBar` rules are gone
 
-- **Where**: `resources/themes/template.qss` - the `QToolBar`,
-  `QToolBar::separator`, `QToolBar QToolButton` and its `:hover`, `:pressed`,
-  `:checked` and `:disabled` rules.
-- **What**: the main toolbar was retired when the ribbon took over its
-  commands, and `MainWindow` creates no `QToolBar` at all now, so these rules
-  match nothing.
-- **Status**: deliberately left in place. Deleting them is a visual change to
-  be made once, on the final layout, and that is Stage 5's call. The comment
-  above `#ribbonPanel QToolButton:checked` explains why the ribbon needed its
-  own `:checked` rule: the toolbar-scoped one never reached it.
+- **Was**: the main toolbar was retired in Stage 4A but its `QToolBar`,
+  `QToolBar::separator` and `QToolBar QToolButton` rules stayed in
+  `resources/themes/template.qss`, matching nothing.
+- **Now**: removed in Stage 5 - 68 lines. `git grep QToolBar` over `src/`
+  confirms nothing constructs one; the only mention left is an unused
+  `m_toolbar` pointer declared in `KitesTab`, which predates this work and is
+  left alone.
+- **The sidebar rules were NOT dead** and are kept. The `QListWidget` block
+  was written for the navigation sidebar, but the Settings dialog's
+  `settingList` uses every rule in it. Only the comment heading changed, so
+  it no longer names a widget that does not exist.
+- The ribbon needed its own `:checked` rule because the toolbar-scoped one
+  never reached it; that rule, and the rest of the ribbon's styling, is
+  under `#ribbonPanel` in the same file.
+
+---
+
+## 14. Ribbon separators are deliberately below 3:1
+
+- **Where**: `resources/themes/template.qss` - `QFrame#ribbonGroupDivider`,
+  `QFrame#ribbonInnerSeparator`, and the outline on
+  `QToolButton[ribbonSegment]`.
+- **Measured** against the panel ground: 1.32 (kites_dark), 1.31
+  (kites_light), 1.11 (tokyo_night), 1.13 (tokyo_night_storm).
+- **Why this is not a failure**: none of them is the only indicator of
+  anything. A group is identified by its caption and its spacing as well as
+  its rule; a segmented run is identified by its zero-gap adjacency and
+  rounded ends as well as its outline; and which segment is *active* is
+  carried by the accent border and selection fill, which measure 5.43 to 6.79
+  against the panel and clear 3:1 everywhere.
+- **Raising them would undo the fix.** These lines were `QFrame::VLine` with
+  a Plain shadow, taking a near-white colour from the palette at roughly
+  10:1, and that is exactly the harshness Stage 5 was asked to remove.
