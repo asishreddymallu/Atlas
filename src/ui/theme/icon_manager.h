@@ -33,6 +33,20 @@ enum class Icon
     IconCount
 };
 
+// The chrome's icon sizes, in logical pixels, in ONE place.
+//
+// Three names rather than two numbers, so each site says which role it is
+// asking for rather than repeating a literal. They happen to be 20, 20 and
+// 32 today; a site that wants something else should get a name here instead
+// of a number of its own.
+//
+// Every icon in resources/icons is a 24-unit viewBox whose ink fills the
+// same fraction of it (the out-of-tree iconmetrics harness checks that), so
+// equal nominal sizes really do look equal.
+inline constexpr int tabStripIconSize    = 20;
+inline constexpr int smallRibbonIconSize = 20;
+inline constexpr int largeRibbonIconSize = 32;
+
 class IconManager //: QObject
 {
     //Q_OBJECT
@@ -41,7 +55,7 @@ public:
     ~IconManager() = default;
     // Default matches the icon size the toolbar and sidebar request, so the
     // rasterised pixmap never has to be scaled up at paint time.
-    QIcon getIcon(Icon icon, QSize size = QSize(20, 20)) const;
+    QIcon getIcon(Icon icon, QSize size = QSize(smallRibbonIconSize, smallRibbonIconSize)) const;
 private:
     IconManager();
     // using size for futue proofing this fucntion.
@@ -64,7 +78,8 @@ private:
 // button that draws at 32 px would otherwise upscale a 20 px pixmap. An
 // action shown at several sizes should be tagged with the largest, which the
 // smaller sites then render scaled down rather than blown up.
-void setThemedIcon(QAction *action, Icon icon, QSize size = QSize(20, 20));
+void setThemedIcon(QAction *action, Icon icon,
+                   QSize size = QSize(smallRibbonIconSize, smallRibbonIconSize));
 
 // The Icon last set by setThemedIcon(), or Icon::IconCount when the action
 // carries no tag.

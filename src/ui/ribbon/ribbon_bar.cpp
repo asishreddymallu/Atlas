@@ -14,13 +14,6 @@
 
 namespace Kites
 {
-namespace
-{
-// Tab-strip icon size in logical pixels, the same value the toolbar uses and
-// the one IconManager rasterises by default.
-constexpr int stripIconSize = 20;
-} // namespace
-
 RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
 {
     auto *column = new QVBoxLayout(this);
@@ -31,7 +24,7 @@ RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
     // Object name scopes this bar's stylesheet rules so they cannot reach the
     // Cache tab's own QTabWidget, which the generic QTabBar rules still style.
     m_tabBar->setObjectName("ribbonTabBar");
-    m_tabBar->setIconSize(QSize(stripIconSize, stripIconSize));
+    m_tabBar->setIconSize(QSize(tabStripIconSize, tabStripIconSize));
     m_tabBar->setDrawBase(false);
     m_tabBar->setExpanding(false);
     m_tabBar->setUsesScrollButtons(true);

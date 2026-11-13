@@ -32,11 +32,10 @@ namespace Kites
 {
 namespace
 {
-// Icon size for the ribbon's large (icon-over-text) buttons. An action shown
-// both there and on a 20 px small button is rasterised at this size, so the
-// small site scales one down rather than blowing a small one up. The 20 px
-// chrome default itself lives in IconManager and in RibbonGroup.
-constexpr QSize largeIconSize{32, 32};
+// An action shown both on a large ribbon button and on a small one is
+// rasterised at the large size, so the small site scales one down rather
+// than blowing a small one up. The sizes themselves live in icon_manager.h.
+constexpr QSize largeIconSize{largeRibbonIconSize, largeRibbonIconSize};
 
 // Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
 // at runtime (Run<->Stop, Pause<->Resume) cannot lose its key hint.

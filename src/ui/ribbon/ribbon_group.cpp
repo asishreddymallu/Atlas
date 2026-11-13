@@ -25,10 +25,6 @@ namespace
 // guessing from the button's current shape.
 constexpr const char *restingStyleProperty = "ribbonRestingStyle";
 
-// Icon sizes in logical pixels. The small size matches the toolbar and the
-// tab strip; the large one is the Office-style icon-over-text button.
-constexpr int smallIconSize = 20;
-constexpr int largeIconSize = 32;
 
 // Vertical gap between stacked small items, and the most that are ever put in
 // one column. Three is the Office shape; two and one are what a larger font
@@ -49,12 +45,12 @@ int contentHeight()
 {
     QToolButton probe;
     probe.setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-    probe.setIconSize(QSize(largeIconSize, largeIconSize));
+    probe.setIconSize(QSize(largeRibbonIconSize, largeRibbonIconSize));
     probe.setText(QStringLiteral("Wg"));
     // The icon has to be there, and non-null, or the probe measures a
     // text-only button and comes back at about half the real height. Its
-    // appearance never matters - only that it occupies largeIconSize.
-    QPixmap placeholder(largeIconSize, largeIconSize);
+    // appearance never matters - only that it occupies largeRibbonIconSize.
+    QPixmap placeholder(largeRibbonIconSize, largeRibbonIconSize);
     placeholder.fill(Qt::transparent);
     probe.setIcon(QIcon(placeholder));
     return probe.sizeHint().height();
@@ -68,9 +64,9 @@ int stackedItemHeight()
     QToolButton probe;
     probe.setProperty(stackedProperty, true);
     probe.setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    probe.setIconSize(QSize(smallIconSize, smallIconSize));
+    probe.setIconSize(QSize(smallRibbonIconSize, smallRibbonIconSize));
     probe.setText(QStringLiteral("Wg"));
-    QPixmap placeholder(smallIconSize, smallIconSize);
+    QPixmap placeholder(smallRibbonIconSize, smallRibbonIconSize);
     placeholder.fill(Qt::transparent);
     probe.setIcon(QIcon(placeholder));
     return probe.sizeHint().height();
@@ -146,8 +142,8 @@ QToolButton *RibbonGroup::makeButton(QAction *action, Qt::ToolButtonStyle style)
     button->setToolButtonStyle(style);
     button->setProperty(restingStyleProperty, static_cast<int>(style));
     button->setIconSize(style == Qt::ToolButtonTextUnderIcon
-                            ? QSize(largeIconSize, largeIconSize)
-                            : QSize(smallIconSize, smallIconSize));
+                            ? QSize(largeRibbonIconSize, largeRibbonIconSize)
+                            : QSize(smallRibbonIconSize, smallRibbonIconSize));
     button->setAutoRaise(true);
     // The ribbon is reached with the mouse, the menus or a shortcut. Keeping
     // the buttons out of the tab chain stops Tab from walking a dozen chrome
