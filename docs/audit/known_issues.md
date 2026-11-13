@@ -381,12 +381,28 @@ Recorded because they changed reported columns on directive lines.
   blank as well - the evidence was already there and was not read. The
   screenshots were reported as "nothing is clipped at either size", which was
   true and beside the point.
+- **A CORRECTION, and the commit is not amended.** `6c56f71`'s message says
+  `measure()` "re-entered itself". That is wrong, and so is the sentence in
+  the same message beginning "Changing a button style asks the parent chain
+  for a new size, which asks the group for its widths again, so measure()
+  re-entered itself". It does not re-enter: `setToolButtonStyle()` raises no
+  synchronous event, and a probe calling `fullWidth()` from the buttons'
+  event filters recorded zero re-entries. The mechanism is the inherited
+  `updatesEnabled()` described above. The commit stands as written because
+  rewriting history to tidy a diagnosis is worse than recording the
+  correction here; `a646bf8`'s message carries the same correction, and this
+  entry is the one to believe.
 - **Guarded by** four tests in `test/ribbon_navigation_test.cpp`
   (`RibbonStage6.*`): every group still paints after construction, after
   visiting every page, at every width from 800 to 1700, and after being
   measured repeatedly and while an ancestor has painting switched off. Two of
   the four fail against the pre-fix `measure()`; the other two do not
   discriminate and are kept for coverage.
+- **And by the ink check**, which is what should have caught it in the first
+  place: an out-of-tree harness that grabs the ribbon panel and requires
+  every button to put ink in its own rectangle. Against `fb58737` it reports
+  188 blank button renderings across all 8 page groups and exits 1; against
+  the current tip, none. See the row in `docs/ARCHITECTURE.md`.
 
 ---
 
