@@ -434,39 +434,29 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 17. The Cache tab's content sits 9 px left of every other tab's
+## 17. Resolved: the Cache tab's content sat a margin left of every other tab's
 
-- **Where**: `src/ui/cache_tab/cache_tab.cpp` - the host layout's left
-  contents margin, zeroed in `8e30284` so the inner tab bar lines up with the
-  ribbon strip.
-- **Measured**, the x of the first content widget in window coordinates:
+- **Was**: zeroing the host layout's left margin in `8e30284` put the inner
+  tab bar flush with the ribbon strip, and took the pane with it. The Cache
+  pane's content ended up one layout margin left of the other five tabs'.
+- **Now**: the same amount is given back inside each of the three pages, so
+  the bar stays flush and the pane's content returns to where it was. The
+  amount is read from the host layout rather than written down, and
+  `src/ui/cache_tab/cache_tab.cpp` is the only file touched - the `.ui` is
+  not.
+- **Measured** on the Cache tab's content region, 700x200 px of
+  `kites-dark`, against the capture taken before any of this:
 
-  | tab | content x | host layout margins |
-  |---|---|---|
-  | Editor, Memory, Processor, Compiler, Profiler | **9** | 9,9,9,9 |
-  | Cache | **0** | 0,9,9,9 |
+  | state | differing pixels |
+  |---|---|
+  | before, host margin present | reference |
+  | host margin zeroed | **13359** of 140000 |
+  | inset given back | **9** of 140000 |
 
-  Zeroing a left margin moves the whole widget, not just its tab bar, so the
-  Cache pane's content moved left with the bar. Cache is the odd one out.
-- **Status**: not fixed, proposal only. The smallest change that keeps the
-  bar flush and gives the pane the other tabs' left edge is to give the inset
-  back *inside* each page, derived from the style rather than written down:
-
-  ```cpp
-  // The host layout's left margin is zero so the tab bar lines up with the
-  // ribbon strip; give the same amount back inside each page so the pane's
-  // content keeps the left edge the other five tabs have.
-  const int inset = style()->pixelMetric(QStyle::PM_LayoutLeftMargin);
-  for (QWidget *page : {ui->tab, ui->L1Tab, ui->L2Tab})
-      if (QLayout *pageLayout = page->layout())
-      {
-          const QMargins m = pageLayout->contentsMargins();
-          pageLayout->setContentsMargins(m.left() + inset, m.top(), m.right(), m.bottom());
-      }
-  ```
-
-  The one-line alternative is `QTabWidget::pane { padding-left: 9px; }` in
-  `template.qss`, which reaches only this tab because it is the application's
-  only `QTabWidget` - but it writes 9 down as a literal where the code form
-  asks the style for the same number the other five layouts were given.
-
+  The nine are a 9x1 strip at the top-left: the pane's hairline, which now
+  reaches to the tab's left edge because the bar does. Nothing else moved,
+  and nothing moved vertically.
+- **Guarded by** `RibbonStage8.TheCachePaneKeepsTheOtherTabsLeftEdge`, which
+  derives the inset from `QStyle::PM_LayoutLeftMargin` and cross-checks it
+  against a tab that still carries it, so the derivation is shown to be the
+  right number rather than assumed. It fails against the zeroed behaviour.

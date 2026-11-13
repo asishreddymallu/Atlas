@@ -47,6 +47,8 @@
 #include <QGuiApplication>
 #include <QPlainTextEdit>
 #include <QBoxLayout>
+#include <QStyle>
+#include <limits>
 #include <QPointer>
 #include <QLineEdit>
 #include <QPushButton>
@@ -2575,4 +2577,74 @@ TEST(RibbonStage7, ASegmentedRunIsMeasuredBySummingIt)
         EXPECT_LT(widest, sum);
     }
     EXPECT_GT(columnsSeen, 0) << "no stacked column was examined";
+}
+
+// ═══════════ Stage 8: the Cache tab's left edge, bar and pane ═════════════
+
+TEST(RibbonStage8, TheCachePaneKeepsTheOtherTabsLeftEdge)
+{
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+
+    auto *cache = window.findChild<CacheTab *>();
+    ASSERT_NE(cache, nullptr);
+    QLayout *host = cache->layout();
+    ASSERT_NE(host, nullptr);
+
+    // The inset every tab's layout is given, asked of the style rather than
+    // written down - and cross-checked against a tab that still has it, so
+    // the derivation is shown to be the right one rather than asserted.
+    const int inset = cache->style()->pixelMetric(QStyle::PM_LayoutLeftMargin);
+    EXPECT_GT(inset, 0) << "this style gives layouts no left margin; the test below is vacuous";
+
+    auto *memory = window.findChild<MemoryTab *>();
+    ASSERT_NE(memory, nullptr);
+    ASSERT_NE(memory->layout(), nullptr);
+    EXPECT_EQ(memory->layout()->contentsMargins().left(), inset)
+        << "the other tabs' layouts do not use the style's metric, so it is the wrong number";
+
+    // The Cache tab's own layout has no left margin, which is what puts its
+    // inner tab bar flush with the ribbon strip above it...
+    EXPECT_EQ(host->contentsMargins().left(), 0) << "the inner tab bar is indented again";
+    // ...and the other three sides are untouched, so nothing moved vertically.
+    EXPECT_EQ(host->contentsMargins().top(), inset);
+    EXPECT_EQ(host->contentsMargins().right(), inset);
+    EXPECT_EQ(host->contentsMargins().bottom(), inset);
+
+    // ...and every page inside the tab widget has been given that inset back,
+    // so the pane's content sits where the other tabs' content sits. Before
+    // this the pages carried one inset and the content was a margin too far
+    // left; now they carry two.
+    auto *inner = cache->findChild<QTabWidget *>("tabWidget");
+    ASSERT_NE(inner, nullptr);
+    ASSERT_EQ(inner->count(), 3);
+    for (int i = 0; i < inner->count(); ++i)
+    {
+        QWidget *page = inner->widget(i);
+        ASSERT_NE(page, nullptr);
+        QLayout *pageLayout = page->layout();
+        ASSERT_NE(pageLayout, nullptr) << "page " << i << " has no layout";
+        const QMargins margins = pageLayout->contentsMargins();
+        EXPECT_EQ(margins.left(), margins.top() + inset)
+            << "page " << i << " did not get the host's left inset back";
+    }
+
+    // The bar itself is flush with the tab's left edge.
+    QTabBar *bar = inner->tabBar();
+    ASSERT_NE(bar, nullptr);
+    EXPECT_EQ(bar->mapTo(cache, QPoint(0, 0)).x(), 0) << "the inner tab bar is not flush";
+
+    // And the pane's content really does start an inset further in than the
+    // bar - the observable consequence of the two assertions above.
+    QWidget *shown = inner->currentWidget();
+    ASSERT_NE(shown, nullptr);
+    int leftMost = std::numeric_limits<int>::max();
+    for (QWidget *child : shown->findChildren<QWidget *>())
+        if (!child->isHidden() && child->parentWidget() == shown && child->width() > 1)
+            leftMost = std::min(leftMost, child->mapTo(cache, QPoint(0, 0)).x());
+    ASSERT_NE(leftMost, std::numeric_limits<int>::max()) << "the page has no content";
+    EXPECT_EQ(leftMost, 2 * inset)
+        << "the pane's content is not where the other tabs' content is";
 }

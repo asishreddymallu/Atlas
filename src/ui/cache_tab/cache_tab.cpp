@@ -75,16 +75,32 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->tabWidget->setTabText(1, "L1 Cache");
     ui->tabWidget->setTabText(2, "L2 Cache");
 
-    // The inner tab bar started 9 px right of the ribbon's strip, which made
-    // two bars of the same kind look like two different kinds of control.
-    // The 9 px is the default left contents margin of the layout holding the
-    // tab widget - the .ui sets none, so Qt supplies it - and the .ui is not
-    // to be reformatted, so it is zeroed here. Only the left: the top, right
-    // and bottom keep the breathing room the rest of the tab was drawn with.
+    // The inner tab bar started one layout margin right of the ribbon's
+    // strip, which made two bars of the same kind look like two different
+    // kinds of control. The .ui declares no margins, so Qt supplies its
+    // default on all four sides and the whole tab widget is inset by it.
+    //
+    // Zeroing the left margin pulls the bar flush - but it pulls the pane
+    // with it, and the pane's content would then sit a margin left of every
+    // other tab's. So the same amount is given back INSIDE each page, which
+    // moves the content without moving the bar.
+    //
+    // The amount is asked of the style rather than written down, so it is
+    // the same number the other five tabs' layouts were given. The .ui is
+    // untouched.
     if (QLayout *outer = layout())
     {
         const QMargins margins = outer->contentsMargins();
+        const int      inset   = margins.left();
         outer->setContentsMargins(0, margins.top(), margins.right(), margins.bottom());
+
+        for (QWidget *page : {ui->tab, ui->L1Tab, ui->L2Tab})
+            if (QLayout *pageLayout = page ? page->layout() : nullptr)
+            {
+                const QMargins pageMargins = pageLayout->contentsMargins();
+                pageLayout->setContentsMargins(pageMargins.left() + inset, pageMargins.top(),
+                                               pageMargins.right(), pageMargins.bottom());
+            }
     }
 
     ui->tabWidget->setCurrentIndex(0); // show Instruction cache by default
