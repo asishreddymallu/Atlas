@@ -137,6 +137,9 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | The Run and File groups, shown on every tab | `MainWindow::setUpPersistentGroups()` in `src/ui/main_window/main_window.cpp`; they live beside the pages, in `RibbonBar`, so there is one instance of each button rather than one per tab |
 | The execution actions (Run, Debug Run, Pause, Step, Undo, Redo, Processor) and the speed control | `MainWindow::setUpExecutionActions()` in `src/ui/main_window/main_window.cpp` — the old main toolbar's, which the ribbon now shows |
 | Tagging an icon so a theme change re-tints it | `setThemedIcon()` in `src/ui/theme/icon_manager.h`; the pass is `MainWindow::themeChangedSlot()` |
+| Adding an icon | the SVG in `resources/icons/`, a line in `resources/icons/icons.qrc`, an entry on the `Icon` enum in `src/ui/theme/icon_manager.h`, and a line in `IconManager::setUpIconPaths()`. Then `setThemedIcon()` at `tabStripIconSize`, `smallRibbonIconSize` or `largeRibbonIconSize` — the three sizes the chrome uses, all in `icon_manager.h` |
+| Whether the icon set is visually consistent | not testable in `kites_test`, which links no `.qrc`. An out-of-tree harness renders every SVG with `QSvgRenderer` and compares the ink extents; every icon is a 24-unit viewBox at a uniform rendered stroke, filling the same fraction of its canvas |
+| The interface's text size | `baseFontPixelSize` in `src/ui/theme/type_scale.h`, substituted into the stylesheet as `{{fontSize}}`, `{{fontSizeSmall}}` and `{{fontSizeTable}}`. The code editor's font is separate and comes from `FontManager` |
 | Theme colours | `resources/themes/*.json` — `tokyo_night.json`, `tokyo_night_storm.json`, `kites_dark.json`, `kites_light.json` |
 | The stylesheet template | `resources/themes/template.qss` |
 | Theme loading / token substitution | `src/ui/theme/theme_manager.cpp` |

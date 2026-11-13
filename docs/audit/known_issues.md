@@ -249,8 +249,20 @@ Recorded because they changed reported columns on directive lines.
   busiest page therefore set the floor for every tab. `RibbonPage` now
   reports a zero horizontal minimum and `RibbonBar` reports
   `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron.
-  Measured at the shipped state that is **594 px**: Run 338 + File 219 +
-  chevron 37. It does not bind, and would have to grow by 255 px to.
+  Measured at the shipped state that is **543 px**: Run 338 + File 168 +
+  chevron 37. It does not bind, and would have to grow by 306 px to.
+
+  Giving Problems, Search, Copy to Clipboard and Wires Stay Active an icon
+  made their groups 24 px WIDER in full mode and much narrower in compact,
+  because a button with an icon can drop its label where one without it has
+  to keep it: File 263 -> 168, Find 115 -> 58, Datapath 181 -> 70, Output
+  188 -> 59. The net effect on the floor was 594 -> 543.
+
+  **A consequence worth knowing**: compact mode alone now fits at every width
+  the window can reach, so the overflow chevron never appears in normal use.
+  The overflow code is unchanged and still covered - by the synthetic
+  0..2000 px sweep in `test/ribbon_layout_test.cpp` and by the widget tests
+  that widen a group until it has to overflow.
 
   (An earlier draft of this entry said 617. That was taken halfway through
   Stage 5, after the buttons lost their padding but before the captions
@@ -375,4 +387,26 @@ Recorded because they changed reported columns on directive lines.
   measured repeatedly and while an ancestor has painting switched off. Two of
   the four fail against the pre-fix `measure()`; the other two do not
   discriminate and are kept for coverage.
+
+---
+
+## 16. A checkable menu entry with an icon shows no check mark
+
+- **Where**: Settings > Processor > Wires Stay Active, the action shared by
+  that menu entry and the ribbon's Datapath group.
+- **What**: since the action was given `Icon::Wires`, Qt draws the icon where
+  a menu check mark would go, and the stylesheet's `QMenu::item` rules carry
+  no `QMenu::indicator` treatment to put it back. Captured unchecked and
+  checked and compared: **the two images differ by 0 pixels out of 6929**.
+  The menu no longer shows whether wires stay active at all.
+- **The ribbon button is unaffected** - `#ribbonPanel QToolButton:checked`
+  gives it the accent border and the selection fill, measured above 3:1 and
+  4.5:1 in every theme.
+- **Before the icon** the entry showed an ordinary check mark, as the
+  overflow menu's display-base entries still do - those actions have no icon.
+- **Status**: reported, not fixed, pending a decision. The options are a
+  scoped `QMenu::item:checked` or `QMenu::indicator` rule, which would fix
+  every checkable entry at once, or leaving Wires Stay Active without an
+  icon. Hiding the icon on the menu entry alone is not possible without
+  cloning the action, which is the thing the whole ribbon design avoids.
 
