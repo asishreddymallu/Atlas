@@ -465,25 +465,42 @@ TEST(MainWindowRibbon, ThemeChangeLeavesTheStripIntact)
 
 namespace
 {
-/// The actions on a toolbar, skipping separators and the QWidgetAction
-/// wrapper, in order: Processor, Run, Debug, Pause, Step, Undo, Redo.
-QList<QAction *> toolbarActions(MainWindow &window)
-{
-    QList<QAction *> result;
-    const QList<QToolBar *> bars = window.findChildren<QToolBar *>();
-    if (bars.isEmpty())
-        return result;
-    for (QAction *a : bars.first()->actions())
-        if (!a->isSeparator() && !qobject_cast<QWidgetAction *>(a))
-            result.append(a);
-    return result;
-}
-
 RibbonGroup *persistentGroupNamed(RibbonBar *bar, const QString &caption)
 {
     for (int i = 0; i < bar->persistentGroupCount(); ++i)
         if (bar->persistentGroup(i)->caption() == caption)
             return bar->persistentGroup(i);
+    return nullptr;
+}
+
+/// The seven execution actions, in the persistent Run group's order:
+/// Run, Debug Run, Pause, Step, Undo, Redo, Processor.
+///
+/// These were the old main toolbar's, and until Stage 4A the tests took
+/// them from it. The toolbar is gone; the ribbon shows the very same
+/// objects, so the group is where they are named now. Note the orders
+/// differ - the toolbar read Processor | Run Debug | Pause Step |
+/// Undo Redo - so nothing here may be addressed by the old index.
+QList<QAction *> executionActions(RibbonBar *bar)
+{
+    QList<QAction *> result;
+    RibbonGroup     *run = persistentGroupNamed(bar, "Run");
+    if (!run)
+        return result;
+    for (QToolButton *button : run->buttons())
+        if (QAction *a = button->defaultAction())
+            result.append(a);
+    return result;
+}
+
+/// One of those by its label. Labels are the ones the window starts with;
+/// Run and Pause reword themselves at runtime, which is why production code
+/// reads the icon tag instead and these tests only ask at construction.
+QAction *executionAction(RibbonBar *bar, const QString &label)
+{
+    for (QAction *a : executionActions(bar))
+        if (a->text() == label)
+            return a;
     return nullptr;
 }
 
@@ -603,21 +620,21 @@ TEST(RibbonStage2, EachPageHasExactlyTheGroupsItShould)
     }
 }
 
-TEST(RibbonStage2, RibbonButtonsUseTheVerySameActionsAsTheToolbarAndMenus)
+TEST(RibbonStage2, RibbonButtonsUseTheVerySameActionsAsTheMenus)
 {
     MainWindow window;
     RibbonBar *bar = window.findChild<RibbonBar *>();
     ASSERT_NE(bar, nullptr);
 
-    const QList<QAction *> toolbar = toolbarActions(window);
-    ASSERT_EQ(toolbar.size(), 7);
+    const QList<QAction *> execution = executionActions(bar);
+    ASSERT_EQ(execution.size(), 7);
     const QList<QAction *> onRibbon = ribbonActions(bar);
 
     // Pointer identity, not equal text: a clone would compare equal by label
     // and still be a second copy of the state.
-    for (QAction *a : toolbar)
+    for (QAction *a : execution)
         EXPECT_TRUE(onRibbon.contains(a))
-            << "toolbar action '" << a->text().toStdString() << "' is not the object on the ribbon";
+            << "execution action '" << a->text().toStdString() << "' is not on a ribbon button";
 
     QAction *open = menuEntry(window, 0, 0); // File > Open
     QAction *save = menuEntry(window, 0, 1); // File > Save
@@ -650,9 +667,9 @@ TEST(RibbonStage2, ButtonStateFollowsTheSharedAction)
     QToolButton *stepButton = nullptr;
     for (QToolButton *button : run->buttons())
     {
-        if (button->defaultAction() == toolbarActions(window).at(1))
+        if (button->defaultAction() == executionAction(bar, "Run"))
             runButton = button;
-        if (button->defaultAction() == toolbarActions(window).at(4))
+        if (button->defaultAction() == executionAction(bar, "Step"))
             stepButton = button;
     }
     ASSERT_NE(runButton, nullptr);
@@ -707,12 +724,11 @@ TEST(RibbonStage2, SpeedSpinBoxMovedIntactAndStillReachesTheWindow)
             ++msSpins;
     EXPECT_EQ(msSpins, 1) << "the spin box was copied rather than moved";
 
-    // The toolbar no longer carries it.
-    const QList<QToolBar *> bars = window.findChildren<QToolBar *>();
-    ASSERT_FALSE(bars.isEmpty());
-    for (QAction *a : bars.first()->actions())
-        EXPECT_EQ(qobject_cast<QWidgetAction *>(a), nullptr)
-            << "the toolbar still holds a widget action";
+    // There is no toolbar left to carry it, and nothing wrapped it back up
+    // in a QWidgetAction somewhere else.
+    EXPECT_TRUE(window.findChildren<QToolBar *>().isEmpty()) << "a QToolBar is back";
+    EXPECT_TRUE(window.findChildren<QWidgetAction *>().isEmpty())
+        << "the spin box is wrapped in a widget action again";
 
     // The value still goes somewhere: disconnecting with the window as the
     // receiver only succeeds if such a connection existed. Destructive, which
@@ -861,15 +877,17 @@ TEST(RibbonStage2, LargeButtonsAskForThirtyTwoPixelIcons)
     RibbonBar *bar = window.findChild<RibbonBar *>();
     ASSERT_NE(bar, nullptr);
 
-    const QList<QAction *> toolbar = toolbarActions(window);
-    ASSERT_EQ(toolbar.size(), 7);
-    QAction *runAction   = toolbar.at(1);
-    QAction *debugAction = toolbar.at(2);
+    QAction *runAction   = executionAction(bar, "Run");
+    QAction *debugAction = executionAction(bar, "Debug Run");
+    QAction *stepAction  = executionAction(bar, "Step");
+    ASSERT_NE(runAction, nullptr);
+    ASSERT_NE(debugAction, nullptr);
+    ASSERT_NE(stepAction, nullptr);
 
     EXPECT_EQ(themedIconSizeOf(runAction), QSize(32, 32));
     EXPECT_EQ(themedIconSizeOf(debugAction), QSize(32, 32));
     // A small one is still tagged at the chrome size.
-    EXPECT_EQ(themedIconSizeOf(toolbar.at(4)), QSize(20, 20));
+    EXPECT_EQ(themedIconSizeOf(stepAction), QSize(20, 20));
 }
 
 // ═══════════════════ Stage 3: the other five ribbon pages ═════════════════
@@ -1323,8 +1341,9 @@ TEST(RibbonStage3, NothingOnTheRibbonAddedAShortcut)
     // the ribbon gets one. A second action with the same key sequence is
     // what produces "Ambiguous shortcut overload" at runtime, which the
     // smoke harness also watches for.
-    // Everything the menus and the toolbar already owned, submenus included.
-    QList<QAction *> existing = toolbarActions(window);
+    // Everything the menus and the execution set already owned, submenus
+    // included.
+    QList<QAction *> existing = executionActions(bar);
     std::function<void(const QList<QAction *> &)> walk = [&](const QList<QAction *> &actions)
     {
         for (QAction *a : actions)
@@ -1430,48 +1449,32 @@ TEST(RibbonStage3, EveryButtonHasTheLabelAndSizeItShould)
 
 // ══════════════════ Stage 4A: retiring the old toolbar ════════════════════
 
-namespace
-{
-/// The seven execution actions, resolved from the ribbon's persistent Run
-/// group rather than from the toolbar. This is the mapping the toolbar's
-/// retirement turns on: Stage 2 proved these buttons carry the very same
-/// QAction objects the toolbar held, so naming them here is naming those.
-///
-/// The Run group's order is not the toolbar's. The toolbar read
-/// Processor | Run Debug | Pause Step | Undo Redo; the group leads with the
-/// two large buttons and puts Processor last.
-QList<QAction *> executionActions(RibbonBar *bar)
-{
-    QList<QAction *> result;
-    RibbonGroup *run = persistentGroupNamed(bar, "Run");
-    if (!run)
-        return result;
-    for (QToolButton *button : run->buttons())
-        if (QAction *a = button->defaultAction())
-            result.append(a);
-    return result; // Run, Debug Run, Pause, Step, Undo, Redo, Processor
-}
-} // namespace
-
 TEST(RibbonStage4, ExecutionActionsOutliveTheToolbar)
 {
-    // The premise the retirement rests on: no execution QAction is owned by
-    // the QToolBar, so deleting it cannot take one with it. Proved by doing
-    // it, not by reading the constructor.
+    // The premise the retirement rested on: QWidget::addAction() does not
+    // transfer ownership, so the QToolBar never owned these and deleting it
+    // could not take one with it. Proved by doing it rather than by reading
+    // the constructor.
+    //
+    // The window has no toolbar any more, so the test builds one, puts the
+    // actions on it exactly as setUpToolBar() did, and deletes it. Without
+    // that this would assert against an empty list and prove nothing.
     MainWindow window;
     RibbonBar *bar = window.findChild<RibbonBar *>();
     ASSERT_NE(bar, nullptr);
+    EXPECT_TRUE(window.findChildren<QToolBar *>().isEmpty())
+        << "the old main toolbar is back";
 
     const QList<QAction *> actions = executionActions(bar);
     ASSERT_EQ(actions.size(), 7);
 
-    // Every one is parented to the window, not to a toolbar.
+    // Every one is parented to the window, not to any widget showing it.
     for (QAction *a : actions)
-        EXPECT_EQ(a->parent(), &window)
-            << "'" << a->text().toStdString() << "' is owned by " << a->parent()->metaObject()->className();
+        EXPECT_EQ(a->parent(), &window) << "'" << a->text().toStdString() << "' is owned by "
+                                        << a->parent()->metaObject()->className();
 
-    // Remember them as QObjects so a dangling pointer is observable through
-    // a guard rather than by dereferencing freed memory.
+    // Remember them through guards, so a dangling pointer is observable
+    // without dereferencing freed memory.
     QList<QPointer<QAction>> guards;
     QStringList              labels;
     for (QAction *a : actions)
@@ -1480,8 +1483,14 @@ TEST(RibbonStage4, ExecutionActionsOutliveTheToolbar)
         labels << a->text();
     }
 
-    for (QToolBar *toolbar : window.findChildren<QToolBar *>())
-        delete toolbar;
+    {
+        QToolBar *rebuilt = window.addToolBar("Rebuilt Toolbar");
+        for (QAction *a : actions)
+            rebuilt->addAction(a);
+        rebuilt->addSeparator();
+        EXPECT_EQ(window.findChildren<QToolBar *>().size(), 1);
+        delete rebuilt;
+    }
     EXPECT_TRUE(window.findChildren<QToolBar *>().isEmpty());
 
     for (int i = 0; i < guards.size(); ++i)
@@ -1542,6 +1551,9 @@ TEST(RibbonStage4, EveryToolbarCommandIsOnTheRibbonAsTheSameObject)
     EXPECT_TRUE(onRibbon.contains(open));
     EXPECT_TRUE(onRibbon.contains(save));
     EXPECT_TRUE(onRibbon.contains(problems));
+
+    // No toolbar is left, which is what this stage removed.
+    EXPECT_EQ(window.findChildren<QToolBar *>().size(), 0);
 
     // The menu bar is untouched: File, Settings, Help, View, in that order.
     QStringList menus;

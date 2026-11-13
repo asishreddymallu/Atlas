@@ -32,13 +32,10 @@ namespace Kites
 {
 namespace
 {
-// Chrome icon size in logical pixels, shared by the toolbar and the ribbon's
-// tab strip so the two never disagree. IconManager's default matches it.
-constexpr int toolbarIconSize = 20;
-
-// Icon size for the ribbon's large (icon-over-text) buttons. Actions shown
-// both there and on the 20 px toolbar are rasterised at this size, so the
-// toolbar scales one down rather than blowing a small one up.
+// Icon size for the ribbon's large (icon-over-text) buttons. An action shown
+// both there and on a 20 px small button is rasterised at this size, so the
+// small site scales one down rather than blowing a small one up. The 20 px
+// chrome default itself lives in IconManager and in RibbonGroup.
 constexpr QSize largeIconSize{32, 32};
 
 // Keeps the shortcut hint and the tooltip in one place, so a tooltip reworded
@@ -112,7 +109,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_stackedTabs = new QStackedWidget(this);
     m_ribbon = new RibbonBar(this);
     setUpStatusBar();
-    setUpToolBar();
+    setUpExecutionActions();
     setUpMenubar();
     setUpTabs();
     setUpRibbon();
@@ -143,12 +140,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(this, &MainWindow::runProcessorSignal, m_processorManager, &ProcessorManager::runSlot);
     connect(this, &MainWindow::debugRunProcessorSignal, m_processorManager,
             &ProcessorManager::debugRunSlot);
-    // well temporarily disable the toolbar buttons when vm is running
+    // well temporarily disable the execution buttons when vm is running
     connect(m_processorManager, &ProcessorManager::runFinishedSignal, this, &MainWindow::runFinishedSlot);
     connect(m_processorManager, &ProcessorManager::runErrorSignal, this,
             [this](const QString &errorMessage, int sourceLine)
             {
-                // first we enable the toolbar buttons
+                // first we enable the execution buttons
                 runFinishedSlot();
                 auto editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
                 if (editorTab)
@@ -222,13 +219,13 @@ void MainWindow::setUpStatusBar()
     statusBar->addPermanentWidget(statusLabel);
 }
 
-void MainWindow::setUpToolBar()
+void MainWindow::setUpExecutionActions()
 {
-    QToolBar *toolbar         = addToolBar("Main Toolbar");
-    // Held as members so every place that needs them - the ribbon from the
-    // next commit, and runFinishedSlot() below - can name the action instead
-    // of hunting for it by its user-visible text in whichever QToolBar Qt
-    // happens to return first. Creation order is unchanged.
+    // These were the old main toolbar's. The toolbar is gone - the ribbon's
+    // persistent Run group shows them now - but they are created here, in
+    // this order, with the window as their parent, exactly as before. Every
+    // shortcut, tooltip, icon tag and connection below is untouched; only
+    // the widget that used to display them has been removed.
     m_processorAction = new QAction("Processor", this);
     m_runAction       = new QAction("Run", this);
     m_pauseAction     = new QAction("Pause", this);
@@ -242,7 +239,7 @@ void MainWindow::setUpToolBar()
     m_undoAction->setDisabled(true);
     m_redoAction->setDisabled(true);
 
-    // set toolbar icons (resources in :/icons)
+    // icons (resources in :/icons)
     setThemedIcon(m_processorAction, Icon::Processor);
     setThemedIcon(m_runAction, Icon::Play, largeIconSize);
     setThemedIcon(m_pauseAction, Icon::Pause);
@@ -253,7 +250,7 @@ void MainWindow::setUpToolBar()
     // Keyboard shortcuts. None of these collide with QPlainTextEdit's built-in
     // bindings (Ctrl+C/X/V/Z/Y/A and friends) or with the keys Editor
     // intercepts for the completer popup (Enter/Return/Escape/Tab/Backtab).
-    // Toolbar Undo/Redo are deliberately left unbound: they undo a VM step,
+    // Undo/Redo are deliberately left unbound: they undo a VM step,
     // not a text edit, and Ctrl+Z in the editor must stay text undo.
     m_runAction->setShortcut(QKeySequence(Qt::Key_F5));
     m_debugAction->setShortcut(QKeySequence(Qt::Key_F9));
@@ -268,11 +265,6 @@ void MainWindow::setUpToolBar()
     setActionHint(m_stepAction, "Execute single step");
     setActionHint(m_undoAction, "Undo last VM step");
     setActionHint(m_redoAction, "Redo last VM step");
-    // one icon size for the whole chrome; the sidebar uses the same value
-    toolbar->setIconSize(QSize(toolbarIconSize, toolbarIconSize));
-    // single fixed toolbar: the drag handle is just visual noise
-    toolbar->setMovable(false);
-
     //------------Spinbox for setting execution speed----------------
     m_stepDelaySpin = new QSpinBox(this);
     m_stepDelaySpin->setRange(1, 10000);
@@ -282,20 +274,12 @@ void MainWindow::setUpToolBar()
     //---------------------------------------------------------------
 
     // The spin box is a widget, not an action, so it can have exactly one
-    // parent: it now lives in the ribbon's Run group (setUpPersistentGroups)
-    // rather than in a QWidgetAction here. A second spin box would be the
-    // duplicated state this work is meant to avoid. Its range, default and
-    // connection are unchanged; only its home moved.
-    toolbar->addAction(m_processorAction);   // processor settings
-    toolbar->addSeparator();
-    toolbar->addAction(m_runAction);         // start / stop
-    toolbar->addAction(m_debugAction);
-    toolbar->addSeparator();
-    toolbar->addAction(m_pauseAction);       // transport
-    toolbar->addAction(m_stepAction);
-    toolbar->addSeparator();
-    toolbar->addAction(m_undoAction);        // history
-    toolbar->addAction(m_redoAction);
+    // parent: it lives in the ribbon's Run group (setUpPersistentGroups).
+    // Its range, default and connection are unchanged; only its home moved.
+    //
+    // The actions are not added to anything here either. setUpPersistentGroups()
+    // puts each on a ribbon button through QToolButton::setDefaultAction(),
+    // which is what showed them on the toolbar too - one object, one state.
 
     connect(m_runAction, &QAction::triggered, this,
             [this]()
@@ -325,7 +309,7 @@ void MainWindow::setUpToolBar()
             {
                 m_debugAction->setDisabled(true);
                 m_processorAction->setDisabled(true);
-                // debug run starts paused, so the toolbar starts in the paused state
+                // debug run starts paused, so the controls start paused
                 m_runAction->setText("Stop");
                 setThemedIcon(m_runAction, Icon::Stop, largeIconSize);
                 setActionHint(m_runAction, "Stop execution");
@@ -421,13 +405,13 @@ void MainWindow::setUpPersistentGroups()
 {
     // Shown left of the per-tab page on every tab, so execution stays
     // reachable while looking at any of them. Every button is bound to the
-    // QAction the menu or the toolbar already uses - QToolButton's default
+    // QAction the menus already use - QToolButton's default
     // action - so enabled, checked, text, icon and tooltip are the action's,
     // not a second copy, and no second shortcut is registered.
     RibbonGroup *run = m_ribbon->addPersistentGroup("Run");
     run->addLarge(m_runAction);
     run->addLarge(m_debugAction);
-    run->addWidget(m_stepDelaySpin); // reparented out of the toolbar
+    run->addWidget(m_stepDelaySpin); // its only home since the toolbar went
     run->addSeparator();
     run->addSmall(m_pauseAction);
     run->addSmall(m_stepAction);
@@ -867,7 +851,7 @@ bool MainWindow::tryParseAndLoadProgram()
 
 void MainWindow::run(bool startPaused)
 {
-    // as soon s as run is clicked we disable the toolbar buttons
+    // as soon s as run is clicked we disable the execution buttons
     // disableToolBarButtons();
     if (tryParseAndLoadProgram())
     {
@@ -978,7 +962,7 @@ void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
     // Icons are flat SVGs tinted with the theme's icon colour, so every one of
     // them has to be re-tinted when the theme changes. Each action was tagged
     // with its Icon by setThemedIcon(), so this is a single pass over every
-    // action in the window - toolbar, menus and submenus alike - with no
+    // action in the window - ribbon, menus and submenus alike - with no
     // dependence on user-visible text.
     for (QAction *action : this->findChildren<QAction *>())
     {

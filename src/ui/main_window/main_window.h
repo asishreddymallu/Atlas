@@ -63,7 +63,12 @@ private:
     };
 
     void setUpStatusBar();
-    void setUpToolBar();
+    /// Creates the execution QActions - Processor, Run, Debug Run, Pause,
+    /// Step, Undo, Redo - and the execution-speed spin box, with their
+    /// shortcuts, tooltips, icons and connections. They are displayed by the
+    /// ribbon's persistent Run group; this creates no widget of its own.
+    /// Was setUpToolBar() until the main toolbar was retired.
+    void setUpExecutionActions();
     void setUpRibbon();
     void setUpPersistentGroups();
     void setUpEditorPage();
@@ -80,7 +85,6 @@ private:
     void processorChangeDialog();
     Ui::MainWindow *ui;
 
-    // QToolBar *m_mainToolbar = nullptr;
     // held so Save can be disabled while the editor is read-only (i.e. while a
     // program is running); a disabled QAction also swallows its shortcut
     QAction           *m_saveAction        {nullptr};
@@ -96,12 +100,12 @@ private:
     // can show the menu's own action rather than a second checkbox for the
     // same setting. Created where it always was, in setUpMenubar().
     QAction           *m_wiresStayActiveAction {nullptr};
-    // The execution controls, held rather than left local to setUpToolBar().
-    // runFinishedSlot() used to recover them by walking
-    // findChildren<QToolBar*>()[0] and comparing action->text() - text these
-    // same handlers rewrite at runtime (Run<->Stop, Pause<->Resume). That is
-    // only safe while exactly one toolbar exists and no action is shown
-    // twice, and the ribbon makes both assumptions false.
+    // The execution controls. They used to be locals in setUpToolBar(), and
+    // runFinishedSlot() recovered them by walking findChildren<QToolBar*>()[0]
+    // and comparing action->text() - text those same handlers rewrite at
+    // runtime (Run<->Stop, Pause<->Resume). That was only safe while exactly
+    // one toolbar existed and no action was shown twice; the ribbon made both
+    // assumptions false, and there is no toolbar at all any more.
     QAction           *m_processorAction   {nullptr};
     QAction           *m_runAction         {nullptr};
     QAction           *m_pauseAction       {nullptr};
