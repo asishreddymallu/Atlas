@@ -124,6 +124,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setUpPersistentGroups();
     setUpEditorPage();
     setUpMemoryPage();
+    setUpProcessorPage();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -535,6 +536,40 @@ void MainWindow::setUpMemoryPage()
     checkChoice(choices, bases.indexOf(memoryTab->displayBase()));
 }
 
+void MainWindow::setUpProcessorPage()
+{
+    RibbonPage *page = m_ribbon->page(toIndex(TabIndex::ProcessorTabIndex));
+
+    // The menu's own action, on a button. Not a copy: checked state, text
+    // and the connection to ProcessorTab::setWiresStayActive are the menu
+    // entry's, so the two can never disagree and no second shortcut exists.
+    //
+    // Processor... is deliberately not repeated here - it is already in the
+    // persistent Run group, which is on screen on this tab too.
+    RibbonGroup *datapath = page->addGroup("Datapath");
+    datapath->addSmall(m_wiresStayActiveAction);
+
+    // The register panel sits beside the tabs rather than inside one, but
+    // its display base is a processor-level reading choice, so the ribbon
+    // offers it here. Its combo box stays the state.
+    RibbonGroup           *registers = page->addGroup("Registers");
+    const QList<Base>      bases {Base::Binary, Base::Hexadecimal, Base::Decimal};
+    const QList<QAction *> choices =
+        addExclusiveChoices(this, registers, {"Binary", "Hexadecimal", "Decimal/Float"});
+
+    for (int i = 0; i < choices.size(); ++i)
+    {
+        const Base base = bases.at(i);
+        connect(choices.at(i), &QAction::triggered, m_registerContainer,
+                [this, base] { m_registerContainer->setDisplayBase(base); });
+    }
+
+    connect(m_registerContainer, &RegisterContainer::displayBaseChangedSignal, this,
+            [choices, bases](Base base) { checkChoice(choices, bases.indexOf(base)); });
+
+    checkChoice(choices, bases.indexOf(m_registerContainer->displayBase()));
+}
+
 void MainWindow::setCurrentTab(TabIndex index)
 {
     const int target = static_cast<int>(toIndex(index));
@@ -604,6 +639,7 @@ void MainWindow::setUpMenubar()
     QAction *wireStayActiveAction = new QAction("Wires Stay Active", this);
     wireStayActiveAction->setCheckable(true);
     wireStayActiveAction->setChecked(false);
+    m_wiresStayActiveAction = wireStayActiveAction;
     processorMenu->addAction(wireStayActiveAction);
     connect(wireStayActiveAction, &QAction::toggled, this,
             [this](bool checked)

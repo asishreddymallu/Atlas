@@ -22,6 +22,9 @@
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/main_window/main_window.h"
 #include "ui/memory_tab/memory_tab.h"
+#include "ui/processor_tab/circuit_scene.h"
+#include "ui/processor_tab/processor_tab.h"
+#include "ui/register_table/register_container.h"
 #include "ui/problems_panel/problems_dock.h"
 #include "ui/ribbon/ribbon_bar.h"
 #include "ui/ribbon/ribbon_group.h"
@@ -35,6 +38,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QComboBox>
+#include <QGraphicsView>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -555,12 +559,14 @@ const QStringList kIconlessRibbonActions = {
     "Problems", // the dock's own toggleViewAction, which has never had one
     "Editor",     "Expanded", // Editor page, View
     "Search",     "Hex",      "Binary", "Decimal", // Memory page
+    "Wires Stay Active",                               // Processor page, Datapath
+    "Binary",     "Hexadecimal", "Decimal/Float",      // Processor page, Registers
 };
 
 const QList<PageGroups> kPageGroups = {
     {MainWindow::EditorTabIndex, {"View"}},
     {MainWindow::MemoryTabIndex, {"Find", "Display"}},
-    {MainWindow::ProcessorTabIndex, {}},
+    {MainWindow::ProcessorTabIndex, {"Datapath", "Registers"}},
     {MainWindow::CacheTabIndex, {}},
     {MainWindow::CompilerTabIndex, {}},
     {MainWindow::ProfilerTabIndex, {}},
@@ -1002,4 +1008,132 @@ TEST(RibbonStage3, MemorySearchPressesTheTabsOwnButton)
     const QString after = view->model()->index(0, 0).data().toString();
     EXPECT_NE(after, before) << "the table did not move to the searched address";
     EXPECT_EQ(after, QStringLiteral("0x100"));
+}
+
+TEST(RibbonStage3, WiresStayActiveIsTheMenusOwnAction)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    RibbonGroup *datapath = pageGroupNamed(bar, MainWindow::ProcessorTabIndex, "Datapath");
+    ASSERT_NE(datapath, nullptr);
+    ASSERT_EQ(datapath->buttons().size(), 1);
+    QAction *onRibbon = datapath->buttons().first()->defaultAction();
+    ASSERT_NE(onRibbon, nullptr);
+
+    // Settings > Processor > Wires Stay Active. Found by walking the menus
+    // rather than by label, so this is the object the menu shows.
+    QAction *fromMenu = nullptr;
+    for (QAction *menuAction : window.menuBar()->actions())
+    {
+        QMenu *menu = menuAction->menu();
+        if (!menu)
+            continue;
+        for (QAction *entry : menu->actions())
+        {
+            QMenu *submenu = entry->menu();
+            if (!submenu)
+                continue;
+            for (QAction *sub : submenu->actions())
+                if (sub->text() == QStringLiteral("Wires Stay Active"))
+                    fromMenu = sub;
+        }
+    }
+    ASSERT_NE(fromMenu, nullptr) << "the menu entry is gone";
+
+    // Pointer identity: one action, two places that show it.
+    EXPECT_EQ(onRibbon, fromMenu);
+    EXPECT_TRUE(onRibbon->isCheckable());
+    EXPECT_TRUE(onRibbon->shortcut().isEmpty()) << "nothing new on the ribbon gets a shortcut";
+}
+
+TEST(RibbonStage3, WiresStayActiveReachesTheCircuitSceneFromTheRibbon)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    // The scene through the view that shows it. ProcessorManager is not a
+    // child of the window (it is moved to its own thread), so the tab's
+    // graphics view is the way to reach what the setting actually drives.
+    auto *processorTab = window.findChild<ProcessorTab *>();
+    ASSERT_NE(processorTab, nullptr);
+    auto *view = processorTab->findChild<QGraphicsView *>();
+    ASSERT_NE(view, nullptr);
+    auto *scene = qobject_cast<CircuitScene *>(view->scene());
+    ASSERT_NE(scene, nullptr) << "the processor tab is not showing a circuit scene";
+
+    QToolButton *button =
+        pageGroupNamed(bar, MainWindow::ProcessorTabIndex, "Datapath")->buttons().first();
+
+    const bool before = scene->getWireStayActive();
+    button->click();
+    EXPECT_NE(scene->getWireStayActive(), before) << "the ribbon did not reach the scene";
+    EXPECT_EQ(button->isChecked(), scene->getWireStayActive());
+
+    button->click();
+    EXPECT_EQ(scene->getWireStayActive(), before);
+    EXPECT_EQ(button->isChecked(), scene->getWireStayActive());
+}
+
+TEST(RibbonStage3, RegisterDisplayBaseReachesTheComboAndTheModel)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *registers = window.findChild<RegisterContainer *>();
+    ASSERT_NE(registers, nullptr);
+
+    auto *combo = registers->findChild<QComboBox *>("displayType");
+    ASSERT_NE(combo, nullptr);
+    const QList<QTableView *> views = registers->findChildren<QTableView *>();
+    ASSERT_FALSE(views.isEmpty());
+    // Column 2 is "Value", the only one the base changes.
+    auto valueText = [&views] { return views.first()->model()->index(0, 2).data().toString(); };
+
+    RibbonGroup *group = pageGroupNamed(bar, MainWindow::ProcessorTabIndex, "Registers");
+    ASSERT_NE(group, nullptr);
+    ASSERT_EQ(group->buttons().size(), 3);
+
+    // The constructor selects Hexadecimal, and the ribbon starts in step.
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Hexadecimal"));
+    EXPECT_TRUE(valueText().startsWith(QStringLiteral("0x")));
+    expectOnlyChecked(group, "Hexadecimal");
+
+    buttonNamed(group, "Binary")->click();
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Binary")) << "the panel's combo did not move";
+    EXPECT_EQ(registers->displayBase(), Base::Binary);
+    EXPECT_TRUE(valueText().startsWith(QStringLiteral("0b")))
+        << "the model is not rendering in binary: " << valueText().toStdString();
+    expectOnlyChecked(group, "Binary");
+
+    buttonNamed(group, "Decimal/Float")->click();
+    EXPECT_EQ(combo->currentText(), QStringLiteral("Decimal/Float"));
+    EXPECT_EQ(registers->displayBase(), Base::Decimal);
+    EXPECT_FALSE(valueText().startsWith(QStringLiteral("0x"))) << valueText().toStdString();
+    EXPECT_FALSE(valueText().startsWith(QStringLiteral("0b"))) << valueText().toStdString();
+    expectOnlyChecked(group, "Decimal/Float");
+}
+
+TEST(RibbonStage3, RegisterDisplayBaseMirrorsBackFromTheCombo)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *registers = window.findChild<RegisterContainer *>();
+    ASSERT_NE(registers, nullptr);
+    auto *combo = registers->findChild<QComboBox *>("displayType");
+    ASSERT_NE(combo, nullptr);
+
+    RibbonGroup *group = pageGroupNamed(bar, MainWindow::ProcessorTabIndex, "Registers");
+    ASSERT_NE(group, nullptr);
+
+    combo->setCurrentText(QStringLiteral("Binary"));
+    expectOnlyChecked(group, "Binary");
+
+    combo->setCurrentText(QStringLiteral("Decimal/Float"));
+    expectOnlyChecked(group, "Decimal/Float");
+
+    combo->setCurrentText(QStringLiteral("Hexadecimal"));
+    expectOnlyChecked(group, "Hexadecimal");
 }

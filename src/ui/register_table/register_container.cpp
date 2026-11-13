@@ -35,6 +35,27 @@ class RegisterRangeProxyModel : public QSortFilterProxyModel
     int m_firstRow;
     int m_lastRowExclusive;
 };
+
+// The combo box's three entries, as the .ui spells them. One table instead
+// of an if-chain, so the label and the base cannot drift apart.
+struct BaseEntry
+{
+    const char *text;
+    Base        base;
+};
+constexpr BaseEntry baseEntries[] = {
+    {"Binary", Base::Binary},
+    {"Hexadecimal", Base::Hexadecimal},
+    {"Decimal/Float", Base::Decimal},
+};
+
+Base baseForText(const QString &text)
+{
+    for (const BaseEntry &entry : baseEntries)
+        if (text == QLatin1String(entry.text))
+            return entry.base;
+    return Base::Hexadecimal; // what the constructor selects, and the model's default
+}
 } // namespace
 
 RegisterContainer::RegisterContainer(QWidget *parent, RegisterFile *regfile)
@@ -48,18 +69,11 @@ RegisterContainer::RegisterContainer(QWidget *parent, RegisterFile *regfile)
     connect(ui->displayType, &QComboBox::currentTextChanged, this,
             [this](const QString &text)
             {
-                if (text == "Hexadecimal")
-                {
-                    m_registerModel->setDisplayBase(Base::Hexadecimal);
-                }
-                else if (text == "Binary")
-                {
-                    m_registerModel->setDisplayBase(Base::Binary);
-                }
-                else if (text == "Decimal/Float")
-                {
-                    m_registerModel->setDisplayBase(Base::Decimal);
-                }
+                const Base base = baseForText(text);
+                m_registerModel->setDisplayBase(base);
+                // Announced after the model has it, so anything that reacts
+                // sees the table already in the new base.
+                emit displayBaseChangedSignal(base);
             });
 }
 
@@ -104,6 +118,18 @@ void RegisterContainer::setupRegisterTable()
         section->setContentWidget(tableView);
         sectionsLayout->addWidget(section);
     }
+}
+
+void RegisterContainer::setDisplayBase(Base base)
+{
+    for (const BaseEntry &entry : baseEntries)
+        if (entry.base == base)
+            ui->displayType->setCurrentText(QLatin1String(entry.text));
+}
+
+Base RegisterContainer::displayBase() const
+{
+    return baseForText(ui->displayType->currentText());
 }
 
 void RegisterContainer::setRegisterFile(RegisterFile *regfile)

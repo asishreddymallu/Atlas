@@ -23,6 +23,21 @@ class RegisterContainer : public QWidget
     explicit RegisterContainer(QWidget *parent = nullptr, RegisterFile *regfile = nullptr);
     ~RegisterContainer();
     void setRegisterFile(RegisterFile *regfile);
+
+    /// Selects a display base by driving this panel's own combo box. The
+    /// combo stays the state; this only moves it, and its existing handler
+    /// does the rest. A base the combo does not offer is ignored.
+    void setDisplayBase(Base base);
+
+    /// The base the combo box currently shows.
+    Base displayBase() const;
+
+  signals:
+    /// Emitted whenever the combo box lands on a new base, whoever moved it,
+    /// so a second view of the same choice can follow it.
+    void displayBaseChangedSignal(Base base);
+
+  public:
     // private slots:
     //     void updateRegisterValue(size_t regIndex, uint64_t value);
   private:

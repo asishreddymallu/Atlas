@@ -68,6 +68,7 @@ private:
     void setUpPersistentGroups();
     void setUpEditorPage();
     void setUpMemoryPage();
+    void setUpProcessorPage();
     void setUpMenubar();
     void setUpProblemsDock();
     void setUpTabs();
@@ -89,6 +90,10 @@ private:
     // and mirror its in-tab buttons; the buttons stay the state.
     QAction           *m_editorViewAction   {nullptr};
     QAction           *m_expandedViewAction {nullptr};
+    // Settings > Processor > Wires Stay Active, held so the Processor page
+    // can show the menu's own action rather than a second checkbox for the
+    // same setting. Created where it always was, in setUpMenubar().
+    QAction           *m_wiresStayActiveAction {nullptr};
     // The execution controls, held rather than left local to setUpToolBar().
     // runFinishedSlot() used to recover them by walking
     // findChildren<QToolBar*>()[0] and comparing action->text() - text these
