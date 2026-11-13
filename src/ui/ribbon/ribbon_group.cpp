@@ -385,10 +385,33 @@ int RibbonGroup::currentWidth()
         int slotWidth = 0;
         if (QLayout *inner = slot->layout())
         {
-            // A column host: as wide as its widest cell.
+            // Two kinds of slot carry a layout and they measure differently.
+            // A COLUMN stacks its cells, so it is as wide as the widest one;
+            // a SEGMENTED RUN sits side by side, so it is as wide as all of
+            // them put together. Treating the second like the first reports
+            // about a third of its real width, the layout function then
+            // believes it fits, and the panel squeezes the labels away to
+            // nothing rather than moving the group into the overflow menu.
+            const bool sideBySide = qobject_cast<QHBoxLayout *>(inner) != nullptr;
+            int        cells      = 0;
             for (int j = 0; j < inner->count(); ++j)
-                if (QWidget *cell = inner->itemAt(j)->widget())
-                    slotWidth = std::max(slotWidth, cell->sizeHint().width());
+            {
+                QWidget *cell = inner->itemAt(j)->widget();
+                if (!cell)
+                    continue;
+                const int cellWidth = cell->sizeHint().width();
+                if (sideBySide)
+                {
+                    slotWidth += cellWidth;
+                    ++cells;
+                }
+                else
+                {
+                    slotWidth = std::max(slotWidth, cellWidth);
+                }
+            }
+            if (sideBySide && cells > 1)
+                slotWidth += inner->spacing() * (cells - 1);
         }
         else
         {

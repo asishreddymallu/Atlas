@@ -46,6 +46,7 @@
 #include <QGraphicsView>
 #include <QGuiApplication>
 #include <QPlainTextEdit>
+#include <QBoxLayout>
 #include <QPointer>
 #include <QLineEdit>
 #include <QPushButton>
@@ -2505,4 +2506,73 @@ TEST(RibbonStage6, TheFourNewIconsAreTaggedAndSharedCorrectly)
     // sharing the action rather than cloning it.
     EXPECT_EQ(themedIconOf(problems), Icon::Problems);
     EXPECT_EQ(themedIconOf(wires), Icon::Wires);
+}
+
+TEST(RibbonStage7, ASegmentedRunIsMeasuredBySummingIt)
+{
+    // A column and a segmented run both hang a layout off their slot, and
+    // they measure in opposite directions: a column is as wide as its widest
+    // cell, a run is as wide as all of them together. Measuring a run like a
+    // column reports about a third of its real width, the layout function
+    // then believes it fits, and the panel squeezes the labels away to
+    // nothing rather than moving the group into the overflow menu.
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    for (const QString &caption : {QStringLiteral("View"), QStringLiteral("Display"),
+                                   QStringLiteral("Registers"), QStringLiteral("Level")})
+    {
+        RibbonGroup *group = anyGroupNamed(bar, caption);
+        ASSERT_NE(group, nullptr) << caption.toStdString();
+        const QList<QToolButton *> buttons = group->buttons();
+        ASSERT_GE(buttons.size(), 2) << caption.toStdString();
+
+        int sum = 0, widest = 0;
+        for (QToolButton *button : buttons)
+        {
+            sum += button->sizeHint().width();
+            widest = std::max(widest, button->sizeHint().width());
+        }
+        // The group has margins and a divider on top of its content, so its
+        // width is at least the sum - and must be clear of the widest-cell
+        // answer, which is what the bug returned.
+        EXPECT_GE(group->fullWidth(), sum)
+            << "'" << caption.toStdString() << "' is measured as " << group->fullWidth()
+            << " but its segments need " << sum;
+        EXPECT_GT(sum, widest) << "'" << caption.toStdString()
+                               << "': the two measurements coincide here, so this proves nothing";
+    }
+
+    // A column still measures the other way, and that is checked on a column
+    // itself rather than on the whole Run group - whose two large buttons
+    // and three separators would swamp the comparison either way.
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+    int columnsSeen = 0;
+    for (QToolButton *button : run->buttons())
+    {
+        QWidget *host = button->parentWidget();
+        if (!host || !qobject_cast<QVBoxLayout *>(host->layout()))
+            continue; // a large button sits in the row directly
+        int sum = 0, widest = 0;
+        int cells = 0;
+        for (QObject *child : host->children())
+            if (auto *cell = qobject_cast<QToolButton *>(child))
+            {
+                sum += cell->sizeHint().width();
+                widest = std::max(widest, cell->sizeHint().width());
+                ++cells;
+            }
+        if (cells < 2)
+            continue;
+        ++columnsSeen;
+        EXPECT_EQ(host->sizeHint().width(), widest)
+            << "a column of " << cells << " is as wide as their sum, not their widest";
+        EXPECT_LT(widest, sum);
+    }
+    EXPECT_GT(columnsSeen, 0) << "no stacked column was examined";
 }
