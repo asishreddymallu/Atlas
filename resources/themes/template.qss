@@ -65,6 +65,7 @@ QTabBar::tab:selected {
 }
 QTabBar::tab:hover:!selected {
     color: {{foreground}};
+    background-color: {{currentLine}};
 }
 
 /* ── Buttons ───────────────────────────────────────────────────── */
@@ -236,6 +237,38 @@ QToolTip {
     border: 1px solid {{border}};
     border-radius: 4px;
     padding: 4px 8px;
+}
+
+/* ── Ribbon panel, captions and separators ─────────────────────
+ * The panel is FLAT. A vertical lift from surface to background was the
+ * other option and was tried: on a band this shallow it reads as a bevel and
+ * argues with the buttons, which have just had their boxes taken away. What
+ * the panel does need is an edge, so one hairline along the bottom separates
+ * chrome from content - the same job the old toolbar's border did. */
+#ribbonPanel {
+    background-color: {{background}};
+    border-bottom: 1px solid {{border}};
+}
+
+/* Captions name their group and should never compete with it: muted, and
+ * one step below button text. */
+QLabel[ribbonCaption="true"] {
+    color: {{mutedForeground}};
+    font-size: {{fontSizeSmall}};
+    padding: 0px;
+}
+
+/* Group rule and the thinner rule inside a group. Both are 1 px of the
+ * border token, inset equally top and bottom so every group's rule starts
+ * and ends on the same line, and given equal air on each side by the
+ * layouts' spacing. */
+QFrame#ribbonGroupDivider {
+    background-color: {{border}};
+    margin: 10px 0px;
+}
+QFrame#ribbonInnerSeparator {
+    background-color: {{border}};
+    margin: 8px 2px;
 }
 
 /* ── Ribbon buttons ────────────────────────────────────────────

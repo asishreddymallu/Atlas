@@ -123,12 +123,16 @@ RibbonGroup::RibbonGroup(const QString &caption, QWidget *parent) : QWidget(pare
     column->addWidget(rowHost, 1);
     column->addWidget(m_caption, 0);
 
+    // A plain styled widget, not a QFrame::VLine. A VLine takes its colour
+    // from the palette, which gave a hard near-white rule the theme had no
+    // say over; this one is a 1 px background in the border token, and the
+    // stylesheet can inset it top and bottom.
     auto *divider = new QFrame(this);
     m_divider     = divider;
     divider->setObjectName("ribbonGroupDivider");
-    divider->setFrameShape(QFrame::VLine);
-    divider->setFrameShadow(QFrame::Plain);
-    divider->setLineWidth(1);
+    divider->setFrameShape(QFrame::NoFrame);
+    divider->setAttribute(Qt::WA_StyledBackground, true);
+    divider->setFixedWidth(1);
 
     outer->addWidget(content, 1);
     outer->addWidget(divider, 0);
@@ -315,9 +319,9 @@ void RibbonGroup::addSeparator()
 {
     auto *line = new QFrame(this);
     line->setObjectName("ribbonInnerSeparator");
-    line->setFrameShape(QFrame::VLine);
-    line->setFrameShadow(QFrame::Plain);
-    line->setLineWidth(1);
+    line->setFrameShape(QFrame::NoFrame);
+    line->setAttribute(Qt::WA_StyledBackground, true);
+    line->setFixedWidth(1);
     addFullHeight(line);
 }
 
