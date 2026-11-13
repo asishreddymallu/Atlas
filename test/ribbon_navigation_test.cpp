@@ -23,6 +23,7 @@
 #include "ui/main_window/main_window.h"
 #include "ui/memory_tab/memory_tab.h"
 #include "ui/cache_tab/cache_config_widget.h"
+#include "ui/compiler_tab/compiler_tab.h"
 #include "ui/cache_tab/cache_tab.h"
 #include "ui/processor_tab/circuit_scene.h"
 #include "ui/processor_tab/processor_tab.h"
@@ -40,7 +41,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QComboBox>
+#include <QClipboard>
 #include <QGraphicsView>
+#include <QGuiApplication>
+#include <QPlainTextEdit>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -565,6 +569,7 @@ const QStringList kIconlessRibbonActions = {
     "Wires Stay Active",                               // Processor page, Datapath
     "Binary",     "Hexadecimal", "Decimal/Float",      // Processor page, Registers
     "Instruction", "L1",     "L2",                     // Cache page, Level
+    "Copy to Clipboard",                               // Compiler page, Output
 };
 
 const QList<PageGroups> kPageGroups = {
@@ -572,7 +577,7 @@ const QList<PageGroups> kPageGroups = {
     {MainWindow::MemoryTabIndex, {"Find", "Display"}},
     {MainWindow::ProcessorTabIndex, {"Datapath", "Registers"}},
     {MainWindow::CacheTabIndex, {"Level"}},
-    {MainWindow::CompilerTabIndex, {}},
+    {MainWindow::CompilerTabIndex, {"Build", "Output"}},
     {MainWindow::ProfilerTabIndex, {}},
 };
 } // namespace
@@ -1208,4 +1213,100 @@ TEST(RibbonStage3, CachePageOffersNoPolicyButton)
     auto *cacheTab = window.findChild<CacheTab *>();
     ASSERT_NE(cacheTab, nullptr);
     EXPECT_EQ(cacheTab->findChildren<CacheConfigWidget *>().size(), 3);
+}
+
+TEST(RibbonStage3, CompilerButtonsCallTheTabsOwnSlots)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *compilerTab = window.findChild<CompilerTab *>();
+    ASSERT_NE(compilerTab, nullptr);
+
+    auto *input  = compilerTab->findChild<QPlainTextEdit *>("inputTextEdit");
+    auto *output = compilerTab->findChild<QPlainTextEdit *>("outputTextEdit");
+    ASSERT_NE(input, nullptr);
+    ASSERT_NE(output, nullptr);
+
+    QToolButton *compile = buttonNamed(pageGroupNamed(bar, MainWindow::CompilerTabIndex, "Build"),
+                                       QStringLiteral("Compile"));
+    QToolButton *copy = buttonNamed(pageGroupNamed(bar, MainWindow::CompilerTabIndex, "Output"),
+                                    QStringLiteral("Copy to Clipboard"));
+    ASSERT_NE(compile, nullptr);
+    ASSERT_NE(copy, nullptr);
+
+    // Empty input is the one compile path that reaches no network: the tab
+    // writes its own error into the output pane and returns. That is enough
+    // to show the ribbon button really calls the tab's slot.
+    input->setPlainText(QString());
+    output->setPlainText(QString());
+    compile->click();
+    EXPECT_TRUE(output->toPlainText().contains(QStringLiteral("Input is empty")))
+        << "the ribbon did not reach onConvertToAssemblyClicked(): '"
+        << output->toPlainText().toStdString() << "'";
+
+    // Copy takes whatever is in the output pane to the clipboard.
+    output->setPlainText(QStringLiteral("addi x1, x0, 7"));
+    QGuiApplication::clipboard()->setText(QStringLiteral("something else"));
+    copy->click();
+    EXPECT_EQ(QGuiApplication::clipboard()->text(), QStringLiteral("addi x1, x0, 7"))
+        << "the ribbon did not reach onCopyToMainEditorClicked()";
+}
+
+TEST(RibbonStage3, CompileButtonFollowsTheTabsDisabledState)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    auto *compilerTab = window.findChild<CompilerTab *>();
+    ASSERT_NE(compilerTab, nullptr);
+
+    auto *inTab = compilerTab->findChild<QPushButton *>("convertToAssemblyButton");
+    ASSERT_NE(inTab, nullptr);
+
+    QToolButton *onRibbon = buttonNamed(pageGroupNamed(bar, MainWindow::CompilerTabIndex, "Build"),
+                                        QStringLiteral("Compile"));
+    ASSERT_NE(onRibbon, nullptr);
+
+    // They start in step.
+    EXPECT_TRUE(inTab->isEnabled());
+    EXPECT_TRUE(onRibbon->isEnabled());
+    EXPECT_TRUE(compilerTab->isCompileEnabled());
+
+    // A compile in flight is exactly this: the tab disables its own button.
+    // The ribbon must not stay clickable, or it would start a second one.
+    inTab->setEnabled(false);
+    EXPECT_FALSE(compilerTab->isCompileEnabled());
+    EXPECT_FALSE(onRibbon->isEnabled()) << "the ribbon can still start a second compile";
+
+    inTab->setEnabled(true);
+    EXPECT_TRUE(onRibbon->isEnabled()) << "the ribbon button never came back";
+
+    // Copy to Clipboard has no disabled state in the tab, so the ribbon
+    // gives it none either rather than inventing one.
+    auto *inTabCopy = compilerTab->findChild<QPushButton *>("copyToMainEditorButton");
+    ASSERT_NE(inTabCopy, nullptr);
+    EXPECT_TRUE(inTabCopy->isEnabled());
+    QToolButton *copy = buttonNamed(pageGroupNamed(bar, MainWindow::CompilerTabIndex, "Output"),
+                                    QStringLiteral("Copy to Clipboard"));
+    ASSERT_NE(copy, nullptr);
+    EXPECT_TRUE(copy->isEnabled());
+}
+
+TEST(RibbonStage3, ProfilerPageStaysEmpty)
+{
+    // Nothing in the profiler tab is a command, so its page carries only the
+    // persistent groups. No placeholder: an empty page says "nothing here"
+    // more honestly than a greyed-out button that never does anything.
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    RibbonPage *page = bar->page(MainWindow::ProfilerTabIndex);
+    ASSERT_NE(page, nullptr);
+    EXPECT_EQ(page->groupCount(), 0);
+    EXPECT_TRUE(page->groups().isEmpty());
+
+    // ...and the persistent groups are still reachable from it.
+    EXPECT_EQ(bar->persistentGroupCount(), 2);
 }

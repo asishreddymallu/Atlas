@@ -2,6 +2,7 @@
 #include "config/app_settings.h"
 #include "ui_compiler_tab.h"
 #include <QClipboard>
+#include <QEvent>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -26,6 +27,11 @@ CompilerTab::CompilerTab(QWidget *parent) : KitesTab(parent), ui(new Ui::Compile
             &CompilerTab::onCopyToMainEditorClicked);
     connect(&AppSettings::getInstance(), &AppSettings::compilerOutputBorderStyleChangedSignal, this,
             &CompilerTab::applyOutputBorderStyle);
+    // Watching the button rather than emitting from the compile code: the
+    // enabled state is the button's, and anything that changes it - the
+    // compile below, a parent being disabled, something added later - is
+    // announced without having to remember to.
+    ui->convertToAssemblyButton->installEventFilter(this);
     ui->splitter_2->setStretchFactor(0, 3);
     ui->splitter_2->setStretchFactor(1, 1);
     ui->outputTextEdit->setReadOnly(true);
@@ -34,6 +40,20 @@ CompilerTab::CompilerTab(QWidget *parent) : KitesTab(parent), ui(new Ui::Compile
     ui->outputTextEdit->setPlaceholderText(
         "Generated assembly appears here after you compile.");
     applyOutputBorderStyle();
+}
+
+bool CompilerTab::eventFilter(QObject *watched, QEvent *event)
+{
+    // EnabledChange arrives after the state has already changed, so the
+    // button is the right thing to ask.
+    if (watched == ui->convertToAssemblyButton && event->type() == QEvent::EnabledChange)
+        emit compileEnabledChangedSignal(ui->convertToAssemblyButton->isEnabled());
+    return KitesTab::eventFilter(watched, event);
+}
+
+bool CompilerTab::isCompileEnabled() const
+{
+    return ui->convertToAssemblyButton->isEnabled();
 }
 
 void CompilerTab::applyOutputBorderStyle()

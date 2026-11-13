@@ -70,6 +70,7 @@ private:
     void setUpMemoryPage();
     void setUpProcessorPage();
     void setUpCachePage();
+    void setUpCompilerPage();
     void setUpMenubar();
     void setUpProblemsDock();
     void setUpTabs();

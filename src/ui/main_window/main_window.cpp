@@ -126,6 +126,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setUpMemoryPage();
     setUpProcessorPage();
     setUpCachePage();
+    setUpCompilerPage();
 
     // m_registerContainer = new RegisterContainer(this);
     mainLayout->setSpacing(0);
@@ -609,6 +610,40 @@ void MainWindow::setUpCachePage()
     // without emitting configChangedSignal, so the widget would claim LRU
     // while the cache kept running whatever was selected before. Reported
     // rather than wired; see the Stage 3 report.
+}
+
+void MainWindow::setUpCompilerPage()
+{
+    auto *compilerTab = dynamic_cast<CompilerTab *>(m_tabs[TabIndex::CompilerTabIndex]);
+    if (!compilerTab)
+        return;
+
+    RibbonPage *page = m_ribbon->page(toIndex(TabIndex::CompilerTabIndex));
+
+    RibbonGroup *build = page->addGroup("Build");
+    auto        *compileAction = new QAction("Compile", this);
+    // The compiler tab's own icon: this button *is* the compile command, so
+    // it is the same idea, not a tab icon borrowed for something else.
+    setThemedIcon(compileAction, Icon::Compiler, largeIconSize);
+    compileAction->setToolTip("Compile the C/C++ in this tab to assembly");
+    build->addLarge(compileAction);
+    connect(compileAction, &QAction::triggered, compilerTab,
+            [compilerTab] { compilerTab->onConvertToAssemblyClicked(); });
+
+    // The tab disables its Compile button for the length of a compile. The
+    // ribbon has to follow it, or it would be a way to start a second one.
+    compileAction->setEnabled(compilerTab->isCompileEnabled());
+    connect(compilerTab, &CompilerTab::compileEnabledChangedSignal, compileAction,
+            &QAction::setEnabled);
+
+    // The label is the one the in-tab button carries, because that is what
+    // the command does: it copies to the clipboard, not to the editor.
+    RibbonGroup *output = page->addGroup("Output");
+    auto        *copyAction = new QAction("Copy to Clipboard", this);
+    copyAction->setToolTip("Copy the generated assembly to the clipboard");
+    output->addSmall(copyAction);
+    connect(copyAction, &QAction::triggered, compilerTab,
+            [compilerTab] { compilerTab->onCopyToMainEditorClicked(); });
 }
 
 void MainWindow::setCurrentTab(TabIndex index)
