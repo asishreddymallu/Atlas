@@ -53,6 +53,7 @@
 #include <QToolBar>
 #include <QWidgetAction>
 #include <algorithm>
+#include <functional>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QToolButton>
@@ -1309,4 +1310,47 @@ TEST(RibbonStage3, ProfilerPageStaysEmpty)
 
     // ...and the persistent groups are still reachable from it.
     EXPECT_EQ(bar->persistentGroupCount(), 2);
+}
+
+TEST(RibbonStage3, NothingOnTheRibbonAddedAShortcut)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // Shared actions keep the shortcut they already had; nothing built for
+    // the ribbon gets one. A second action with the same key sequence is
+    // what produces "Ambiguous shortcut overload" at runtime, which the
+    // smoke harness also watches for.
+    // Everything the menus and the toolbar already owned, submenus included.
+    QList<QAction *> existing = toolbarActions(window);
+    std::function<void(const QList<QAction *> &)> walk = [&](const QList<QAction *> &actions)
+    {
+        for (QAction *a : actions)
+        {
+            existing.append(a);
+            if (QMenu *menu = a->menu())
+                walk(menu->actions());
+        }
+    };
+    walk(window.menuBar()->actions());
+
+    for (QAction *a : ribbonActions(bar))
+    {
+        if (a->shortcut().isEmpty())
+            continue;
+        EXPECT_TRUE(existing.contains(a))
+            << "'" << a->text().toStdString() << "' is a new ribbon action with a shortcut ("
+            << a->shortcut().toString().toStdString() << ")";
+    }
+
+    // And the window as a whole still holds the same seven, all distinct.
+    QStringList sequences;
+    for (QAction *a : window.findChildren<QAction *>())
+        if (!a->shortcut().isEmpty())
+            sequences << a->shortcut().toString();
+    EXPECT_EQ(sequences.size(), 7);
+    QStringList distinct = sequences;
+    distinct.removeDuplicates();
+    EXPECT_EQ(distinct.size(), sequences.size()) << "two actions share a key sequence";
 }
