@@ -291,6 +291,21 @@ QToolBar QToolButton:disabled {
     border: 1px solid {{accent}};
 }
 
+/* Small ribbon buttons stack in columns of two or three, so their height has
+ * to come down to the icon plus a hairline - the generic button rule's 5 px
+ * of vertical padding and 22 px min-height would need 115 px for a column of
+ * three, in a panel band that is 69 px tall.
+ *
+ * Geometry only: no colour, no border, nothing the theme owns. Horizontal
+ * padding is untouched. Deliberately not scoped to #ribbonPanel, so the
+ * probe RibbonGroup measures the grid with is subject to the same rule as
+ * the real buttons. */
+QToolButton[ribbonStacked="true"] {
+    padding-top: 1px;
+    padding-bottom: 1px;
+    min-height: 0px;
+}
+
 /* step-interval spinbox lives in the toolbar */
 QSpinBox {
     background-color: {{surface}};

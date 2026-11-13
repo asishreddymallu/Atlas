@@ -41,6 +41,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QComboBox>
+#include <QApplication>
 #include <QClipboard>
 #include <QGraphicsView>
 #include <QGuiApplication>
@@ -1560,4 +1561,211 @@ TEST(RibbonStage4, EveryToolbarCommandIsOnTheRibbonAsTheSameObject)
     for (QAction *a : window.menuBar()->actions())
         menus << a->text();
     EXPECT_EQ(menus, (QStringList{"&File", "&Settings", "&Help", "&View"}));
+}
+
+// ════════════════ Stage 4B1: small buttons stack in columns ═══════════════
+//
+// Nothing here hard-codes a pixel count. The capacity and the cell height are
+// measured from the style and the font at runtime, so these assertions hold
+// at a different font size or device pixel ratio instead of pinning this
+// machine's numbers.
+
+namespace
+{
+/// The packing rule, written out independently of RibbonGroup: items are
+/// filled down a column until it is full, then a new column starts, and a
+/// separator or a large button ends the column in progress.
+QList<int> expectedColumns(const QList<int> &runsBetweenSeparators, int capacity)
+{
+    QList<int> columns;
+    for (int items : runsBetweenSeparators)
+        while (items > 0)
+        {
+            const int take = std::min(items, capacity);
+            columns << take;
+            items -= take;
+        }
+    return columns;
+}
+
+RibbonGroup *anyGroupNamed(RibbonBar *bar, const QString &caption)
+{
+    if (RibbonGroup *g = persistentGroupNamed(bar, caption))
+        return g;
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *g : bar->page(p)->groups())
+            if (g->caption() == caption)
+                return g;
+    return nullptr;
+}
+} // namespace
+
+TEST(RibbonStage4B1, SmallButtonsStackIntoColumns)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+    const int capacity = run->rowCapacity();
+    EXPECT_LE(capacity, 3);
+    // Two is the design expectation, not a law of the layout: a 20 px icon
+    // row fits twice inside a band sized for a 32 px icon under any sane
+    // font. If a font ever makes this 1 the ribbon silently goes back to one
+    // button per column and gets much wider, so it is worth being told.
+    EXPECT_GE(capacity, 2) << "nothing is stacking; every small button is its own column";
+
+    // Run has three separator-delimited runs of small items: Pause+Step,
+    // Undo+Redo, Processor+the speed spin box. Each is packed on its own.
+    EXPECT_EQ(run->columnSizes(), expectedColumns({2, 2, 2}, capacity));
+
+    // Groups with no separators pack as one run.
+    const QList<QPair<QString, int>> plain = {
+        {"View", 2}, {"Find", 1}, {"Display", 3}, {"Datapath", 1},
+        {"Registers", 3}, {"Level", 3}, {"Output", 1}, {"File", 1},
+    };
+    for (const auto &[caption, items] : plain)
+    {
+        RibbonGroup *group = anyGroupNamed(bar, caption);
+        ASSERT_NE(group, nullptr) << caption.toStdString();
+        EXPECT_EQ(group->columnSizes(), expectedColumns({items}, capacity))
+            << "group '" << caption.toStdString() << "'";
+    }
+
+    // Build holds only the large Compile button, so it has no column at all.
+    RibbonGroup *build = anyGroupNamed(bar, "Build");
+    ASSERT_NE(build, nullptr);
+    EXPECT_TRUE(build->columnSizes().isEmpty());
+
+    // Stacking must actually have happened, or every assertion above is the
+    // old one-per-column layout passing by accident.
+    if (capacity > 1)
+        EXPECT_LT(run->columnSizes().size(), 6)
+            << "six columns means nothing stacked";
+}
+
+TEST(RibbonStage4B1, StackingAddsNoHeightToThePanel)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // A group holding one large button and nothing else is the reference
+    // band: whatever a large icon-over-text button needs, plus the caption
+    // and the margins. If a column ever overflowed, a real group would come
+    // out taller than this and the panel would grow with it.
+    //
+    // The reference button is given an explicit 32 px icon. kites_test does
+    // not link the .qrc objects, so the window's real large buttons have
+    // null icons and are shorter here than in the application - but the band
+    // RibbonGroup derives its capacity from is measured with a synthetic
+    // pixmap, so the reference has to carry one too or it would be comparing
+    // against a different number than the production code used.
+    QPixmap placeholder(32, 32);
+    placeholder.fill(Qt::transparent);
+    QAction reference("Reference", &window);
+    reference.setIcon(QIcon(placeholder));
+
+    RibbonGroup oneLarge("Reference");
+    oneLarge.addLarge(&reference);
+    const int band = oneLarge.sizeHint().height();
+    EXPECT_GT(band, 0);
+
+    int tallest = 0;
+    auto check = [band, &tallest](RibbonGroup *group)
+    {
+        const int h = group->sizeHint().height();
+        tallest = std::max(tallest, h);
+        EXPECT_LE(h, band) << "group '" << group->caption().toStdString()
+                           << "' is taller than the band a large button defines";
+    };
+    for (int i = 0; i < bar->persistentGroupCount(); ++i)
+        check(bar->persistentGroup(i));
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            check(group);
+
+    // The panel is exactly as tall as its tallest group and no taller than
+    // the band. The application's own 97 px is asserted by the out-of-tree
+    // screenshot harness, which links the resources and the stylesheet; this
+    // is the part that holds whatever the font and the icons turn out to be.
+    QWidget *panel = bar->findChild<QWidget *>("ribbonPanel");
+    ASSERT_NE(panel, nullptr);
+    EXPECT_EQ(panel->sizeHint().height(), tallest);
+    EXPECT_LE(panel->sizeHint().height(), band) << "stacking made the panel taller";
+}
+
+TEST(RibbonStage4B1, TheSpeedSpinBoxIsStillOneWidgetInTheRunGroup)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    int count = 0;
+    for (QSpinBox *candidate : window.findChildren<QSpinBox *>())
+        if (candidate->suffix() == QStringLiteral(" ms"))
+            ++count;
+    EXPECT_EQ(count, 1) << "the spin box was copied, not moved into a column";
+
+    QSpinBox *spin = speedSpin(window);
+    ASSERT_NE(spin, nullptr);
+
+    // Stacking reparents it into a column host, which is inside the Run
+    // group, which is inside the ribbon. One parent, one owner, one object.
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+    EXPECT_TRUE(run->isAncestorOf(spin)) << "the spin box left the Run group";
+    EXPECT_TRUE(bar->isAncestorOf(spin));
+    EXPECT_NE(spin->parentWidget(), nullptr);
+
+    // Unchanged in every way that is not its position.
+    EXPECT_EQ(spin->minimum(), 1);
+    EXPECT_EQ(spin->maximum(), 10000);
+    EXPECT_EQ(spin->value(), 1000);
+    EXPECT_EQ(spin->suffix(), QStringLiteral(" ms"));
+}
+
+TEST(RibbonStage4B1, NoButtonIsClippedOnAnyPage)
+{
+    MainWindow window;
+    window.resize(1400, 900);
+    window.show();
+    QApplication::processEvents();
+
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    int examined = 0;
+    auto check = [&examined](RibbonGroup *group)
+    {
+        const QRect bounds = group->rect();
+        for (QToolButton *button : group->buttons())
+        {
+            if (!button->isVisible())
+                continue;
+            const QRect placed(button->mapTo(group, QPoint(0, 0)), button->size());
+            EXPECT_TRUE(bounds.contains(placed))
+                << "'" << button->text().toStdString() << "' in group '"
+                << group->caption().toStdString() << "' sticks out of its group: button "
+                << placed.x() << "," << placed.y() << " " << placed.width() << "x"
+                << placed.height() << " group " << bounds.width() << "x" << bounds.height();
+            // A button squeezed below what it asked to draw would clip its
+            // icon or its text.
+            EXPECT_GE(button->height(), button->minimumSizeHint().height())
+                << "'" << button->text().toStdString() << "' is shorter than it can draw in";
+            ++examined;
+        }
+    };
+
+    for (int page = 0; page < bar->count(); ++page)
+    {
+        window.setCurrentTab(static_cast<MainWindow::TabIndex>(page));
+        QApplication::processEvents();
+        for (int i = 0; i < bar->persistentGroupCount(); ++i)
+            check(bar->persistentGroup(i));
+        for (RibbonGroup *group : bar->page(page)->groups())
+            check(group);
+    }
+    EXPECT_GT(examined, 0) << "no buttons were examined";
 }

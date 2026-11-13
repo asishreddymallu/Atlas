@@ -411,8 +411,9 @@ void MainWindow::setUpPersistentGroups()
     RibbonGroup *run = m_ribbon->addPersistentGroup("Run");
     run->addLarge(m_runAction);
     run->addLarge(m_debugAction);
-    run->addWidget(m_stepDelaySpin); // its only home since the toolbar went
     run->addSeparator();
+    // Small items stack in columns, and a separator starts a new one, so the
+    // three pairs below read as three blocks: transport, history, settings.
     run->addSmall(m_pauseAction);
     run->addSmall(m_stepAction);
     run->addSeparator();
@@ -420,6 +421,10 @@ void MainWindow::setUpPersistentGroups()
     run->addSmall(m_redoAction);
     run->addSeparator();
     run->addSmall(m_processorAction);
+    // Under Processor rather than after Debug Run, so it shares that column
+    // instead of standing alone. Still the one spin box with one parent; only
+    // which column holds it changed, and buttons() order is untouched.
+    run->addWidget(m_stepDelaySpin); // its only home since the toolbar went
 
     RibbonGroup *file = m_ribbon->addPersistentGroup("File");
     file->addLarge(m_openAction);
