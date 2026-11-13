@@ -248,9 +248,17 @@ Recorded because they changed reported columns on directive lines.
   a `QStackedWidget` takes the largest of its children's minimums and the
   busiest page therefore set the floor for every tab. `RibbonPage` now
   reports a zero horizontal minimum and `RibbonBar` reports
-  `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron -
-  which is **617 px** since the buttons lost their padding in Stage 5, and so
-  never binds. See `src/ui/ribbon/ribbon_layout.h`.
+  `ribbonMinimumWidth()` - the persistent groups compact, plus the chevron.
+  Measured at the shipped state that is **594 px**: Run 338 + File 219 +
+  chevron 37. It does not bind, and would have to grow by 255 px to.
+
+  (An earlier draft of this entry said 617. That was taken halfway through
+  Stage 5, after the buttons lost their padding but before the captions
+  shrank, and the captions are part of a group's width. 594 is the number
+  `RibbonBar::minimumSizeHint()` returns now, and it is read from
+  `RibbonGroup::fullWidth()` / `compactWidth()` - not from
+  `minimumSizeHint()`, which is a different and larger number that the
+  harness used to print beside it.) See `src/ui/ribbon/ribbon_layout.h`.
 - **Below 849 px** the window simply refuses to shrink. Nothing is clipped
   and nothing is hidden; the layout stops rather than cutting anything off.
 - **To go lower**, the register panel (minimum 225 px, maximum 350 px) would
