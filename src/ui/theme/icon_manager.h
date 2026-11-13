@@ -57,8 +57,9 @@ class IconManager //: QObject
 public:
     static IconManager &getInstance();
     ~IconManager() = default;
-    // Default matches the icon size the toolbar and sidebar request, so the
-    // rasterised pixmap never has to be scaled up at paint time.
+    // Default matches the size the tab strip and the small ribbon buttons
+    // ask for, so the rasterised pixmap never has to be scaled up at paint
+    // time. (It named the toolbar and the sidebar until both were retired.)
     QIcon getIcon(Icon icon, QSize size = QSize(smallRibbonIconSize, smallRibbonIconSize)) const;
 private:
     IconManager();

@@ -24,8 +24,8 @@ namespace Kites
  * caller supplies, through QToolButton::setDefaultAction(), so text, icon,
  * tooltip, enabled and checked state all stay with that action and are
  * mirrored by Qt in both directions. Putting the same action on a ribbon
- * button and on a menu or toolbar therefore creates no second copy of its
- * state and no second keyboard shortcut.
+ * button and on a menu therefore creates no second copy of its state and no
+ * second keyboard shortcut.
  */
 class RibbonGroup : public QWidget
 {
