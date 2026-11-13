@@ -238,6 +238,42 @@ QMenu::item:selected {
 QMenu::item:disabled {
     color: {{mutedForeground}};
 }
+/* A checked entry has to read as checked whether or not it carries an icon.
+ * Qt puts the icon in the indicator column when there is one, so an icon
+ * takes the check mark's place and the state disappears - Settings >
+ * Processor > Wires Stay Active was pixel-identical checked and unchecked
+ * once it gained one.
+ *
+ * The accent bar down the leading edge is what carries the state, for the
+ * same reason it does on the ribbon: a fill subtle enough not to shout
+ * cannot clear 3:1 on its own, and a 2 px bar of {{accent}} does. The fill
+ * reinforces it. Entries that have no icon keep their check mark as well,
+ * so they end up with both.
+ *
+ * Padding is NOT changed: the 2 px the border takes is given back out of
+ * padding-left, so the text sits exactly where it did and a checked entry
+ * does not jump. The icon column, the item radius and the :selected tint
+ * are untouched. */
+QMenu::item:checked {
+    background-color: {{currentLine}};
+    border-left: 2px solid {{accent}};
+    padding-left: 10px;
+}
+/* Hovered, the fill becomes {{selection}} - and {{accent}} on {{selection}}
+ * is the same hue in kites_dark and falls to 2.53:1, so the bar would all
+ * but vanish exactly when the pointer is on it. It switches to
+ * {{foreground}} there, which is 4.81:1 at worst and reads as the bar
+ * brightening with everything else under the pointer. */
+QMenu::item:checked:selected {
+    background-color: {{selection}};
+    border-left: 2px solid {{foreground}};
+    padding-left: 10px;
+}
+QMenu::item:checked:disabled {
+    background-color: transparent;
+    border-left: 2px solid {{mutedForeground}};
+    padding-left: 10px;
+}
 QMenu::separator {
     height: 1px;
     background-color: {{border}};
