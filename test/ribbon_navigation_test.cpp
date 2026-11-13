@@ -1769,3 +1769,101 @@ TEST(RibbonStage4B1, NoButtonIsClippedOnAnyPage)
     }
     EXPECT_GT(examined, 0) << "no buttons were examined";
 }
+
+// ═══════════════ Stage 4B2: measuring a group, and overflowability ════════
+
+TEST(RibbonStage4B2, MeasuringAGroupLeavesItInTheModeItWasIn)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+
+    // Asked while full: still full afterwards, and the labels are back.
+    ASSERT_FALSE(run->isCompact());
+    const QStringList before = [run]
+    {
+        QStringList styles;
+        for (QToolButton *b : run->buttons())
+            styles << QString::number(b->toolButtonStyle());
+        return styles;
+    }();
+
+    const int full    = run->fullWidth();
+    const int compact = run->compactWidth();
+    EXPECT_FALSE(run->isCompact()) << "measuring left the group compact";
+
+    QStringList after;
+    for (QToolButton *b : run->buttons())
+        after << QString::number(b->toolButtonStyle());
+    EXPECT_EQ(after, before) << "measuring changed how the buttons draw";
+
+    EXPECT_GT(full, 0);
+    EXPECT_GT(compact, 0);
+    EXPECT_LE(compact, full) << "compact is not narrower than full";
+
+    // Asked while compact: still compact afterwards.
+    run->setCompact(true);
+    EXPECT_EQ(run->fullWidth(), full);
+    EXPECT_EQ(run->compactWidth(), compact);
+    EXPECT_TRUE(run->isCompact()) << "measuring left the group full";
+    run->setCompact(false);
+}
+
+TEST(RibbonStage4B2, WidthsAreCachedAndDroppedOnAStyleChange)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    RibbonGroup *group = persistentGroupNamed(bar, "File");
+    ASSERT_NE(group, nullptr);
+
+    const int first = group->fullWidth();
+    EXPECT_EQ(group->fullWidth(), first) << "a second ask gave a different answer";
+
+    // The events a theme change and a font change arrive as. Delivered
+    // directly, because kites_test has no themes to switch between.
+    QEvent styleChange(QEvent::StyleChange);
+    QApplication::sendEvent(group, &styleChange);
+    EXPECT_EQ(group->fullWidth(), first) << "re-measuring after a style change disagreed";
+
+    QEvent fontChange(QEvent::FontChange);
+    QApplication::sendEvent(group, &fontChange);
+    EXPECT_EQ(group->fullWidth(), first);
+
+    // The cache really is dropped, not just re-read: a wider label changes
+    // the answer only because the measurement was taken again.
+    QAction extra("A very much longer label than before", &window);
+    group->addSmall(&extra);
+    EXPECT_GT(group->fullWidth(), first) << "the cached width survived a new button";
+}
+
+TEST(RibbonStage4B2, OnlyGroupsOfPlainButtonsCanOverflow)
+{
+    MainWindow window;
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+
+    // Run holds the speed spin box, so it can never be shown as menu items.
+    RibbonGroup *run = persistentGroupNamed(bar, "Run");
+    ASSERT_NE(run, nullptr);
+    EXPECT_FALSE(run->isOverflowable()) << "the group holding the spin box says it can overflow";
+
+    // Everything else is buttons only.
+    EXPECT_TRUE(persistentGroupNamed(bar, "File")->isOverflowable());
+    for (int p = 0; p < bar->count(); ++p)
+        for (RibbonGroup *group : bar->page(p)->groups())
+            EXPECT_TRUE(group->isOverflowable())
+                << "page group '" << group->caption().toStdString() << "'";
+
+    // ...and a page group stops being overflowable the moment one is added.
+    RibbonGroup  fresh("Fresh");
+    QAction      action("Action", &window);
+    fresh.addSmall(&action);
+    EXPECT_TRUE(fresh.isOverflowable());
+
+    auto *spin = new QSpinBox;
+    fresh.addWidget(spin);
+    EXPECT_FALSE(fresh.isOverflowable()) << "a group given a widget still claims it can overflow";
+}

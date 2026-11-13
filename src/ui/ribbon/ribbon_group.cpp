@@ -3,6 +3,9 @@
 #include "ui/theme/icon_manager.h"
 
 #include <QAction>
+#include <QEvent>
+#include <QLayout>
+#include <QLayoutItem>
 #include <QFrame>
 #include <QIcon>
 #include <QPixmap>
@@ -42,6 +45,28 @@ constexpr const char *stackedProperty = "ribbonStacked";
 // is whatever a large icon-over-text button asks for under the current style,
 // font and device pixel ratio. The probe is built and thrown away; it is the
 // same question the real large buttons answer when they are laid out.
+// Drops the cached size hint of a layout and of every layout under it.
+// Drops every cached size hint under `widget`, deepest first.
+//
+// QLayout::invalidate() on the outer layout alone is not enough: it marks
+// only itself dirty, and the buttons sit three layouts down - the group's,
+// the content column's, the row's, then a column host's. Walking down and
+// calling updateGeometry() on the way back up is what marks each parent
+// layout dirty, so the next sizeHint() is computed rather than remembered.
+void refreshGeometry(QWidget *widget)
+{
+    if (!widget)
+        return;
+    if (QLayout *own = widget->layout())
+    {
+        for (int i = 0; i < own->count(); ++i)
+            if (QWidget *child = own->itemAt(i)->widget())
+                refreshGeometry(child);
+        own->invalidate();
+    }
+    widget->updateGeometry();
+}
+
 int contentHeight()
 {
     QToolButton probe;
@@ -152,6 +177,7 @@ QToolButton *RibbonGroup::makeButton(QAction *action, Qt::ToolButtonStyle style)
     button->setFocusPolicy(Qt::NoFocus);
 
     m_buttons.append(button);
+    invalidateWidths();
     if (m_compact)
         button->setToolButtonStyle(compactStyleFor(button));
     return button;
@@ -246,8 +272,12 @@ void RibbonGroup::addWidget(QWidget *widget)
 {
     if (!widget)
         return;
-    // Reparented into the column, not copied: this is the one speed spin box,
-    // and it still has exactly one parent.
+    // A menu entry is a QAction and this is not one, so from here the group
+    // can never be moved into the overflow menu. It is also the reason the
+    // Run group is pinned: a widget has exactly one parent, and this is the
+    // one speed spin box.
+    m_hasPlainWidget = true;
+    // Reparented into the column, not copied.
     addToColumn(widget);
 }
 
@@ -294,5 +324,84 @@ void RibbonGroup::setCompact(bool compact)
 bool RibbonGroup::isCompact() const
 {
     return m_compact;
+}
+
+int RibbonGroup::currentWidth()
+{
+    // Recursive, and that matters: QLayout::invalidate() drops only its own
+    // cached hint, and the buttons sit three layouts down - the group's, the
+    // content column's, the row's, then the column host's. Invalidating just
+    // the outer one gives back the previous answer.
+    refreshGeometry(this);
+    if (QLayout *own = layout())
+        own->activate();
+    // sizeHint, not minimumSizeHint: the question the layout function asks is
+    // how wide this group wants to be, and a QToolButton's minimumSizeHint
+    // is its icon alone - it would happily elide every label away and report
+    // the same number for "Run" and "Copy to Clipboard".
+    return sizeHint().width();
+}
+
+void RibbonGroup::measure()
+{
+    if (m_fullWidth >= 0 && m_compactWidth >= 0)
+        return;
+
+    const bool wasCompact  = m_compact;
+    const bool wasUpdating = updatesEnabled();
+    // Nothing is painted between here and the restore, so flipping the mode
+    // twice cannot show.
+    setUpdatesEnabled(false);
+
+    setCompact(false);
+    m_fullWidth = currentWidth();
+    setCompact(true);
+    m_compactWidth = currentWidth();
+
+    setCompact(wasCompact);
+    currentWidth(); // re-resolve the layout for the mode we are leaving in
+    setUpdatesEnabled(wasUpdating);
+}
+
+int RibbonGroup::fullWidth()
+{
+    measure();
+    return m_fullWidth;
+}
+
+int RibbonGroup::compactWidth()
+{
+    measure();
+    return m_compactWidth;
+}
+
+void RibbonGroup::invalidateWidths()
+{
+    m_fullWidth    = -1;
+    m_compactWidth = -1;
+}
+
+bool RibbonGroup::isOverflowable() const
+{
+    return !m_hasPlainWidget;
+}
+
+void RibbonGroup::changeEvent(QEvent *event)
+{
+    switch (event->type())
+    {
+        // A theme reapplies the application stylesheet, which reaches every
+        // widget as a StyleChange. Both of the font cases matter because the
+        // cells are sized from font metrics.
+        case QEvent::StyleChange:
+        case QEvent::FontChange:
+        case QEvent::ApplicationFontChange:
+        case QEvent::LayoutDirectionChange:
+            invalidateWidths();
+            break;
+        default:
+            break;
+    }
+    QWidget::changeEvent(event);
 }
 } // namespace Kites

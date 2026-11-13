@@ -4,6 +4,7 @@
 #include <QWidget>
 
 class QAction;
+class QEvent;
 class QHBoxLayout;
 class QVBoxLayout;
 class QLabel;
@@ -75,8 +76,43 @@ class RibbonGroup : public QWidget
     void setCompact(bool compact);
     bool isCompact() const;
 
+    /**
+     * @brief The group's width in each mode, without leaving it in the other.
+     *
+     * The layout function needs both numbers at once, and the panel must not
+     * flicker while they are taken. The measurement flips the mode with
+     * painting switched off and restores exactly what it found, so the group
+     * is in the same state afterwards as before.
+     *
+     * The pair is cached, because this is asked on every resize. The cache is
+     * dropped on a font or style change - a theme reapplies the stylesheet,
+     * which is a style change - so the numbers never outlive what produced
+     * them.
+     */
+    int fullWidth();
+    int compactWidth();
+
+    /// Drops the cached widths, so the next ask re-measures.
+    void invalidateWidths();
+
+    /**
+     * @brief Whether this group's commands can be shown in the overflow menu.
+     *
+     * False once anything that is not a QToolButton has been added. The
+     * Run group's speed spin box is the case: a menu shows QActions, a spin
+     * box has none, and a widget can only have one parent - so a group
+     * holding one has to stay on the panel.
+     */
+    bool isOverflowable() const;
+
+  protected:
+    void changeEvent(QEvent *event) override;
+
   private:
     QToolButton *makeButton(QAction *action, Qt::ToolButtonStyle style);
+    /// Width the layout asks for right now, with the layout re-resolved.
+    int  currentWidth();
+    void measure();
     /// Appends to the column in progress, starting a new one when it is full.
     void addToColumn(QWidget *widget);
     /// Ends the column in progress, so the next small item starts a new one.
@@ -94,5 +130,11 @@ class RibbonGroup : public QWidget
     QVBoxLayout         *m_column      {nullptr};
     int                  m_columnCount {0};
     QList<int>           m_columnSizes;
+
+    // Set the moment anything that is not a QToolButton is added.
+    bool m_hasPlainWidget {false};
+    // Cached measurements; -1 means "not measured since the last change".
+    int  m_fullWidth    {-1};
+    int  m_compactWidth {-1};
 };
 } // namespace Kites
