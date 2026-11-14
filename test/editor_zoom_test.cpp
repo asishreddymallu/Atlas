@@ -322,3 +322,83 @@ TEST(EditorZoomFontChange, ASettingsFontChangeKeepsTheDeltaAndRemeasures)
     fonts.setSize(original);
     QApplication::processEvents();
 }
+
+/**
+ * @brief The breakpoint dot must never be taller than the line it marks.
+ *
+ * Pixels, not arithmetic: the dot's size is decided inside paintEvent, so
+ * the only honest check is to paint the gutter and measure the ink.
+ *
+ * The configured sizes matter more than the zoom here. The clamp keeps
+ * zoom from reaching a line too short for a 9 px dot, but a small font
+ * chosen in Settings reaches it with no zoom at all - which is how the
+ * fixed-size dot got out of its line in the first place.
+ *
+ * KNOWN LIMIT, measured rather than assumed: this test does not catch a
+ * dot put back to a fixed 9 px. kites_test has no font resources, so
+ * FontManager falls back to a family whose line height never drops below
+ * 9 px at any size this asks for, and the overflow cannot be reached
+ * here. The out-of-tree harness does reach it - at a configured 4 pt the
+ * line is 7 px and a fixed dot reports NO - and that is where the control
+ * for the scaling lives. What this test is worth is the invariant: if the
+ * metrics ever do shrink in kites_test, it fails rather than drifting.
+ */
+TEST(EditorZoomDot, TheDotStaysInsideItsLineAtEverySize)
+{
+    FontManager &fonts = FontManager::getInstance();
+    const int    original = fonts.currentFont().pointSize();
+
+    Bench bench;
+    bench.place("one\ntwo\nthree\nfour\nfive", 0, 0);
+    bench.editor.toggleBreakpointAtLine(3);
+
+    QWidget *dots = nullptr;
+    for (QWidget *child : bench.editor.findChildren<QWidget *>())
+        if (QString::fromLatin1(child->metaObject()->className()).contains("BreakPoint"))
+            dots = child;
+    ASSERT_NE(dots, nullptr);
+
+    for (int size : {6, 8, 11, 16})
+    {
+        fonts.setSize(size);
+        QApplication::processEvents();
+        for (int delta : {-6, 0, 6})
+        {
+            bench.editor.setZoomDelta(delta);
+            QApplication::processEvents();
+
+            QTextCursor third(bench.editor.document());
+            third.setPosition(bench.editor.document()->findBlockByNumber(2).position());
+            const QRect band = bench.editor.cursorRect(third);
+
+            const QImage shot = dots->grab().toImage();
+            ASSERT_FALSE(shot.isNull());
+            const QRgb ground = shot.pixel(0, 0);
+            int top = -1, bottom = -1;
+            for (int y = 0; y < shot.height(); ++y)
+                for (int x = 0; x < shot.width(); ++x)
+                    if (shot.pixel(x, y) != ground)
+                    {
+                        if (top < 0) top = y;
+                        bottom = y;
+                        break;
+                    }
+            ASSERT_GE(top, 0) << "no dot was painted at size " << size << " delta " << delta;
+            // Containment, not height. A dot drawn above its line is
+            // CLIPPED by the gutter widget, so its ink measures shorter
+            // than it is and a height comparison calls the overflow a fit.
+            // Where the ink sits is what shows the overflow.
+            EXPECT_GE(top, band.top())
+                << "the dot starts above its line at configured " << size
+                << " pt, delta " << delta << " (line " << band.top() << ".."
+                << band.bottom() << ", dot " << top << ".." << bottom << ")";
+            EXPECT_LE(bottom, band.bottom())
+                << "the dot ends below its line at configured " << size
+                << " pt, delta " << delta << " (line " << band.top() << ".."
+                << band.bottom() << ", dot " << top << ".." << bottom << ")";
+        }
+    }
+    bench.editor.setZoomDelta(0);
+    fonts.setSize(original);
+    QApplication::processEvents();
+}

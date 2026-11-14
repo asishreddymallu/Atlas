@@ -9,6 +9,9 @@
  */
 #include "ui/editor_tab/editor_commands.h"
 
+#include "ui/editor_tab/main_editor.h"
+#include <QApplication>
+#include <QTextDocument>
 #include <gtest/gtest.h>
 
 #include <QList>
@@ -361,4 +364,48 @@ TEST(EditorBrackets, ABlockRelativeCallAgreesWithAWholeDocumentOne)
         }
         base += text.size() + 1;
     }
+}
+
+/**
+ * @brief The highlight lands on the right characters, not the right offsets
+ *        of some other line.
+ *
+ * updateBracketHighlight() asks bracketAt() about the caret's BLOCK and
+ * then adds the block's position back on. Forgetting that addition leaves
+ * the selection on line 1 whatever line the caret is on - and the pure
+ * function's own tests cannot see it, because they never go through the
+ * widget. This one does.
+ */
+TEST(EditorBracketsWiring, TheHighlightLandsOnTheCaretsOwnLine)
+{
+    Editor editor;
+    editor.resize(600, 400);
+    editor.show();
+    // Line 0 also has a pair, so an un-shifted offset would still find
+    // SOMETHING - and land on the wrong line, which is the bug.
+    editor.setPlainText("lw t0, 4(sp)\nnop\nsw t1, 8(sp)\nnop");
+    QApplication::processEvents();
+
+    const int target = editor.toPlainText().indexOf("(sp)", 10);
+    ASSERT_GT(target, 20);
+
+    QTextCursor beside(editor.document());
+    beside.setPosition(target + 1); // just after the '('
+    editor.setTextCursor(beside);
+    QApplication::processEvents();
+
+    QList<int> singles;
+    for (const QTextEdit::ExtraSelection &selection : editor.extraSelections())
+    {
+        const int start = selection.cursor.selectionStart();
+        const int end   = selection.cursor.selectionEnd();
+        if (end - start == 1)
+            singles << start;
+    }
+    EXPECT_TRUE(singles.contains(target))
+        << "the opening bracket on the caret's own line was not highlighted";
+    EXPECT_TRUE(singles.contains(target + 3))
+        << "the partner on the caret's own line was not highlighted";
+    for (int offset : singles)
+        EXPECT_GE(offset, 13) << "a highlight landed on line 1, where the caret is not";
 }
