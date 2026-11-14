@@ -43,6 +43,20 @@ struct Token
  * chopped on characters that cannot be in a name, and each piece records
  * whether a ':' follows it and whether it stands where an operand stands.
  */
+/// True for a character Lexer::getNextToken() has a case for. Everything
+/// else sends it to skipLine(), which discards the rest of the line.
+bool isLexerCharacter(QChar c)
+{
+    return c.isLetterOrNumber() || c == QLatin1Char('_') || c == QLatin1Char(',') ||
+           c == QLatin1Char('"') || c == QLatin1Char('(') || c == QLatin1Char(')') ||
+           c == QLatin1Char('.') || c == QLatin1Char('#') || c == QLatin1Char(';') ||
+           c == QLatin1Char('-') || c.isSpace() ||
+           // ':' never reaches the dispatch: identifier() consumes it as
+           // part of the label it has just read. It is listed here because
+           // this predicate is asked about every character of the line.
+           c == QLatin1Char(':');
+}
+
 QList<Token> tokenise(const QString &line)
 {
     QList<Token> tokens;
@@ -93,15 +107,24 @@ QList<Token> tokenise(const QString &line)
             flush(i, QChar());
             break;
         }
-        // Only a DOUBLE quote. The lexer has no case for '\'' in
-        // getNextToken(), so a single-quoted run is not a string to it -
-        // `.string 'a # b'` measures as DIRECTIVE(string) INVALID().
+        // Only a DOUBLE quote opens a string. The lexer has no case for
+        // '\'' in getNextToken() at all.
         if (c == QLatin1Char('"'))
         {
             flush(i, QChar());
             inString = true;
             quote    = c;
             continue;
+        }
+        // Anything the lexer does not dispatch on makes it skipLine() and
+        // return INVALID - it abandons the REST OF THE LINE, it does not
+        // carry on past the character. `'`, `%`, `@`, `+`, `[` all land
+        // here, so `    ' j loop` holds no reference as far as the
+        // assembler is concerned, and the index must say the same.
+        if (!isLexerCharacter(c))
+        {
+            flush(i, QChar());
+            break;
         }
         if (isLabelChar(c))
         {

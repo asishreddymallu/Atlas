@@ -221,3 +221,48 @@ TEST(CommentSyntaxHighlighter, TheCommentRuleCoversBothCharacters)
             << "' to be " << (c.covered ? "inside" : "outside") << " a comment";
     }
 }
+
+// ════════════ the index abandons a line the lexer abandons ══════════════
+//
+// Lexer::getNextToken() ends in `else { skipLine(); return INVALID; }`:
+// any character it has no case for discards the REST OF THE LINE. `'` is
+// one of them, and so are '%', '@', '+' and '['. A first attempt at this
+// merely stopped treating `'` as a string quote, which made the index
+// carry on scanning past it - less faithful than before, not more, and no
+// test noticed. Its control did not bite, which is what found it.
+
+TEST(CommentSyntaxIndex, AnUnknownCharacterEndsTheLineForTheIndexToo)
+{
+    // Line 3 is discarded by the lexer, so `loop` there is not a
+    // reference. Only the one on line 2 is.
+    const QString text = "loop:\n    j loop\n    ' j loop\n";
+    const LabelIndex::Index index = LabelIndex::findLabels(text);
+    int refs = 0;
+    for (const LabelIndex::Reference &reference : index.references)
+        if (reference.name == QLatin1String("loop"))
+            ++refs;
+    EXPECT_EQ(refs, 1) << "the index scanned past a character the lexer gives up on";
+}
+
+TEST(CommentSyntaxIndex, TheSameHoldsForTheOtherCharactersTheLexerDropsOn)
+{
+    for (const QString &bad : {QStringLiteral("'"), QStringLiteral("%"),
+                               QStringLiteral("@"), QStringLiteral("+"),
+                               QStringLiteral("[")})
+    {
+        const QString text =
+            QStringLiteral("loop:\n    %1 j loop\n").arg(bad);
+        const LabelIndex::Index index = LabelIndex::findLabels(text);
+        EXPECT_TRUE(index.references.isEmpty())
+            << "'" << bad.toStdString() << "' did not end the line for the index";
+    }
+}
+
+TEST(CommentSyntaxIndex, ADefinitionAfterSuchACharacterIsNotALabel)
+{
+    const QString text = "main:\n    nop\n    ' ghost:\n";
+    const LabelIndex::Index index = LabelIndex::findLabels(text);
+    EXPECT_FALSE(index.isDefined(QStringLiteral("ghost")))
+        << "a name the lexer never reaches was taken as a definition";
+    EXPECT_TRUE(index.isDefined(QStringLiteral("main")));
+}
