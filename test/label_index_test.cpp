@@ -197,3 +197,51 @@ TEST(LabelIndexNameAt, TheWholeTokenIsReturnedFromAnywhereInIt)
     // no name at all.
     EXPECT_EQ(nameAt(text, 2), QString());
 }
+
+// ───────────────────── ';' is a comment character too ─────────────────────
+//
+// Lexer::getNextToken() treats '#' AND ';' as starting a comment
+// (lexer.cpp: `current_char == '#' || current_char == ';'`). The index
+// only knew about '#', so everything after a ';' was scanned as code.
+// A reference form probe over the whole assembler found this: it is the
+// one form where the index and the assembler disagree.
+
+TEST(LabelIndexComments, ASemicolonStartsACommentJustLikeAHash)
+{
+    const QString text = "loop:\n    j loop   ; loop again\n";
+    const Index index = findLabels(text);
+    int refs = 0;
+    for (const Reference &reference : index.references)
+        if (reference.name == QLatin1String("loop"))
+            ++refs;
+    EXPECT_EQ(refs, 1) << "the mention inside the ';' comment was counted";
+}
+
+TEST(LabelIndexComments, ASemicolonCommentCannotDefineALabel)
+{
+    // The assembler never sees this line at all, so there is no such label.
+    const QString text = "main:\n    nop\n    ; ghost: not a label\n";
+    const Index index = findLabels(text);
+    EXPECT_FALSE(index.isDefined(QStringLiteral("ghost")))
+        << "a name inside a ';' comment was taken as a definition";
+    EXPECT_TRUE(index.isDefined(QStringLiteral("main")));
+}
+
+TEST(LabelIndexComments, ASemicolonAtTheStartOfALineCommentsTheWholeLine)
+{
+    const QString text = "main:\n; j main\n    j main\n";
+    const Index index = findLabels(text);
+    int refs = 0;
+    for (const Reference &reference : index.references)
+        if (reference.name == QLatin1String("main"))
+            ++refs;
+    EXPECT_EQ(refs, 1) << "a whole-line ';' comment was scanned as code";
+}
+
+TEST(LabelIndexComments, DefinitionsOnLineAgreesAboutSemicolons)
+{
+    // The completion scanner shares this function, so it must agree.
+    EXPECT_EQ(definitionsOnLine(QStringLiteral("real: ; fake:")),
+              QStringList{QStringLiteral("real")});
+    EXPECT_TRUE(definitionsOnLine(QStringLiteral("; fake:")).isEmpty());
+}

@@ -83,7 +83,12 @@ QList<Token> tokenise(const QString &line)
                 inString = false;
             continue;
         }
-        if (c == QLatin1Char('#'))
+        // '#' AND ';'. The lexer treats both as starting a comment -
+        // lexer.cpp getNextToken(): `current_char == '#' || current_char
+        // == ';'` - and the index knew only about '#', so everything after
+        // a ';' was scanned as code. A probe over every reference form the
+        // assembler accepts found this; it was the one disagreement.
+        if (c == QLatin1Char('#') || c == QLatin1Char(';'))
         {
             flush(i, QChar());
             break;

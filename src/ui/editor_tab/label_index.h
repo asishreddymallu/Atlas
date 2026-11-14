@@ -65,7 +65,8 @@ bool isLabelChar(QChar c);
  * @brief Scans `text` for definitions and references.
  *
  * Comment- and string-aware in the same way the pair rules are: nothing
- * after a '#' counts, and nothing inside a "..." or '...' counts.
+ * after a '#' OR a ';' counts - the lexer treats both as starting a
+ * comment - and nothing inside a "..." or '...' counts.
  *
  * Only names that are DEFINED somewhere are reported as references, so an
  * ordinary instruction operand is not mistaken for one. That also means the
