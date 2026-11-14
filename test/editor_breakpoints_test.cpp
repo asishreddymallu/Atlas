@@ -279,3 +279,365 @@ TEST(BreakpointMapInvariants, NoMapEverProducesADuplicateOrGrowsTheCount)
         }
     EXPECT_GT(checked, 2000) << "the sweep did not actually run";
 }
+
+// ═══════════════════ the widget: real keys, real anchors ══════════════════
+
+#include "ui/editor_tab/main_editor.h"
+
+#include <QAbstractItemView>
+#include <QApplication>
+#include <QClipboard>
+#include <QKeyEvent>
+#include <QMimeData>
+#include <random>
+
+namespace
+{
+void sendKey(QWidget *target, Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifier,
+             const QString &text = QString())
+{
+    QKeyEvent press(QEvent::KeyPress, key, mods, text);
+    QApplication::sendEvent(target, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, mods, text);
+    QApplication::sendEvent(target, &release);
+    QApplication::processEvents();
+}
+
+/// A writable offscreen Editor, shown so keys reach it as they do in the
+/// application.
+struct Bench
+{
+    Editor editor;
+    Bench()
+    {
+        editor.resize(600, 400);
+        editor.show();
+        QApplication::processEvents();
+    }
+
+    /// Text, caret and breakpoints, in that order - setPlainText keeps the
+    /// numbers it already had, so the breakpoints go on afterwards.
+    void place(const QString &text, int anchor, int position, const QList<int> &breakpoints)
+    {
+        editor.setPlainText(text);
+        editor.setBreakpoints({});
+        for (int line : breakpoints)
+            editor.toggleBreakpointAtLine(line);
+        QTextCursor cursor = editor.textCursor();
+        cursor.setPosition(anchor);
+        cursor.setPosition(position, QTextCursor::KeepAnchor);
+        editor.setTextCursor(cursor);
+        QApplication::processEvents();
+        // A completion popup left from a previous key takes Enter and Tab
+        // before the editor sees them; that is the completer's contract and
+        // not what these cases are about.
+        for (QWidget *top : QApplication::topLevelWidgets())
+            if (top->isVisible() && qobject_cast<QAbstractItemView *>(top))
+                top->hide();
+        QApplication::processEvents();
+    }
+
+    QList<int> breakpoints() const
+    {
+        QList<int> out;
+        for (uint64_t line : editor.getBreakpoints())
+            out << int(line);
+        return out;
+    }
+};
+
+struct KeyCase
+{
+    const char           *name;
+    QString               before;
+    int                   anchor;
+    int                   position;
+    QList<int>            breakpointsBefore;
+    Qt::Key               key;
+    Qt::KeyboardModifiers mods;
+    QString               after;
+    QList<int>            breakpointsAfter;
+};
+
+void runKeys(Bench &bench, const QList<KeyCase> &cases)
+{
+    for (const KeyCase &row : cases)
+    {
+        bench.place(row.before, row.anchor, row.position, row.breakpointsBefore);
+        ASSERT_EQ(bench.breakpoints(), row.breakpointsBefore)
+            << "setup went wrong for: " << row.name;
+        sendKey(&bench.editor, row.key, row.mods);
+        EXPECT_EQ(bench.editor.toPlainText(), row.after) << "text: " << row.name;
+        EXPECT_EQ(bench.breakpoints(), row.breakpointsAfter) << "breakpoints: " << row.name;
+    }
+}
+
+const QString kFiveW = "l1\nl2\nl3\nl4\nl5";
+} // namespace
+
+TEST(BreakpointKeysOrdinaryEdits, EnterBackspaceDeleteAndPaste)
+{
+    Bench bench;
+
+    // Plain Enter, which goes through the editor's own auto-indent command.
+    runKeys(bench,
+            {
+                {"Enter at column 0 of line 3", kFiveW, 6, 6, {2, 3, 4}, Qt::Key_Return,
+                 Qt::NoModifier, "l1\nl2\n\nl3\nl4\nl5", {2, 4, 5}},
+                {"Enter mid-line of line 3", kFiveW, 7, 7, {2, 3, 4}, Qt::Key_Return,
+                 Qt::NoModifier, "l1\nl2\nl\n3\nl4\nl5", {2, 3, 5}},
+                {"Enter at the end of line 3", kFiveW, 8, 8, {2, 3, 4}, Qt::Key_Return,
+                 Qt::NoModifier, "l1\nl2\nl3\n\nl4\nl5", {2, 3, 5}},
+            });
+
+    // Backspace joining two lines - pure Qt, no command involved.
+    runKeys(bench,
+            {
+                {"Backspace at column 0 of line 3, both marked", kFiveW, 6, 6, {2, 3},
+                 Qt::Key_Backspace, Qt::NoModifier, "l1\nl2l3\nl4\nl5", {2}},
+                {"Backspace at column 0 of line 3, only the lower marked", kFiveW, 6, 6,
+                 {3, 5}, Qt::Key_Backspace, Qt::NoModifier, "l1\nl2l3\nl4\nl5", {2, 4}},
+                {"Backspace at column 0 of line 3, only the upper marked", kFiveW, 6, 6,
+                 {2, 5}, Qt::Key_Backspace, Qt::NoModifier, "l1\nl2l3\nl4\nl5", {2, 4}},
+            });
+
+    // Deleting a multi-line selection.
+    bench.place(kFiveW, 3, 11, {1, 2, 3, 4, 5});
+    sendKey(&bench.editor, Qt::Key_Delete);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\n\nl5"));
+    // Lines 2, 3 and 4's text is all gone; what is left of line 2 is the
+    // partly-kept first line and keeps one.
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{1, 2, 3}));
+
+    // Typing inside a line changes nothing.
+    bench.place(kFiveW, 7, 7, {2, 3, 4});
+    sendKey(&bench.editor, Qt::Key_X, Qt::NoModifier, "X");
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\nl2\nlX3\nl4\nl5"));
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 3, 4}));
+}
+
+TEST(BreakpointKeysOrdinaryEdits, PastingMultipleLinesShiftsWhatIsBelow)
+{
+    Bench bench;
+    auto *mime = new QMimeData;
+    mime->setText("a\nb\n");
+    QApplication::clipboard()->setMimeData(mime);
+
+    bench.place(kFiveW, 6, 6, {2, 3, 4}); // caret at column 0 of line 3
+    sendKey(&bench.editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\nl2\na\nb\nl3\nl4\nl5"));
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 5, 6}));
+
+    auto *again = new QMimeData;
+    again->setText("a\nb\n");
+    QApplication::clipboard()->setMimeData(again);
+    bench.place(kFiveW, 7, 7, {2, 3, 4}); // mid-line of line 3
+    sendKey(&bench.editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\nl2\nla\nb\n3\nl4\nl5"));
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 3, 6}));
+}
+
+TEST(BreakpointKeysLineCommands, EveryCommandCarriesTheBreakpointsItShould)
+{
+    Bench bench;
+    runKeys(
+        bench,
+        {
+            {"Alt+Down carries both lines", kFiveW, 3, 3, {2, 3}, Qt::Key_Down,
+             Qt::AltModifier, "l1\nl3\nl2\nl4\nl5", {2, 3}},
+            {"Alt+Down, only the moved line marked", kFiveW, 3, 3, {2}, Qt::Key_Down,
+             Qt::AltModifier, "l1\nl3\nl2\nl4\nl5", {3}},
+            {"Alt+Down, only the jumped line marked", kFiveW, 3, 3, {3}, Qt::Key_Down,
+             Qt::AltModifier, "l1\nl3\nl2\nl4\nl5", {2}},
+            {"Alt+Up, only the moved line marked", kFiveW, 6, 6, {3}, Qt::Key_Up,
+             Qt::AltModifier, "l1\nl3\nl2\nl4\nl5", {2}},
+            {"Alt+Up at the first line does nothing", kFiveW, 0, 0, {1, 2}, Qt::Key_Up,
+             Qt::AltModifier, kFiveW, {1, 2}},
+            {"Shift+Alt+Down: the original keeps it, the copy gets none", kFiveW, 3, 3,
+             {2, 4}, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier,
+             "l1\nl2\nl2\nl3\nl4\nl5", {2, 5}},
+            {"Shift+Alt+Up: the copy goes above, the original moves down", kFiveW, 3, 3,
+             {2, 4}, Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier,
+             "l1\nl2\nl2\nl3\nl4\nl5", {3, 5}},
+            {"Ctrl+Shift+K removes it and pulls the rest up", kFiveW, 6, 6, {2, 3, 4},
+             Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, "l1\nl2\nl4\nl5", {2, 3}},
+            {"Ctrl+Enter inserts below, nothing moves down from the caret's line", kFiveW,
+             6, 6, {3, 4}, Qt::Key_Return, Qt::ControlModifier, "l1\nl2\nl3\n\nl4\nl5",
+             {3, 5}},
+            {"Ctrl+Shift+Enter inserts above and carries the current line", kFiveW, 6, 6,
+             {3, 4}, Qt::Key_Return, Qt::ControlModifier | Qt::ShiftModifier,
+             "l1\nl2\n\nl3\nl4\nl5", {4, 5}},
+            {"Ctrl+/ moves nothing", kFiveW, 6, 6, {1, 2, 3, 4, 5}, Qt::Key_Slash,
+             Qt::ControlModifier, "l1\nl2\n# l3\nl4\nl5", {1, 2, 3, 4, 5}},
+            {"Ctrl+] moves nothing", kFiveW, 6, 6, {1, 2, 3, 4, 5}, Qt::Key_BracketRight,
+             Qt::ControlModifier, "l1\nl2\n\tl3\nl4\nl5", {1, 2, 3, 4, 5}},
+            {"Ctrl+[ moves nothing", "l1\n\tl2\nl3", 4, 4, {1, 2, 3}, Qt::Key_BracketLeft,
+             Qt::ControlModifier, "l1\nl2\nl3", {1, 2, 3}},
+            {"Shift+Tab moves nothing", "l1\n\tl2\nl3", 4, 4, {1, 2, 3}, Qt::Key_Backtab,
+             Qt::ShiftModifier, "l1\nl2\nl3", {1, 2, 3}},
+            {"Tab across lines moves nothing", kFiveW, 3, 8, {1, 2, 3, 4, 5}, Qt::Key_Tab,
+             Qt::NoModifier, "l1\n\tl2\n\tl3\nl4\nl5", {1, 2, 3, 4, 5}},
+        });
+}
+
+TEST(BreakpointKeysLineClipboard, CutRemovesItAndAPasteAboveShiftsLinesDown)
+{
+    Bench bench;
+
+    // Ctrl+X on a whole line takes its breakpoint with it.
+    bench.place(kFiveW, 6, 6, {2, 3, 4});
+    sendKey(&bench.editor, Qt::Key_X, Qt::ControlModifier);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\nl2\nl4\nl5"));
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 3}));
+
+    // And the line copy now on the clipboard pastes ABOVE, shifting down.
+    bench.place(kFiveW, 6, 6, {2, 3, 4});
+    sendKey(&bench.editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("l1\nl2\nl3\nl3\nl4\nl5"));
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 4, 5}));
+}
+
+TEST(BreakpointKeysUndo, UndoAndRedoLeaveBreakpointsInRange)
+{
+    Bench bench;
+    struct Row { const char *name; Qt::Key key; Qt::KeyboardModifiers mods; };
+    const QList<Row> rows = {
+        {"Alt+Down", Qt::Key_Down, Qt::AltModifier},
+        {"Alt+Up", Qt::Key_Up, Qt::AltModifier},
+        {"Shift+Alt+Down", Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier},
+        {"Shift+Alt+Up", Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier},
+        {"Ctrl+Shift+K", Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier},
+        {"Ctrl+Enter", Qt::Key_Return, Qt::ControlModifier},
+        {"Ctrl+Shift+Enter", Qt::Key_Return, Qt::ControlModifier | Qt::ShiftModifier},
+        {"Enter", Qt::Key_Return, Qt::NoModifier},
+        {"Ctrl+/", Qt::Key_Slash, Qt::ControlModifier},
+        {"Ctrl+]", Qt::Key_BracketRight, Qt::ControlModifier},
+    };
+    for (const Row &row : rows)
+    {
+        bench.place(kFiveW, 6, 6, {1, 3, 5});
+        sendKey(&bench.editor, row.key, row.mods);
+        sendKey(&bench.editor, Qt::Key_Z, Qt::ControlModifier);
+        EXPECT_EQ(bench.editor.toPlainText(), kFiveW) << "undo of " << row.name;
+        for (int line : bench.breakpoints())
+        {
+            EXPECT_GE(line, 1) << "after undoing " << row.name;
+            EXPECT_LE(line, bench.editor.document()->blockCount())
+                << "after undoing " << row.name;
+        }
+
+        sendKey(&bench.editor, Qt::Key_Y, Qt::ControlModifier);
+        for (int line : bench.breakpoints())
+        {
+            EXPECT_GE(line, 1) << "after redoing " << row.name;
+            EXPECT_LE(line, bench.editor.document()->blockCount())
+                << "after redoing " << row.name;
+        }
+    }
+}
+
+TEST(BreakpointKeysDocumentSwap, LoadingAFileLeavesTheNumbersWhereTheyWere)
+{
+    // Exactly what B0.4 measured on the shipped build before any of this:
+    // setPlainText does not touch the breakpoint numbers, even when they
+    // fall outside the new document.
+    Bench bench;
+    bench.place(kFiveW, 0, 0, {2, 4});
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 4}));
+
+    bench.editor.setPlainText("only\ntwo");
+    QApplication::processEvents();
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 4}))
+        << "loading a shorter file changed the numbers";
+
+    bench.editor.setPlainText("a\nb\nc\nd\ne\nf");
+    QApplication::processEvents();
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 4}));
+
+    // A user wiping the document is NOT a file load, and does remove them.
+    bench.place(kFiveW, 0, 0, {2, 4});
+    QTextCursor all = bench.editor.textCursor();
+    all.select(QTextCursor::Document);
+    bench.editor.setTextCursor(all);
+    sendKey(&bench.editor, Qt::Key_Delete);
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{}))
+        << "select-all-and-delete should not behave like loading a file";
+}
+
+TEST(BreakpointKeysInvariants, TwoHundredRandomKeysKeepThemLegal)
+{
+    Bench bench;
+    bench.place("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight", 0, 0, {1, 3, 5, 7});
+    const int started = bench.breakpoints().size();
+
+    struct Step { Qt::Key key; Qt::KeyboardModifiers mods; const char *text; };
+    const QList<Step> steps = {
+        {Qt::Key_Return, Qt::NoModifier, ""},
+        {Qt::Key_Return, Qt::ControlModifier, ""},
+        {Qt::Key_Return, Qt::ControlModifier | Qt::ShiftModifier, ""},
+        {Qt::Key_Down, Qt::AltModifier, ""},
+        {Qt::Key_Up, Qt::AltModifier, ""},
+        {Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier, ""},
+        {Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier, ""},
+        {Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, ""},
+        {Qt::Key_Slash, Qt::ControlModifier, ""},
+        {Qt::Key_BracketRight, Qt::ControlModifier, ""},
+        {Qt::Key_BracketLeft, Qt::ControlModifier, ""},
+        {Qt::Key_Backspace, Qt::NoModifier, ""},
+        {Qt::Key_Delete, Qt::NoModifier, ""},
+        {Qt::Key_Z, Qt::ControlModifier, ""},
+        {Qt::Key_X, Qt::ControlModifier, ""},
+        {Qt::Key_V, Qt::ControlModifier, ""},
+        {Qt::Key_Down, Qt::NoModifier, ""},
+        {Qt::Key_Up, Qt::NoModifier, ""},
+        {Qt::Key_Right, Qt::NoModifier, ""},
+        {Qt::Key_A, Qt::NoModifier, "a"},
+    };
+
+    std::mt19937 rng(20260115); // fixed, so a failure is reproducible
+    std::uniform_int_distribution<int> pick(0, int(steps.size()) - 1);
+
+    for (int i = 0; i < 200; ++i)
+    {
+        const Step &step = steps.at(pick(rng));
+        sendKey(&bench.editor, step.key, step.mods, QString::fromLatin1(step.text));
+
+        const QList<int> lines  = bench.breakpoints();
+        const int        blocks = bench.editor.document()->blockCount();
+        ASSERT_LE(lines.size(), started) << "the count grew at step " << i;
+        for (int j = 0; j < lines.size(); ++j)
+        {
+            ASSERT_GE(lines.at(j), 1) << "below line 1 at step " << i;
+            ASSERT_LE(lines.at(j), blocks)
+                << "past the end (" << blocks << " lines) at step " << i;
+            if (j)
+                ASSERT_NE(lines.at(j), lines.at(j - 1)) << "a duplicate at step " << i;
+        }
+    }
+}
+
+TEST(BreakpointKeysReadOnly, AReadOnlyPaneNeitherGainsNorLosesThem)
+{
+    Bench bench;
+    bench.place(kFiveW, 6, 6, {2, 3, 4});
+    bench.editor.setReadOnly(true);
+
+    struct Row { Qt::Key key; Qt::KeyboardModifiers mods; const char *name; };
+    const QList<Row> rows = {
+        {Qt::Key_Return, Qt::NoModifier, "Enter"},
+        {Qt::Key_Down, Qt::AltModifier, "Alt+Down"},
+        {Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier, "Shift+Alt+Up"},
+        {Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, "Ctrl+Shift+K"},
+        {Qt::Key_Slash, Qt::ControlModifier, "Ctrl+/"},
+        {Qt::Key_X, Qt::ControlModifier, "Ctrl+X"},
+        {Qt::Key_V, Qt::ControlModifier, "Ctrl+V"},
+        {Qt::Key_Backspace, Qt::NoModifier, "Backspace"},
+    };
+    for (const Row &row : rows)
+    {
+        sendKey(&bench.editor, row.key, row.mods);
+        EXPECT_EQ(bench.editor.toPlainText(), kFiveW) << "text changed by " << row.name;
+        EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 3, 4}))
+            << "breakpoints changed by " << row.name;
+    }
+}
