@@ -477,6 +477,25 @@ void Editor::openFind(bool withReplace)
         connect(m_findBar, &FindBar::replaceAll, this, [this] { replaceEveryMatch(); });
         connect(m_findBar, &FindBar::closeRequested, this, [this] { closeFind(); });
         // While the bar is open, an edit has to be re-searched.
+        // The match colours are derived from the theme, so a theme change
+        // while the bar is open has to rebuild them AND repaint the
+        // highlights - an extra selection keeps the format it was given, so
+        // without this the matches keep the old theme's colour. Measured:
+        // after switching kites-dark to kites-light the wash was still the
+        // dark one, 0 pixels of the new colour on a match.
+        //
+        // Both signals: the wash is mixed from the EDITOR background and the
+        // UI theme's `info`, so either changing matters.
+        const auto rebuildColours = [this](const QString &)
+        {
+            refreshFindColors();
+            updateFindHighlights();
+        };
+        connect(&ThemeManager::getInstance(), &ThemeManager::themeChangedSignal, this,
+                rebuildColours);
+        connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,
+                rebuildColours);
+
         connect(document(), &QTextDocument::contentsChanged, this,
                 [this]
                 {
