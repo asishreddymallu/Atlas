@@ -13,6 +13,10 @@
 
 #include <gtest/gtest.h>
 
+#include "ui/theme/theme_manager.h"
+#include <QMouseEvent>
+#include <cmath>
+#include <cstdio>
 #include <QApplication>
 #include <QKeyEvent>
 #include <QScrollBar>
@@ -377,4 +381,208 @@ TEST(CompletionKeys, NoMatchesCloseIt)
     ASSERT_TRUE(bench.open());
     type(&bench.editor, "zzz");
     EXPECT_FALSE(bench.open()) << "a filter with no matches left it open";
+}
+
+// ═══════════════════════ geometry: L1, L2, L4 ════════════════════════════
+
+namespace
+{
+/// Opens the list with everything in it and returns the popup.
+CompletionPopup *openFull(Bench &bench, int editorWidth = 800)
+{
+    bench.editor.resize(editorWidth, 400);
+    bench.place("", 0);
+    sendKey(&bench.editor, Qt::Key_Space, Qt::ControlModifier);
+    QApplication::processEvents();
+    return bench.editor.completionPopup();
+}
+} // namespace
+
+TEST(CompletionGeometry, ItStaysInsideTheViewportAndFlipsWhenThereIsNoRoom)
+{
+    Bench bench;
+    CompletionPopup *popup = openFull(bench);
+    ASSERT_NE(popup, nullptr);
+    ASSERT_TRUE(popup->isVisible());
+
+    const QSize viewport = bench.editor.viewport()->size();
+    const QRect box = popup->geometry();
+    EXPECT_GE(box.left(), 0);
+    EXPECT_GE(box.top(), 0);
+    EXPECT_LE(box.right(), viewport.width()) << "the list hangs off the right";
+    EXPECT_LE(box.bottom(), viewport.height()) << "the list hangs off the bottom";
+    EXPECT_FALSE(popup->isAbove()) << "there was room below; it should not have flipped";
+
+    // Put the caret on the last visible line, where there is no room below.
+    QStringList many;
+    for (int i = 0; i < 60; ++i)
+        many << QString(); // blank, so Ctrl+Space sees an empty prefix
+    bench.editor.setPlainText(many.join('\n'));
+    QTextCursor last(bench.editor.document());
+    last.movePosition(QTextCursor::End);
+    bench.editor.setTextCursor(last);
+    bench.editor.ensureCursorVisible();
+    QApplication::processEvents();
+    sendKey(&bench.editor, Qt::Key_Space, Qt::ControlModifier);
+    QApplication::processEvents();
+    ASSERT_TRUE(popup->isVisible());
+    EXPECT_TRUE(popup->isAbove()) << "it did not flip above when the caret was at the bottom";
+    EXPECT_GE(popup->geometry().top(), 0);
+    EXPECT_LE(popup->geometry().bottom(), bench.editor.viewport()->height());
+}
+
+TEST(CompletionGeometry, ItNeverShowsMoreThanTwelveRows)
+{
+    Bench bench;
+    CompletionPopup *popup = openFull(bench);
+    ASSERT_GT(popup->count(), CompletionPopup::maxVisibleRows)
+        << "the fixture needs more items than fit for this to mean anything";
+    const int rows = popup->height() / popup->rowHeight();
+    EXPECT_LE(rows, CompletionPopup::maxVisibleRows);
+}
+
+TEST(CompletionGeometry, ItFitsInsideANarrowPane)
+{
+    // The 849 px window leaves the Input pane a few hundred pixels.
+    Bench bench;
+    CompletionPopup *popup = openFull(bench, 240);
+    ASSERT_TRUE(popup->isVisible());
+    EXPECT_LE(popup->geometry().right(), bench.editor.viewport()->width())
+        << "the list is wider than the pane it is drawn in";
+    EXPECT_GE(popup->geometry().left(), 0);
+}
+
+TEST(CompletionGeometry, RowsFollowTheZoom)
+{
+    Bench bench;
+    CompletionPopup *popup = openFull(bench);
+    ASSERT_TRUE(popup->isVisible());
+
+    bench.editor.setZoomDelta(0);
+    sendKey(&bench.editor, Qt::Key_Space, Qt::ControlModifier);
+    const int atZero = popup->rowHeight();
+
+    bench.editor.setZoomDelta(18);
+    sendKey(&bench.editor, Qt::Key_Space, Qt::ControlModifier);
+    QApplication::processEvents();
+    const int atMax = popup->rowHeight();
+
+    bench.editor.setZoomDelta(-6);
+    sendKey(&bench.editor, Qt::Key_Space, Qt::ControlModifier);
+    QApplication::processEvents();
+    const int atMin = popup->rowHeight();
+
+    EXPECT_GT(atMax, atZero) << "zooming in did not grow the rows";
+    EXPECT_LT(atMin, atZero) << "zooming out did not shrink the rows";
+    bench.editor.setZoomDelta(0);
+}
+
+TEST(CompletionGeometry, AClickAcceptsAndAClickElsewhereCloses)
+{
+    Bench bench;
+    bench.place("", 0);
+    type(&bench.editor, "ad");
+    ASSERT_TRUE(bench.open());
+    CompletionPopup *popup = bench.editor.completionPopup();
+    const QString first = popup->selectedLabel();
+
+    // A click on the first row accepts it.
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(5, 5), QPointF(5, 5),
+                      Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(popup, &press);
+    QApplication::processEvents();
+    EXPECT_EQ(bench.text(), first) << "clicking a row did not insert it";
+    EXPECT_FALSE(bench.open());
+
+    // A click in the editor closes it without inserting.
+    bench.place("", 0);
+    type(&bench.editor, "ad");
+    ASSERT_TRUE(bench.open());
+    QTextCursor away(bench.editor.document());
+    away.setPosition(0);
+    bench.editor.setTextCursor(away);
+    QApplication::processEvents();
+    EXPECT_FALSE(bench.open()) << "moving the caret away left it open";
+    EXPECT_EQ(bench.text(), QString("ad")) << "it inserted something on the way out";
+}
+
+TEST(CompletionGeometry, ScrollingTheCaretOutOfViewCloses)
+{
+    Bench bench;
+    QStringList many;
+    for (int i = 0; i < 200; ++i)
+        many << QString();
+    bench.editor.setPlainText(many.join('\n'));
+    QTextCursor top(bench.editor.document());
+    top.setPosition(0);
+    bench.editor.setTextCursor(top);
+    QApplication::processEvents();
+    bench.queries = 0;
+
+    type(&bench.editor, "ad");
+    ASSERT_TRUE(bench.open());
+    bench.editor.verticalScrollBar()->setValue(
+        bench.editor.verticalScrollBar()->maximum());
+    QApplication::processEvents();
+    EXPECT_FALSE(bench.open()) << "the caret line scrolled away and the list stayed";
+}
+
+// ══════════════════════════ L6: contrast ═════════════════════════════════
+
+/**
+ * @brief Every colour the list draws, against the surface it draws it on.
+ *
+ * Arithmetic here; the pixels are checked in the out-of-tree harness. Below
+ * 4.5:1 is a defect, not a note.
+ */
+TEST(CompletionContrast, EveryColourClearsFourAndAHalfOnEveryTheme)
+{
+    auto luminance = [](const QColor &c)
+    {
+        auto channel = [](double v)
+        { return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * channel(c.redF()) + 0.7152 * channel(c.greenF()) +
+               0.0722 * channel(c.blueF());
+    };
+    auto contrast = [&](const QColor &a, const QColor &b)
+    {
+        const double la = luminance(a), lb = luminance(b);
+        return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+    };
+
+    int failures = 0;
+    for (const QString &theme : {"kites-dark", "kites-light", "tokyo-night",
+                                 "tokyo-night-storm"})
+    {
+        ThemeManager::getInstance().setTheme(theme);
+        // The widget's OWN colours, not a second copy of the arithmetic -
+        // otherwise the test can pass while the popup draws something else.
+        const CompletionPopup::Colours c = CompletionPopup::colours();
+        const QColor page     = c.page;
+        const QColor text     = c.text;
+        const QColor detail   = c.detail;
+        const QColor matched  = c.matched;
+        const QColor selected = c.selected;
+
+        struct Case { const char *what; QColor ink; QColor ground; };
+        const QList<Case> cases = {
+            {"label on the list",        text,    page},
+            {"label on the selection",   text,    selected},
+            {"matched on the list",      matched, page},
+            {"matched on the selection", matched, selected},
+            {"detail on the list",       detail,  page},
+            {"detail on the selection",  detail,  selected},
+        };
+        for (const Case &c : cases)
+        {
+            const double ratio = contrast(c.ink, c.ground);
+            std::printf("    %-20s %-26s %5.2f\n", theme.toStdString().c_str(), c.what,
+                        ratio);
+            EXPECT_GE(ratio, 4.5) << theme.toStdString() << ": " << c.what
+                                  << " is " << ratio;
+            if (ratio < 4.5)
+                ++failures;
+        }
+    }
+    EXPECT_EQ(failures, 0);
 }

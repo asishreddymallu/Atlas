@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <QWheelEvent>
 #include <algorithm>
+#include <cmath>
 
 namespace Kites
 {
@@ -39,19 +40,58 @@ QColor blend(const QColor &base, const QColor &tint, double amount)
                   int(base.blue() + (tint.blue() - base.blue()) * amount));
 }
 
+double luminance(const QColor &c)
+{
+    auto channel = [](double v)
+    { return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * channel(c.redF()) + 0.7152 * channel(c.greenF()) +
+           0.0722 * channel(c.blueF());
+}
+
+double contrastOf(const QColor &a, const QColor &b)
+{
+    const double la = luminance(a);
+    const double lb = luminance(b);
+    return (std::max(la, lb) + 0.05) / (std::min(la, lb) + 0.05);
+}
+
+/**
+ * @brief The dim detail colour, lifted until it is legible.
+ *
+ * mutedForeground is what a dim column wants to be, and measured it is
+ * 2.91:1 on the list background and 1.63:1 on the selected row - VS Code's
+ * detail text fails AA in the same way. Rather than ship that, the colour is
+ * walked towards the ordinary text colour until it clears 4.5:1 on the
+ * HARDER of the two grounds, so it stays dimmer than the label and stays
+ * readable. Pure arithmetic from existing tokens; no new one is introduced.
+ */
+QColor legibleDetail(const QColor &muted, const QColor &text, const QColor &page,
+                     const QColor &selected)
+{
+    QColor candidate = muted;
+    for (int step = 0; step <= 20; ++step)
+    {
+        candidate = blend(muted, text, step / 20.0);
+        if (contrastOf(candidate, page) >= 4.5 && contrastOf(candidate, selected) >= 4.5)
+            return candidate;
+    }
+    return text; // nothing dimmer is legible on this theme
+}
+
 Palette paletteNow()
 {
     const ThemeManager &theme = ThemeManager::getInstance();
     Palette p;
     p.page     = theme.getEditorBackgroundColor();
     p.text     = theme.getEditorForegroundColor();
-    p.detail   = theme.getEditorMutedForegroundColor();
     p.matched  = theme.getInfoColor();
     // A visible frame without a new token: the page lifted towards the text.
     p.border   = blend(p.page, p.text, 0.35);
     // The same wash the find bar uses for a non-current match, which was
     // measured to keep ordinary text at 4.5:1 or better on every theme.
     p.selected = blend(p.page, theme.getInfoColor(), 0.25);
+    p.detail   = legibleDetail(theme.getEditorMutedForegroundColor(), p.text, p.page,
+                               p.selected);
     return p;
 }
 
@@ -67,6 +107,12 @@ QString badgeFor(Completion::Kind kind)
     return QStringLiteral("I");
 }
 } // namespace
+
+CompletionPopup::Colours CompletionPopup::colours()
+{
+    const Palette p = paletteNow();
+    return Colours{p.page, p.border, p.text, p.matched, p.detail, p.selected};
+}
 
 CompletionPopup::CompletionPopup(QWidget *parent) : QWidget(parent)
 {

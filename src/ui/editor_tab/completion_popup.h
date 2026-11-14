@@ -3,6 +3,7 @@
 #include "ui/editor_tab/completion_model.h"
 
 #include <QList>
+#include <QColor>
 #include <QWidget>
 
 namespace Kites
@@ -67,6 +68,14 @@ class CompletionPopup : public QWidget
 
     /// How many rows are drawn at most before the list scrolls.
     static constexpr int maxVisibleRows = 12;
+
+    /// The six colours the list draws with, for the contrast test. Derived
+    /// from existing theme colours; no new token.
+    struct Colours
+    {
+        QColor page, border, text, matched, detail, selected;
+    };
+    static Colours colours();
 
   signals:
     /// A row was clicked. The editor decides what inserting means.
