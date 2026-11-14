@@ -214,18 +214,13 @@ void KitesEditor::applyZoomedFont()
         zoomed.setPointSize(std::max(1, base + m_zoomDelta));
     setFont(zoomed);
 
-    // The gutters get it explicitly. Qt propagates a font to children that
-    // have none of their own, but the line-number column's sizeHint() is
-    // read by updateViewPortMargins() in the next statement, and measured
-    // it was still returning the old width - so the width is pushed rather
-    // than waited for.
-    for (GutterColumn *column : findChildren<GutterColumn *>())
-        column->setFont(zoomed);
-
-    // A tab is a number of SPACES wide, so it has to be re-measured, and the
-    // gutters re-measured with it.
-    // Rewrites the per-widget sheet with the new size, for the editor and
-    // the gutters, which is what actually changes what is drawn.
+    // What actually re-sizes the gutters: applyEditorTheme() writes the size
+    // into each column's own stylesheet, and a stylesheet rule beats
+    // setFont(). An explicit setFont() loop used to stand here - it was
+    // needed before the size moved into the sheet, and a control proved it
+    // does nothing now: removing it changed no pixel of the gutter width,
+    // the digit fit or the dot at deltas -6, 0 and +18 in all four themes.
+    // A tab is a number of SPACES wide, so it is re-measured after.
     applyEditorTheme();
 
     setTabStopDistance(editorTabWidth * fontMetrics().horizontalAdvance(' '));

@@ -230,6 +230,25 @@ TEST(EditorPairsBreakpoints, OnlyAMultiLineWrapCarriesALineMap)
     ASSERT_TRUE(back.valid);
     for (int line = 0; line < 3; ++line)
         EXPECT_EQ(back.lines.mapped(line), line);
+
+    // The one case that rewrites more than one line: wrapping a selection
+    // that spans lines. It names the span it rewrote, like every other
+    // command, and the map is the IDENTITY over it - the quotes go INSIDE
+    // the span, so no line is created, destroyed or moved and a breakpoint
+    // on any of them stays where it is.
+    //
+    // Asserting the span and every entry, not merely that a map exists: a
+    // map that collapsed the span onto its first line would satisfy a
+    // weaker check and silently drag every breakpoint in the selection up
+    // to one line. A control that made exactly that mutation is what found
+    // this test asserting less than its name.
+    const QString   multi = "one\ntwo\nthree\nfour";
+    const Edit      wrap  = autoPair(multi, 4, 13, "(");     // "two\nthree"
+    ASSERT_TRUE(wrap.valid);
+    EXPECT_EQ(wrap.lines.firstLine, 1);
+    EXPECT_EQ(wrap.lines.lastLine, 2);
+    for (int line = 0; line < 4; ++line)
+        EXPECT_EQ(wrap.lines.mapped(line), line) << "wrapping moved line " << line;
 }
 
 // ═══════════════════════════ bracket matching ═════════════════════════════
