@@ -257,10 +257,10 @@ struct BracketPair
 BracketPair bracketAt(const QString &text, int position);
 
 /**
- * @brief Toggles a '#' comment on the touched lines.
+ * @brief Toggles a '#' or ';' comment on the touched lines.
  *
  * Blank lines are skipped, and do not count towards the decision. If every
- * non-blank touched line is already commented, the '#' comes off - with one
+ * non-blank touched line is already commented, the '#' or ';' comes off - with one
  * following space if there is one. Otherwise "# " goes on at the column of
  * the LEAST indented non-blank touched line, so a commented block keeps its
  * shape instead of having each line's marker at its own depth.

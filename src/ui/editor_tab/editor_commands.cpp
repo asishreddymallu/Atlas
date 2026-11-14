@@ -576,20 +576,29 @@ LineContext contextAt(const QString &text, int offset)
         const QChar c = text.at(i);
         if (context.inString)
         {
-            // A backslash escapes the next character, so `.asciz "a\"b"` is
-            // one string and not two.
-            if (c == QLatin1Char('\\'))
-                ++i;
-            else if (c == context.stringQuote)
+            // NO backslash escape. The lexer has none: `.string "a\"b"`
+            // measures as STRING(a\) INVALID(b) INVALID(), so the string
+            // ends at the quote after the backslash and what follows is
+            // code. This used to skip the next character, which put the
+            // editor in a string where the assembler was in code.
+            if (c == context.stringQuote)
                 context.inString = false;
             continue;
         }
-        if (c == QLatin1Char('#'))
+        // '#' AND ';'. Lexer::getNextToken() takes both, at any column,
+        // including immediately after a token: `j loop; j other` lexes as
+        // OPCODE(j) LABEL_REF(loop) and nothing more.
+        if (c == QLatin1Char('#') || c == QLatin1Char(';'))
         {
             context.inComment = true;
             break; // a comment runs to the end of the line
         }
-        if (c == QLatin1Char('"') || c == QLatin1Char('\''))
+        // Only a DOUBLE quote opens a string. The lexer has no case for
+        // '\'' in getNextToken() at all - it falls through to skipLine() -
+        // so `.string 'a # b'` is not a string, and that '#' is a comment.
+        // The editor still auto-pairs '\'' as a typing convenience; that is
+        // a separate question from what the assembler reads.
+        if (c == QLatin1Char('"'))
         {
             context.inString   = true;
             context.stringQuote = c;
@@ -767,7 +776,11 @@ Edit toggleComment(const QString &text, int anchor, int position)
     {
         const QString &content = lines.at(line);
         const int      column  = firstNonSpace(content);
-        if (content.at(column) != QLatin1Char('#'))
+        // Either comment character counts as commented, because the
+        // assembler treats both the same way. A block that mixes them is
+        // still a commented block.
+        const QChar    lead    = content.at(column);
+        if (lead != QLatin1Char('#') && lead != QLatin1Char(';'))
             allCommented = false;
         leastIndent = leastIndent < 0 ? column : std::min(leastIndent, column);
     }
@@ -779,8 +792,12 @@ Edit toggleComment(const QString &text, int anchor, int position)
         if (allCommented)
         {
             const int column = firstNonSpace(content);
-            // The '#', and one space after it if the comment was written
-            // with one - so a toggle round trip gives the line back exactly.
+            // The comment character - whichever of the two it is - and one
+            // space after it if the comment was written with one, so a
+            // toggle round trip gives a '#' line back exactly. A ';' line
+            // comes back UNcommented and is re-commented with '#', which
+            // normalises it; '#' is what the corpus uses and what the
+            // inserted character stays.
             const int remove =
                 (column + 1 < content.size() && content.at(column + 1) == QLatin1Char(' ')) ? 2
                                                                                             : 1;

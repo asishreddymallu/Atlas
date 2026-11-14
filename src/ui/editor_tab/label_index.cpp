@@ -93,7 +93,10 @@ QList<Token> tokenise(const QString &line)
             flush(i, QChar());
             break;
         }
-        if (c == QLatin1Char('"') || c == QLatin1Char('\''))
+        // Only a DOUBLE quote. The lexer has no case for '\'' in
+        // getNextToken(), so a single-quoted run is not a string to it -
+        // `.string 'a # b'` measures as DIRECTIVE(string) INVALID().
+        if (c == QLatin1Char('"'))
         {
             flush(i, QChar());
             inString = true;

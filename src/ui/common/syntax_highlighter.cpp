@@ -26,14 +26,26 @@ SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent) : QSyntaxHighlighter
     this, &SyntaxHighlighter::themeChangedSlot);
 }
 
+QRegularExpression SyntaxHighlighter::commentPattern()
+{
+    // A string FIRST, so a '#' or a ';' inside one is eaten by the string
+    // alternative and cannot open a comment. The lexer behaves the same
+    // way: `.string "a # b"` measures as DIRECTIVE(string) STRING(a # b).
+    // Only double quotes - the lexer has no single-quoted strings.
+    return QRegularExpression(R"((?<string>"[^"\n]*")|[#;][^\n]*)");
+}
+
 void SyntaxHighlighter::setHighlightingRules()
 {
     
     setInstructionHighlightingRules();
     setRegisterHighlightingRules();
 
-    // setting rules for comments
-    m_highlightRules.append({QRegularExpression("#[^\n]*"), SyntaxStyle::Comment});
+    // setting rules for comments. BOTH '#' and ';' - the lexer takes both
+    // (getNextToken: `current_char == '#' || current_char == ';'`) and the
+    // highlighter knew only about '#'. See commentPattern() for why a
+    // string is in the same pattern.
+    m_highlightRules.append({commentPattern(), SyntaxStyle::Comment});
 
     // setting rules for labels
     m_highlightRules.append({QRegularExpression(R"(^\s*[A-Za-z_][A-Za-z0-9_.$]*:$)"), SyntaxStyle::Label});
@@ -121,6 +133,12 @@ void SyntaxHighlighter::highlightBlock(const QString &text)
         while (matchIterator.hasNext())
         {
             QRegularExpressionMatch match = matchIterator.next();
+            // The comment pattern also matches strings, only so that it can
+            // step over them; those matches are not comments and must not
+            // be coloured. There is no String style to give them - adding
+            // one would mean a new theme token.
+            if (match.capturedStart(QStringLiteral("string")) >= 0)
+                continue;
             setFormat(match.capturedStart(), match.capturedLength(), 
             ThemeManager::getInstance().getSyntaxFormat(rule.style));
         }
