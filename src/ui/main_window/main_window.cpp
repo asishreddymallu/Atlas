@@ -758,7 +758,10 @@ void MainWindow::setUpMenubar()
                             dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
                         if (editorTab)
                         {
-                            editorTab->setRawText(content);
+                            // Not setRawText: opening a file also drops the
+                            // breakpoints, which were line numbers in the
+                            // file that is being replaced.
+                            editorTab->loadFileContent(content);
                         }
                         file.close();
                     }

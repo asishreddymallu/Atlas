@@ -29,6 +29,19 @@ public:
     explicit EditorTab(QWidget *parent = nullptr, ProcessorManager *vmManager = nullptr);
     ~EditorTab();
     void updateDisassemblyView(const std::string &disassembledCode);
+
+    /**
+     * @brief Loads a file's contents into the Input pane.
+     *
+     * The File > Open path, named so it can be driven without a modal file
+     * dialog. It clears the breakpoints: they are line numbers in the file
+     * that was open, and they mean nothing in a different one.
+     *
+     * Deliberately NOT done in Editor::setPlainText. Other code sets the
+     * text - the Expanded view, a reload - and has always left the numbers
+     * alone; only opening a file is a new file.
+     */
+    void loadFileContent(const QString &content);
     void setErrorLinesFromFile(const std::filesystem::path &filepath);
     /// Mapping produced by customPseudoManager::expandPseudoInstruction:
     /// index = expanded line - 1, value = 1-based original source line. Set by

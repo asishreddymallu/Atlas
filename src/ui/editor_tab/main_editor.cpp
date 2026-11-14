@@ -1,4 +1,5 @@
 #include "main_editor.h"
+#include "ui/common/gutter_column.h"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMimeData>
@@ -178,6 +179,11 @@ void Editor::clearBreakpoints()
 {
     m_breakPoints.clear();
     m_breakpointAnchors.clear();
+    // The dots live on a gutter column, which is a sibling widget of the
+    // viewport and does not repaint just because the editor does.
+    for (GutterColumn *column : findChildren<GutterColumn *>())
+        column->update();
+    viewport()->update();
 }
 
 std::vector<uint64_t> Editor::getBreakpoints() const

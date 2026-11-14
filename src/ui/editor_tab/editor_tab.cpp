@@ -443,6 +443,12 @@ int EditorTab::sourceLineCount() const
     return m_editor->document()->blockCount();
 }
 
+void EditorTab::loadFileContent(const QString &content)
+{
+    m_editor->clearBreakpoints();
+    setRawText(content);
+}
+
 std::vector<uint64_t>
 EditorTab::breakpointsForExpandedView(const std::vector<int> &expandedToOriginalLine) const
 {
