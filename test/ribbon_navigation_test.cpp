@@ -57,6 +57,7 @@
 #include <QTabWidget>
 #include <QToolBar>
 #include <QWidgetAction>
+#include <QFrame>
 #include <algorithm>
 #include <functional>
 #include <QStackedWidget>
@@ -2647,4 +2648,124 @@ TEST(RibbonStage8, TheCachePaneKeepsTheOtherTabsLeftEdge)
     ASSERT_NE(leftMost, std::numeric_limits<int>::max()) << "the page has no content";
     EXPECT_EQ(leftMost, 2 * inset)
         << "the pane's content is not where the other tabs' content is";
+}
+
+// ═══════════════ Part A: the chrome's two hairlines ════════════════════════
+//
+// The rules are two 1 px QFrames the panel holds outside its layout. What is
+// assertable here is the part that broke three times before it worked: their
+// geometry and their place in the stacking order. kites_test links no
+// stylesheet, so they have no colour at this level - the colour, and the fact
+// that the pixels really change, are checked by the out-of-tree chromelines
+// harness, which reads the rendered rows in all four themes.
+
+namespace
+{
+/// The panel's two rule frames, in the order the panel holds them.
+QList<QFrame *> ribbonRules(RibbonBar *bar)
+{
+    QList<QFrame *> rules;
+    QWidget        *panel = bar->findChild<QWidget *>("ribbonPanel");
+    if (!panel)
+        return rules;
+    for (QFrame *frame : panel->findChildren<QFrame *>(Qt::FindDirectChildrenOnly))
+        if (frame->objectName() == "ribbonRule")
+            rules.append(frame);
+    return rules;
+}
+} // namespace
+
+TEST(RibbonChrome, PanelCarriesARuleAtEachEdge)
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    QApplication::processEvents();
+
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    QWidget *panel = bar->findChild<QWidget *>("ribbonPanel");
+    ASSERT_NE(panel, nullptr);
+
+    const QList<QFrame *> rules = ribbonRules(bar);
+    ASSERT_EQ(rules.size(), 2) << "the panel should carry exactly two rules";
+
+    for (QFrame *rule : rules)
+    {
+        EXPECT_EQ(rule->height(), 1) << "a rule is not a hairline";
+        EXPECT_EQ(rule->x(), 0) << "a rule does not start at the panel's left edge";
+        EXPECT_EQ(rule->width(), panel->width())
+            << "a rule does not span the panel - and the panel spans the window";
+    }
+
+    // One on the first row, one on the last. Sorted, because the order the
+    // frames were constructed in is not the contract; where they sit is.
+    QList<int> tops;
+    for (QFrame *rule : rules)
+        tops.append(rule->y());
+    std::sort(tops.begin(), tops.end());
+    EXPECT_EQ(tops.first(), 0) << "no rule on the panel's first row";
+    EXPECT_EQ(tops.last(), panel->height() - 1) << "no rule on the panel's last row";
+}
+
+TEST(RibbonChrome, RulesStayAboveEverythingElseInThePanel)
+{
+    // The reason this matters: a line painted by the bar, and then a line
+    // painted by the panel itself, were both measured to draw nothing,
+    // because the persistent area and the page stack fill the panel and paint
+    // over whatever is behind them. Being last among the panel's children is
+    // what makes a rule visible at all.
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    QApplication::processEvents();
+
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    QWidget *panel = bar->findChild<QWidget *>("ribbonPanel");
+    ASSERT_NE(panel, nullptr);
+
+    const QObjectList &children = panel->children();
+    QList<int>         ruleIndices, otherIndices;
+    for (int i = 0; i < children.size(); ++i)
+    {
+        auto *child = qobject_cast<QWidget *>(children.at(i));
+        if (!child)
+            continue;
+        if (child->objectName() == "ribbonRule")
+            ruleIndices.append(i);
+        else
+            otherIndices.append(i);
+    }
+    ASSERT_EQ(ruleIndices.size(), 2);
+    ASSERT_FALSE(otherIndices.isEmpty());
+    // Qt paints a parent's children in list order, so later is on top.
+    EXPECT_GT(*std::min_element(ruleIndices.begin(), ruleIndices.end()),
+              *std::max_element(otherIndices.begin(), otherIndices.end()))
+        << "a rule is behind a sibling and would be painted over";
+}
+
+TEST(RibbonChrome, RulesFollowTheWindowWidth)
+{
+    MainWindow window;
+    window.resize(1400, 800);
+    window.show();
+    QApplication::processEvents();
+
+    RibbonBar *bar = window.findChild<RibbonBar *>();
+    ASSERT_NE(bar, nullptr);
+    QWidget *panel = bar->findChild<QWidget *>("ribbonPanel");
+    ASSERT_NE(panel, nullptr);
+
+    for (int width : {1400, 1000, 1400})
+    {
+        window.resize(width, 800);
+        QApplication::processEvents();
+        for (QFrame *rule : ribbonRules(bar))
+        {
+            EXPECT_EQ(rule->width(), panel->width())
+                << "a rule did not follow the panel to " << width;
+            EXPECT_EQ(rule->height(), 1) << "a rule stopped being a hairline at " << width;
+        }
+    }
 }
