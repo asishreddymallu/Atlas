@@ -353,3 +353,93 @@ Every harness invocation goes through it — transcript, the four-theme
 smoke, the ink check, the width sweep, findshots, the zoom and font probes
 and the find-bar fit probe. See `known_issues.md` 35 for what happened
 before it existed.
+
+## Suggestions
+
+A port of VS Code's suggest widget, in the editor's own key handling. There
+is still no `QAction` and no `QShortcut`: the window owns seven key
+sequences and `EditorShortcutSet.NothingNewBecameAnApplicationShortcut`
+counts them.
+
+The list is an own widget (`CompletionPopup`), a child of the viewport,
+**not** `QCompleter`'s popup. That popup is a top-level `QListView`: it
+cannot be driven in `kites_test`, it sits outside the application
+stylesheet so it has no theme, it takes keys through an event filter on the
+editor, and it offers no way to draw matched characters, a badge or an
+elided detail.
+
+### When it opens
+
+| | | Test |
+|---|---|---|
+| typing a word character, prefix ≥ 1 | opens, filtered | `CompletionTrigger.TypingOpensIt` |
+| **any** navigation key | **never** — and the source is not even queried | `CompletionTrigger.NavigationNeverOpensIt` |
+| typing mid-word | filters by the text **before** the caret | `CompletionTrigger.TypingInTheMiddleFiltersByTheTextBeforeTheCaret` |
+| inside a `#` comment or a `"string"` | never | `CompletionTrigger.CommentsAndStringsNeverOpenIt` |
+| `Ctrl+Space` | opens anywhere, empty prefix allowed | `CompletionTrigger.CtrlSpaceOpensWithAnEmptyPrefix` |
+
+`NavigationNeverOpensIt` is the whole table — Up, Down, Left, Right, Home,
+End, PageUp, PageDown and the four Ctrl variants — plus `setTextCursor`,
+`setPlainText`, Backspace, Delete, undo and a line command. It asserts the
+injected source was **not queried**, because "the popup is not visible"
+would also hold if the editor queried and found nothing, which is a
+different and slower bug.
+
+### Keys while it is open
+
+| Key | | Test |
+|---|---|---|
+| `Up` / `Down` | move, **wrapping** at the ends | `CompletionKeys.UpDownWrap` |
+| `PageUp` / `PageDown` | by a page | same |
+| `Enter`, `Tab` | accept, insert mode | `CompletionKeys.EnterAndTabAccept` |
+| `Shift+Enter`, `Shift+Tab` | accept, replacing the tail | `CompletionKeys.ShiftEnterReplacesTheTail` |
+| one `Ctrl+Z` after accepting | puts the typed prefix back | `CompletionKeys.AcceptIsOneUndoStepAndRestoresThePrefix` |
+| `Esc` | closes the list **only** — an open find bar stays open | `CompletionKeys.EscClosesWithoutMovingTheCaretOrClosingTheFindBar` |
+| a non-word character | closes **without accepting** | `CompletionKeys.NonWordCharactersCloseWithoutAccepting` |
+| `Backspace` to the word start | closes | `CompletionKeys.BackspaceToTheWordStartCloses` |
+| `Left`/`Right` out of the word | closes | `CompletionKeys.LeavingTheWordCloses` |
+| a click on a row / elsewhere | accepts / closes | `CompletionGeometry.AClickAcceptsAndAClickElsewhereCloses` |
+| opening Find or Go to line | closes | `CompletionKeys.OpeningFindClosesIt` |
+| undo, redo | closes | `CompletionKeys.UndoClosesIt` |
+| focus loss | closes | `CompletionKeys.FocusLossCloses` |
+| the caret line scrolling away | closes | `CompletionGeometry.ScrollingTheCaretOutOfViewCloses` |
+| no items left | closes | `CompletionKeys.NoMatchesCloseIt` |
+
+Everything that dismisses the list calls `Editor::closeCompletion()` and
+nothing else, so a new overlay closes it by adding one call there.
+
+### Matching
+
+`CompletionScorer.*` and `CompletionWord.*` — thirteen table cases. The
+first typed character must start the label or a segment after `.`, `_` or
+`$`; the rest must appear in order. Ranked by exact-case prefix,
+case-insensitive prefix, segment start, consecutive runs, shorter label,
+then alphabetical.
+
+### Look
+
+Framed list under the caret line, left edge at the word start, flipping
+above when there is no room, clamped inside the viewport, at most 12 rows
+then a thin scrollbar. Each row is a one-letter kind badge, the label with
+matched characters bold in the accent colour, and a right-aligned dim
+detail. The detail is dropped first and the label elided second when the
+pane is narrow. `CompletionGeometry.*` covers the geometry;
+`CompletionContrast.EveryColourClearsFourAndAHalfOnEveryTheme` covers the
+colours.
+
+### Deliberately different from VS Code
+
+- **No commit characters.** In VS Code a `(` or `.` can accept the
+  selection. Assembly has no character that means "and take that one", so
+  every non-word character closes the list and types itself.
+- **No drop shadow and no animation.** Neither is in the theme's
+  vocabulary, and both would need a new token.
+- **No recently-used ordering.** Asked for explicitly: ranking is the
+  scorer's, every time.
+- **No details panel.** `Ctrl+Space` while open would toggle a
+  documentation panel. There is no documentation to show —
+  `instructions.json` is `{category: [bare strings]}`, 171 of them, with no
+  format and no prose. See `known_issues` 37.
+- **The detail column is usually empty**, for the same reason.
+- **The dim colours are lifted.** VS Code's detail text fails AA; this
+  one is walked towards the text colour until it clears 4.5:1.

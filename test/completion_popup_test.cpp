@@ -290,8 +290,16 @@ TEST(CompletionKeys, BackspaceToTheWordStartCloses)
     bench.place("", 0);
     type(&bench.editor, "ad");
     ASSERT_TRUE(bench.open());
+    const int queriesBefore = bench.queries;
     sendKey(&bench.editor, Qt::Key_Backspace);
     EXPECT_TRUE(bench.open()) << "Backspace with a prefix left should re-filter, not close";
+    // It must actually RE-FILTER, not merely stay up with the old list. The
+    // item COUNT is no use here - every symbol matching "ad" also matches
+    // "a", so it is 6 either way - but the source must have been asked
+    // again, with the shorter prefix.
+    EXPECT_GT(bench.queries, queriesBefore)
+        << "Backspace did not re-query; the previous filter's items are still up";
+    EXPECT_EQ(bench.lastPrefix, QString("a"));
     sendKey(&bench.editor, Qt::Key_Backspace);
     EXPECT_FALSE(bench.open()) << "Backspace to the word start did not close it";
 }
@@ -585,4 +593,18 @@ TEST(CompletionContrast, EveryColourClearsFourAndAHalfOnEveryTheme)
         }
     }
     EXPECT_EQ(failures, 0);
+}
+
+TEST(CompletionTrigger, ADocumentSwapClosesAnOpenList)
+{
+    // File > Open and loadFileContent both land as a setPlainText. A list
+    // left standing would be offering the OLD document's labels against a
+    // caret in a new one.
+    Bench bench;
+    bench.place("", 0);
+    type(&bench.editor, "ad");
+    ASSERT_TRUE(bench.open());
+    bench.editor.setPlainText("sub x0,x0,x0\n");
+    QApplication::processEvents();
+    EXPECT_FALSE(bench.open()) << "a document swap left the suggestion list up";
 }

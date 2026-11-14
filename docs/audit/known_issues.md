@@ -1056,3 +1056,67 @@ Calling this "environmental" would be putting a name on an unknown. It is
 recorded as unexplained, and the new baseline is taken hermetically so the
 next comparison starts from something reproducible: three consecutive runs
 of the current branch agree exactly.
+
+---
+
+## 37. There is no documentation to show beside a suggestion
+
+- **Where**: `resources/instructions/instructions.json`, read by
+  `CompletionProvider::loadMnemonicsAndDirectives()`.
+- **What**: the file is a map of category to an array of **bare mnemonic
+  strings** — 171 of them. No operand format, no description, no examples.
+  `LanguageService::completions()` then merges those with the buffer's
+  labels into one `QStringList`, so even the category is gone by the time
+  the editor sees it.
+- **Consequence**: two things in the VS Code port cannot be built.
+  - The **details panel** (`Ctrl+Space` while the list is open, showing the
+    selected item's documentation) has nothing to put in it. Not done.
+  - The **detail column** on each row is drawn but is almost always empty.
+    The column and its eliding rule exist so that data, if it ever arrives,
+    has somewhere to go.
+- **The kind badge** is derived from the symbol's shape instead: a leading
+  `.` is a directive, a name the assembler knows as a register is a
+  register, a name defined with `:` in the buffer is a label, anything else
+  is an instruction. That is a guess from text, not a fact from the data.
+- **Why not fix it here**: filling the JSON in is a content change to the
+  instruction set, not an editor change, and `LanguageService` was left
+  untouched on purpose — the injection seam for tests lives in the new
+  editor code instead.
+
+---
+
+## 38. The suggestion list's colours are derived, not themed
+
+- **Where**: `paletteNow()` in `src/ui/editor_tab/completion_popup.cpp`.
+- **What**: `ThemeManager` exposes editor background, foreground, muted
+  foreground, info, error, current line — but no border, surface, accent or
+  selection getter. The list's frame, selected row, matched-character
+  colour and dim detail are therefore **computed** from the colours that
+  are exposed, rather than read from the tokens a designer would expect to
+  set.
+- **Consequence**: changing the `border` or `surface` token in a theme JSON
+  does not move the suggestion list. It follows the editor's background and
+  foreground instead.
+- **Deliberate**: adding getters would have been the fourth file touched in
+  a stage that was asked not to add theme tokens, and the derived colours
+  are measured against the 4.5:1 gate on all four themes anyway.
+
+---
+
+## 39. Two of the suggestion list's rules cannot be tested in kites_test
+
+Both were found only because the out-of-tree harness runs the real window.
+
+- **`setTheme()` does nothing in `kites_test`.** There are no theme
+  resources linked, so the four themes in
+  `CompletionContrast.EveryColourClearsFourAndAHalfOnEveryTheme` all
+  measure the **default** theme. It reported four identical numbers and
+  passed while the accent on the selected row was 4.18:1 on kites-dark and
+  4.19:1 on kites-light. The harness found it; the colour is now lifted.
+- **There is no application stylesheet in `kites_test`.** So
+  `CompletionGeometry.RowsFollowTheZoom` passed while, in the real window,
+  `QWidget { font-size }` beat the popup's `setFont()` and the list stayed
+  at 14 px while the code was 29 pt.
+- **Consequence**: the in-tree contrast and zoom cases are guards against
+  regression in the default theme only. The four-theme contrast table and
+  the screenshots have to come from the harness, every time.
