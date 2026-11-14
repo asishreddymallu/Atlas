@@ -192,6 +192,15 @@ Index findLabels(const QString &text)
     return index;
 }
 
+QStringList definitionsOnLine(const QString &line)
+{
+    QStringList names;
+    for (const Token &token : tokenise(line))
+        if (token.definesLabel)
+            names << token.name;
+    return names;
+}
+
 QString nameAt(const QString &text, int offset)
 {
     const int clamped = std::clamp(offset, 0, int(text.size()));

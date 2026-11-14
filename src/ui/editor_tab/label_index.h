@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 namespace Kites
 {
@@ -75,6 +76,16 @@ Index findLabels(const QString &text);
 /// The label name at `offset`, or empty when the caret is not on one. The
 /// whole token is returned however far into it the offset sits.
 QString nameAt(const QString &text, int offset);
+
+/**
+ * @brief The labels DEFINED on one line, by the same rule findLabels() uses.
+ *
+ * The single definition of "this line defines a label". The editor's
+ * completion scanner calls this rather than carrying a second copy of the
+ * rule, so the two can never drift - a consistency test asserts they agree
+ * over the corpus and the trap files.
+ */
+QStringList definitionsOnLine(const QString &line);
 
 } // namespace LabelIndex
 } // namespace Kites

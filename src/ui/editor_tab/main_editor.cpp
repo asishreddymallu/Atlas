@@ -43,43 +43,13 @@ class BlockLabels : public QTextBlockUserData
     QStringList labels;
 };
 
-/// The labels defined on one line. A name followed by ':' outside a '#'
-/// comment and outside a "string". One left-to-right pass.
+/// The labels defined on one line. Delegates to the label index, so the
+/// completion scanner and the navigation index share ONE definition of
+/// what a label is - they each had their own before, and nothing stopped
+/// them drifting apart.
 QStringList scanLineLabels(const QString &line)
 {
-    QStringList found;
-    bool        inString = false;
-    QChar       quote;
-    int         wordStart = -1;
-    for (int i = 0; i < line.size(); ++i)
-    {
-        const QChar c = line.at(i);
-        if (inString)
-        {
-            if (c == quote)
-                inString = false;
-            continue;
-        }
-        if (c == QLatin1Char('#'))
-            break;
-        if (c == QLatin1Char('"') || c == QLatin1Char('\''))
-        {
-            inString  = true;
-            quote     = c;
-            wordStart = -1;
-            continue;
-        }
-        if (Completion::isWordChar(c))
-        {
-            if (wordStart < 0)
-                wordStart = i;
-            continue;
-        }
-        if (c == QLatin1Char(':') && wordStart >= 0)
-            found << line.mid(wordStart, i - wordStart);
-        wordStart = -1;
-    }
-    return found;
+    return LabelIndex::definitionsOnLine(line);
 }
 } // namespace
 
@@ -1716,10 +1686,20 @@ void Editor::updateLinkHighlight(const QPoint &position, Qt::KeyboardModifiers m
         return;
     }
 
-    const QTextCursor under  = cursorForPosition(position);
-    const QString     text   = toPlainText();
-    const QString     name   = LabelIndex::nameAt(text, under.position());
-    if (name.isEmpty() || !labelIndex().isDefined(name))
+    // The BLOCK under the mouse, never the whole document. This runs on
+    // every mouse move, and toPlainText() here cost 1428 us a move on an
+    // 877,000 character file - and the first move after an edit cost 99 ms,
+    // because it also rebuilt the whole index. Neither may scale with the
+    // document.
+    const QTextCursor under     = cursorForPosition(position);
+    const QTextBlock  block     = under.block();
+    const int         blockBase = block.position();
+    const QString     line      = block.text();
+    const QString     name      = LabelIndex::nameAt(line, under.position() - blockBase);
+    // "Is it defined" comes from the label-name cache, which the per-block
+    // change detector keeps up to date for nothing - NOT from the index,
+    // whose rebuild is what made the first move after an edit so slow.
+    if (name.isEmpty() || !documentLabels().contains(name))
     {
         clearLinkHighlight();
         return;
@@ -1727,9 +1707,10 @@ void Editor::updateLinkHighlight(const QPoint &position, Qt::KeyboardModifiers m
 
     // Where the token under the mouse starts, so the underline covers it
     // exactly rather than the whole word Qt would select.
-    int start = under.position();
-    while (start > 0 && LabelIndex::isLabelChar(text.at(start - 1)))
-        --start;
+    int inBlock = under.position() - blockBase;
+    while (inBlock > 0 && LabelIndex::isLabelChar(line.at(inBlock - 1)))
+        --inBlock;
+    const int start = blockBase + inBlock;
 
     if (start == m_linkOffset && name == m_linkName)
         return; // same token: nothing to redraw
