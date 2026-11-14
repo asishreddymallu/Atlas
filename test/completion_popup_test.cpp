@@ -770,10 +770,20 @@ TEST(CompletionLabelCache, DeletingTheLineRetiresTheLabel)
 /**
  * @brief (a) A document SWAP that keeps the line count, new label later on.
  *
- * setPlainText does not report what it added - measured, it emits one
- * contentsChange of from=0, charsRemoved=N, charsAdded=0 - so the handler
- * only ever looks at block 0. With the line count unchanged and both
- * documents' first lines unlabelled, nothing tells the cache to move.
+ * setPlainText emits TWO contentsChange signals. Measured, for a 25
+ * character document: (from=0, charsRemoved=25, charsAdded=0), and then
+ * (from=0, charsRemoved=0, charsAdded=24). The first says nothing about
+ * what arrived; the SECOND carries a correct charsAdded that spans every
+ * block, so the handler rescans them all and the flag trips.
+ *
+ * This case pins that. The line count is unchanged and both documents'
+ * first lines are unlabelled, so neither the block-count test nor a look
+ * at block 0 alone would notice anything - only the second signal's full
+ * range reaches the label on the later line.
+ *
+ * It was written expecting to FAIL, on the belief that setPlainText
+ * reported charsAdded=0 and nothing else. It passed, and the measurement
+ * above is why.
  */
 TEST(CompletionLabelCache, ASwapKeepingTheLineCountSeesANewLabel)
 {
@@ -787,7 +797,8 @@ TEST(CompletionLabelCache, ASwapKeepingTheLineCountSeesANewLabel)
         << "a label in the newly loaded document was never seen";
 }
 
-/// (b) The same, the other way: A defines it, B does not.
+/// (b) The same, the other way: A defines it, B does not. Same mechanism
+/// as (a): the second contentsChange spans every block.
 TEST(CompletionLabelCache, ASwapKeepingTheLineCountRetiresAGoneLabel)
 {
     LabelBench bench;
@@ -818,7 +829,7 @@ TEST(CompletionLabelCache, SelectAllAndPasteOfTheSameLineCount)
  * MainWindow calls EditorTab::loadFileContent(), which clears the
  * breakpoints and then setRawText() -> Editor::setPlainText(). This drives
  * the same call the application does, with a replacement of equal line
- * count.
+ * count, so it inherits the two-signal behaviour described on (a).
  */
 TEST(CompletionLabelCache, TheFileOpenPathSeesTheNewDocumentsLabels)
 {

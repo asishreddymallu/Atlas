@@ -1120,3 +1120,65 @@ Both were found only because the out-of-tree harness runs the real window.
 - **Consequence**: the in-tree contrast and zoom cases are guards against
   regression in the default theme only. The four-theme contrast table and
   the screenshots have to come from the harness, every time.
+
+---
+
+## 40. OPEN: the per-block label copy is stale after a document swap
+
+- **Where**: the `contentsChange` handler and `documentLabels()` in
+  `src/ui/editor_tab/main_editor.cpp`.
+- **What is known.** `setPlainText` emits **two** `contentsChange` signals.
+  Measured, for a 25-character document:
+
+  ```
+  contentsChange from=0 removed=25 added=0
+  contentsChange from=0 removed=0  added=24
+  ```
+
+  The second carries a correct `charsAdded` spanning every block, so the
+  handler rescans all of them and updates each block's stored label list.
+  After both signals have run, that stored copy ought to be correct.
+
+- **What is measured instead.** It is not. A build whose `documentLabels()`
+  reads `stored->labels` rather than rescanning fails
+  `CompletionLabelCache.DeletingTheColonRetiresTheLabel` **at its setup
+  assertion** — the first query after a `setPlainText`, before any colon has
+  been deleted — returning an empty label list for a document that defines
+  one.
+
+- **Cause: not pinned down.** It is not the first signal's stale write on
+  its own, because the second signal's range covers block 0 and compares
+  against what it holds. Beyond that, this has not been chased.
+
+- **Consequence: none at present.** `documentLabels()` rescans every line
+  when the dirty flag is set, so the answer the editor uses never depends
+  on the stored copy. The stored copy's only job is change *detection* —
+  deciding whether the flag should be set — and that works. The cost is one
+  full scan per labels-actually-changed edit, not per keystroke.
+
+- **How to reproduce it.** In `documentLabels()`, replace the rescan body
+
+  ```cpp
+  const QStringList found = scanLineLabels(block.text());
+  auto *stored = static_cast<BlockLabels *>(block.userData());
+  if (!stored) block.setUserData(new BlockLabels(found)); else stored->labels = found;
+  labels << found;
+  ```
+
+  with one that trusts what is stored:
+
+  ```cpp
+  auto *stored = static_cast<BlockLabels *>(block.userData());
+  if (!stored) { stored = new BlockLabels(scanLineLabels(block.text()));
+                 block.setUserData(stored); }
+  labels << stored->labels;
+  ```
+
+  then run `kites_test --gtest_filter='CompletionLabelCache*'`. One case
+  fails, at its setup.
+
+- **Why it is open rather than fixed.** The rescan is correct and cheap
+  enough that chasing the stale copy would be work spent on a path nothing
+  reads. It is written down so that anyone who later tries to make the
+  stored copy authoritative — for a bigger document, say — knows there is
+  something here to find first.
