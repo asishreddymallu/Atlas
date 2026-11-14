@@ -52,9 +52,11 @@ bool isLexerCharacter(QChar c)
     // space and an emoji are all non-letters to it and send it to
     // skipLine(). QChar::isLetterOrNumber() and QChar::isSpace() say the
     // opposite, which is what this used to ask.
+    // The ASCII range checks below do the work on their own; an explicit
+    // `u > 127 -> false` gate above them was dead code, and a control that
+    // removed it failed nothing. Left out rather than left in looking
+    // load-bearing.
     const ushort u = c.unicode();
-    if (u > 127)
-        return false;
     const bool asciiAlnum = (u >= 'a' && u <= 'z') || (u >= 'A' && u <= 'Z') ||
                             (u >= '0' && u <= '9');
     const bool asciiSpace = u == ' ' || u == '\t' || u == '\r' || u == '\n' ||
