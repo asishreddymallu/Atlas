@@ -107,6 +107,28 @@ replacement, inside which anchors collapse, so those remap through the
 | loading a file (`setPlainText`) | the numbers are left exactly as they were | `BreakpointKeysDocumentSwap.LoadingAFileLeavesTheNumbersWhereTheyWere` |
 | any key in a read-only pane | neither gained nor lost | `BreakpointKeysReadOnly.AReadOnlyPaneNeitherGainsNorLosesThem` |
 
+| **File > Open** | all cleared — a breakpoint is a line number in the file that was open | `OpenClearsBreakpoints.OpeningAFileDropsThem` |
+| cancelling the Open dialog | nothing cleared; the clear is inside the branch that only runs when a filename came back | `OpenClearsBreakpoints.CancellingTheDialogClearsNothing` |
+| `setPlainText` / `setRawText` on their own | numbers left alone, as always | `OpenClearsBreakpoints.SetPlainTextOnItsOwnStillLeavesThemAlone` |
+
+### In the Expanded pane
+
+The Expanded pane shows the source with custom pseudo-instructions expanded,
+so its line numbers are not the Input pane's.
+`EditorTab::breakpointsForExpandedView()` reads the existing
+expanded-line → original-line mapping the other way.
+
+| Case | Where the dot goes | Test |
+|---|---|---|
+| a pseudo-instruction expanding to several lines | the **first** expanded line, once | `ExpandedBreakpoints.APseudoInstructionExpandingToSeveralLinesGetsOneDotOnTheFirst` |
+| several expanded lines from one source line | still only the first | `ExpandedBreakpoints.OnlyTheFirstExpandedLineIsTakenEvenWhenSeveralMatch` |
+| a source line that produces no expanded line (a comment, a blank) | no dot — there is nowhere to put it | `ExpandedBreakpoints.ABreakpointOnALineThatProducesNoExpandedLineGetsNoDot` |
+| no pseudo-instructions, so nothing expands | the same line numbers as the Input pane | `ExpandedBreakpoints.WithNoMappingRecordedTheTwoPanesAgreeLineForLine`, `ExpandedBreakpoints.ShowingTheExpandedViewPutsTheDotsThereAndChangesNothingElse` |
+
+The pane stays interaction-disabled, the gutter still toggles on the Input
+pane only, and what `MainWindow` hands the VM is still the Input pane's
+source lines.
+
 Invariants, asserted after each of 200 random keys from a fixed seed in
 `BreakpointKeysInvariants.TwoHundredRandomKeysKeepThemLegal`: never below
 line 1, never past the end, never duplicated, and the count never grows.

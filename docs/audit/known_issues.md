@@ -572,14 +572,23 @@ Recorded because they changed reported columns on directive lines.
   breakpoint store was explicitly out of scope. The tests assert only that
   undo and redo leave every breakpoint in range and do not crash.
 - **A breakpoint that is already out of range stays out of range.** The only
-  way to get one is `setBreakpoints()` or loading a shorter file, both of
-  which are deliberately left as they were. No *edit* ever places one
-  outside the document.
-- **The Expanded pane still receives the Input pane's line numbers
-  verbatim** (`EditorTab` pushes them on each view switch). Where pseudo
-  instructions expand, those lines do not correspond; that is unchanged by
-  this work and is a separate question about what a breakpoint means in an
-  expanded view.
+  way to get one now is `setBreakpoints()`, or setting the document text
+  directly — **File > Open no longer leaves them behind**: the open path
+  clears them, because a breakpoint is a line number in the file that was
+  open. The clear is in `EditorTab::loadFileContent()`, not in
+  `Editor::setPlainText()`, so every other caller of `setPlainText` keeps
+  the old behaviour. No *edit* ever places one outside the document.
+  (`OpenClearsBreakpoints.*`)
+- ~~The Expanded pane receives the Input pane's line numbers verbatim.~~
+  **Fixed.** `EditorTab::breakpointsForExpandedView()` reads the existing
+  expanded-line → original-line mapping the other way and puts each dot on
+  the FIRST expanded line that came from its source line. A
+  pseudo-instruction expanding to several lines shows one dot, on the first
+  of them; a breakpoint on a source line that produces no expanded line at
+  all — a comment, a blank — gets none, because there is nowhere to put it.
+  The mapping is recomputed from the text being shown, not read from
+  `m_expandedToOriginalLine`, which is set at assemble time and is stale as
+  soon as the source is edited. (`ExpandedBreakpoints.*`)
 - **Diagnostic squiggles were already right** and still are: they are
   `ExtraSelection`s holding a `QTextCursor`, so the document moves them. An
   error on line 2 followed by a move-down, a copy-down and a comment toggle
@@ -589,24 +598,55 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 19. Debug Run reads past the end of an empty program-counter vector
+## 19. Resolved: Debug Run read past the end of an empty program-counter vector
 
 - **Where**: `src/processor/processor_manager.cpp` —
-  `ProcessorManager::updateEditorHighlight()`, the `programCounters[0]` in
-  the RVSS branch, reached from `processorClockedSlot()` which passes
-  `processorState.programCounters` straight through.
-- **What**: triggering **Debug Run** aborts with
-  `std::vector::operator[]: Assertion '__n < this->size()' failed` before
-  the program gets anywhere. `debugRunSlot()` sets `start_paused_` and the
-  first clocked state carries no program counters, so the subscript is out
-  of bounds. The assertion is Fedora's hardened libstdc++; without it the
-  same code reads past the end silently.
-- **Not introduced here, and not in this branch's area.** Reproduced in an
-  out-of-tree harness **with no breakpoints set and no edit made**, and
-  `git diff` over `src/processor/`, `src/ui/main_window/` and `src/common/`
-  for this whole branch is empty.
-- **Plain Run is fine**, breakpoints included: it pauses at the breakpoint
-  with a populated state. That is how the end-to-end breakpoint check was
-  run instead.
-- **Not fixed here**: processor code is out of scope by instruction. The fix
-  is a guard on `programCounters.empty()` in `updateEditorHighlight()`.
+  `ProcessorManager::updateEditorHighlight()`.
+- **Was**: triggering **Debug Run** aborted before the program went
+  anywhere. `debugRunSlot` → `runSlot` → `run` → `RVSSProcessor::Run()`,
+  which emits `processorClockedSignal(processor_state_)` once more after its
+  loop. `processor_state_.programCounters` is filled only by
+  `setProcessorState()`, called from `StepAndNotify()`, so on a Debug Run
+  that emit is reached with the vector still default-constructed and empty;
+  the RVSS branch then read `programCounters[0]`.
+- **A correction.** The first version of this entry said that without
+  libstdc++ assertions "the same code reads past the end silently". That is
+  wrong. `data()` is null on a default-constructed vector, so it is
+  undefined behaviour either way, and a crash either way. Measured on this
+  toolchain:
+
+  | | |
+  |---|---|
+  | assertions on (the default here — Fedora's libstdc++ enables them with no flag from this project; `CMAKE_BUILD_TYPE` is empty and there is no `-D` of any kind) | `Assertion '__n < this->size()' failed`, abort |
+  | assertions explicitly off | **segmentation fault** |
+
+- **Fix**: nothing clocked means nothing to point at, so
+  `updateEditorHighlight()` returns early on an empty vector. That is the
+  only change in `src/processor/`.
+- **What Debug Run does now**, measured end to end on five instructions,
+  one per line, with a breakpoint on line 4. The highlighted line is read
+  from the painted pixels, independently of the program counter:
+
+  | event | highlighted line | program counter | Pause command reads |
+  |---|---|---|---|
+  | before anything | none | 0 | Pause |
+  | **Debug Run** | 1 | 0 | **Resume** |
+  | Step | 2 | 4 | Resume |
+  | Step | 3 | 8 | Resume |
+  | Step | 4 | 12 | Resume |
+  | Resume (from a fresh Debug Run) | 4 | **12** | **Resume** |
+
+  It pauses *before* the first instruction, the highlight sits on the
+  instruction about to execute, Step advances it one line at a time, and
+  resuming stops at the breakpoint. Running past the end clears the
+  highlight and leaves the program counter at 20.
+
+  Resuming from an instruction you have already stepped onto does **not**
+  stop there again — `last_breakpoint_pc_` is what prevents it, and that is
+  the usual debugger behaviour, not a defect.
+- **Pinned** by `ProcessorHighlight.*` in `test/processor_highlight_test.cpp`,
+  which needs no window and no resources: `processorClockedSlot` is a public
+  slot, so handing it a default-constructed `ProcessorState` is the same
+  call. Two cases, because the guard must skip nothing else — an empty state
+  produces no highlight signal, a populated one still does. Without the
+  guard the case does not fail, it aborts the test binary.
