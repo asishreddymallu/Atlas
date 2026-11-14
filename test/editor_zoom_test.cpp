@@ -200,6 +200,14 @@ TEST(EditorZoom, TheGutterFollowsTheFont)
 {
     Bench bench;
     bench.place("one\ntwo\nthree", 0, 0);
+    // The baseline is taken at delta 0 rather than before any zoom at all.
+    // Until the first applyZoomedFont() the gutter columns use whatever font
+    // they INHERITED, which in kites_test is not the editor's - there are no
+    // font resources here, so FontManager falls back and the two differ by
+    // two pixels of gutter. In the application they are the same font and
+    // this makes no difference; measuring both ends the same way is what
+    // keeps the case about zoom.
+    sendKey(&bench.editor, Qt::Key_0, Qt::ControlModifier);
     const int narrow = bench.editor.viewport()->x();
 
     for (int i = 0; i < 10; ++i)

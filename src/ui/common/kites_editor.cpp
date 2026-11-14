@@ -295,6 +295,10 @@ void KitesEditor::changeEvent(QEvent *event)
 
 void KitesEditor::addRightGutterColumn(GutterColumn* column)
 {
+    // A gutter measures with the editor's font: its sizeHint() is read
+    // by updateViewPortMargins(), and an inherited font is not
+    // guaranteed to be the one the editor is actually using.
+    column->setFont(font());
     if (column && std::find(m_rightGutterColumns.begin(), 
     m_rightGutterColumns.end(), column) == m_rightGutterColumns.end())
     {
@@ -304,6 +308,10 @@ void KitesEditor::addRightGutterColumn(GutterColumn* column)
 
 void KitesEditor::addLeftGutterColumn(GutterColumn* column)
 {
+    // A gutter measures with the editor's font: its sizeHint() is read
+    // by updateViewPortMargins(), and an inherited font is not
+    // guaranteed to be the one the editor is actually using.
+    column->setFont(font());
     if (column && std::find(m_leftGutterColumns.begin(), 
     m_leftGutterColumns.end(), column) == m_leftGutterColumns.end())
     {
