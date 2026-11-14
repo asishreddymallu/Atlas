@@ -447,3 +447,98 @@ TEST(EditorZoomDot, TheDotStaysInsideItsLineAtEverySize)
     fonts.setSize(original);
     QApplication::processEvents();
 }
+
+// ═════════════ the pair rules on a line that is not the first ════════════
+
+namespace
+{
+/// "aaa\nbbb\nccc\nddd\neee" - five lines, NO trailing newline.
+/// Block starts: 0, 4, 8, 12, 16.
+const QString fiveLines = QStringLiteral("aaa\nbbb\nccc\nddd\neee");
+constexpr int thirdLine = 8;
+constexpr int lastLine  = 16;
+} // namespace
+
+/**
+ * @brief The block path must land on the caret's own line.
+ *
+ * With no selection the pair rules are given the caret's BLOCK and the
+ * offset inside it, and the resulting Edit is shifted back by the block's
+ * position. Every one of those three steps can be wrong independently, and
+ * the pure table in editor_pairs_test.cpp cannot see any of them, because
+ * it never goes through the widget.
+ *
+ * Line 3 and the LAST line are the two that matter: the last one has no
+ * trailing newline, so the "what follows the caret" test reads the end of
+ * the document rather than a '\n'. Lines 1 and 2 are asserted unchanged
+ * every time, because an unshifted offset edits exactly there.
+ */
+TEST(EditorPairsBlockOffset, TypingOnLineThreeEditsLineThree)
+{
+    Bench bench;
+
+    // ── opening a pair at the end of line 3
+    bench.place(fiveLines, thirdLine + 3, thirdLine + 3);
+    type(&bench.editor, '(');
+    EXPECT_EQ(bench.text(), QString("aaa\nbbb\nccc()\nddd\neee"));
+    EXPECT_EQ(bench.caret(), thirdLine + 4);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+
+    // ── typing the closer steps over the one just made
+    type(&bench.editor, ')');
+    EXPECT_EQ(bench.text(), QString("aaa\nbbb\nccc()\nddd\neee"))
+        << "the type-over inserted something";
+    EXPECT_EQ(bench.caret(), thirdLine + 5);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+
+    // ── Backspace from between the pair takes both
+    bench.place(QStringLiteral("aaa\nbbb\nccc()\nddd\neee"), thirdLine + 4, thirdLine + 4);
+    sendKey(&bench.editor, Qt::Key_Backspace);
+    EXPECT_EQ(bench.text(), fiveLines);
+    EXPECT_EQ(bench.caret(), thirdLine + 3);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+
+    // ── wrapping a selection on line 3, which takes the WHOLE-document
+    //    path, and must agree with the block path about where line 3 is
+    bench.place(fiveLines, thirdLine, thirdLine + 3);
+    type(&bench.editor, '(');
+    EXPECT_EQ(bench.text(), QString("aaa\nbbb\n(ccc)\nddd\neee"));
+    EXPECT_EQ(bench.editor.textCursor().selectionStart(), thirdLine + 1);
+    EXPECT_EQ(bench.editor.textCursor().selectionEnd(), thirdLine + 4);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+}
+
+/**
+ * @brief The same, on the last line, which has no trailing newline.
+ *
+ * Here the character after the caret is the end of the document rather
+ * than a '\n', and the block's text is the document's tail. A block path
+ * that is right everywhere else can still be wrong at this end.
+ */
+TEST(EditorPairsBlockOffset, TypingOnTheLastLineEditsTheLastLine)
+{
+    Bench bench;
+
+    bench.place(fiveLines, lastLine + 3, lastLine + 3);
+    type(&bench.editor, '(');
+    EXPECT_EQ(bench.text(), QString("aaa\nbbb\nccc\nddd\neee()"));
+    EXPECT_EQ(bench.caret(), lastLine + 4);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+
+    type(&bench.editor, ')');
+    EXPECT_EQ(bench.text(), QString("aaa\nbbb\nccc\nddd\neee()"))
+        << "the type-over inserted something on the last line";
+    EXPECT_EQ(bench.caret(), lastLine + 5);
+
+    bench.place(QStringLiteral("aaa\nbbb\nccc\nddd\neee()"), lastLine + 4, lastLine + 4);
+    sendKey(&bench.editor, Qt::Key_Backspace);
+    EXPECT_EQ(bench.text(), fiveLines);
+    EXPECT_EQ(bench.caret(), lastLine + 3);
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
+    EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
+}
