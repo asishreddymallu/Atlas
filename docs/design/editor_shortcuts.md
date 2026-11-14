@@ -79,13 +79,40 @@ popup — the in-tree case skips and says so, and the check runs in the
 out-of-tree `editorrecon` harness, which links them: with a popup open,
 Ctrl+Enter inserts a line and a bare Enter still goes to the completer.
 
-## Known limit
+## Breakpoints
 
-Breakpoints are held by line number and do not move with the text, so a line
-command leaves one pointing at different text. Pressing Enter already did
-this and always has; see `docs/audit/known_issues.md` issue 18, which also
-records that diagnostic squiggles do **not** have the problem, because they
-are `QTextCursor`s the document maintains.
+A breakpoint belongs to a line, and it follows that line. Each one carries a
+`QTextCursor` selecting its whole line and the newline after it, which Qt
+maintains through ordinary edits; the line commands apply as a single
+replacement, inside which anchors collapse, so those remap through the
+`EditorCommands::LineMap` each command returns. See
+`docs/audit/known_issues.md` issue 18.
+
+| Key / edit | What happens to a breakpoint | Test |
+|---|---|---|
+| typing inside a line | unchanged | `BreakpointKeysOrdinaryEdits.EnterBackspaceDeleteAndPaste` |
+| `Enter` at column 0 | the line moves down with it | same |
+| `Enter` mid-line or at the end | stays on the first part | same |
+| `Backspace` / `Delete` joining two lines | the joined line keeps exactly one | same |
+| deleting a multi-line selection | wholly removed lines lose theirs, a partly kept line keeps its own | same |
+| pasting multi-line text | lines below move down | `BreakpointKeysOrdinaryEdits.PastingMultipleLinesShiftsWhatIsBelow` |
+| `Alt+Up` / `Alt+Down` | the block and the line it jumped over swap, each carrying its own | `BreakpointKeysLineCommands.EveryCommandCarriesTheBreakpointsItShould` |
+| `Shift+Alt+Up` / `Shift+Alt+Down` | the original keeps it, the copy gets none | same |
+| `Ctrl+Shift+K` | removed with the line; the rest move up | same |
+| `Ctrl+Enter` / `Ctrl+Shift+Enter` | lines shift; insert-above carries the current line down | same |
+| `Ctrl+/`, `Tab`, `Shift+Tab`, `Ctrl+]`, `Ctrl+[` | unchanged | same |
+| `Ctrl+X` on a whole line | removed with the line | `BreakpointKeysLineClipboard.CutRemovesItAndAPasteAboveShiftsLinesDown` |
+| `Ctrl+V` of a line copy | lines below move down | same |
+| `Ctrl+Z` / `Ctrl+Y` | left in range; one removed with its line does not come back | `BreakpointKeysUndo.UndoAndRedoLeaveBreakpointsInRange` |
+| loading a file (`setPlainText`) | the numbers are left exactly as they were | `BreakpointKeysDocumentSwap.LoadingAFileLeavesTheNumbersWhereTheyWere` |
+| any key in a read-only pane | neither gained nor lost | `BreakpointKeysReadOnly.AReadOnlyPaneNeitherGainsNorLosesThem` |
+
+Invariants, asserted after each of 200 random keys from a fixed seed in
+`BreakpointKeysInvariants.TwoHundredRandomKeysKeepThemLegal`: never below
+line 1, never past the end, never duplicated, and the count never grows.
+
+The pure maps have their own table in `BreakpointMap*`, driven straight off
+`EditorCommands::LineMap::mapped()`.
 
 ## Not done yet (Tier 2)
 

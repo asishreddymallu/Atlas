@@ -509,34 +509,104 @@ Recorded because they changed reported columns on directive lines.
 
 ---
 
-## 18. Breakpoints are held by line number and do not move with the text
+## 18. Resolved: breakpoints follow their line through an edit
 
-- **Where**: `src/ui/editor_tab/main_editor.h` — `std::vector<uint64_t>
-  m_breakPoints`, filled by `BreakPointGutterColumn` with
-  `block.blockNumber() + 1`.
-- **What**: a breakpoint is a 1-based line number in a plain vector. Nothing
-  adjusts it when the document changes, so any edit that inserts or removes a
-  line leaves the breakpoint pointing at a line that now holds different
-  text.
-- **This is not new, and the Tier 1 editing keys did not introduce it.**
-  Measured on the shipped build, out of tree:
+- **Where**: `src/ui/editor_tab/main_editor.cpp` — the anchors and the
+  `contentsChange` handler; `src/ui/editor_tab/editor_commands.h` —
+  `EditorCommands::LineMap`.
+- **Was**: a breakpoint was a 1-based line number in a plain
+  `std::vector<uint64_t>` and nothing adjusted it. Any edit that inserted or
+  removed a line left it pointing at different text. Pressing Enter at the
+  top of the file already did it, and had since breakpoints existed; the
+  line commands were the same arithmetic.
+- **Now**: each breakpoint carries a `QTextCursor` **selecting its whole
+  line and the newline after it**. Qt maintains the selection through every
+  ordinary edit, so the line is read back from the anchor — and the
+  selection going *empty* is the signal that the line itself was deleted,
+  which a bare cursor cannot tell from a line that merely moved. Where the
+  selection goes empty but the block count did not change, only the line's
+  text was deleted, so the breakpoint stays.
+- **Why not `QTextBlockUserData`**: measured, it does not even survive an
+  Enter at column 0 — the data stays with the block that keeps the position
+  while the text moves to a new one.
+- **The editor's own commands do not use the anchors.** They apply as one
+  `insertText` over a range and anchors collapse inside one: replacing two
+  lines with the same two lines swapped left both anchors on the same line.
+  Each command therefore returns a `LineMap` — for every line it rewrites,
+  where that line went or that it is gone — and `Editor::applyEdit()`
+  remaps through it inside the same edit block.
+- **The semantics**, all covered by `test/editor_breakpoints_test.cpp`:
 
-  | action | before | after | breakpoints |
-  |---|---|---|---|
-  | **Enter** at offset 0 of `one/two/three`, breakpoint on line 3 | line 3 = `three` | line 3 = `two` | still `[3]` |
-  | **Alt+Down** on line 1 of the same file | line 3 = `three` | line 3 = `three` | still `[3]` |
+  | edit | breakpoints |
+  |---|---|
+  | typing inside a line | unchanged |
+  | Enter at column 0 | the line moves down with it |
+  | Enter mid-line or at the end | stays on the first part |
+  | Backspace/Delete joining two lines | the joined line keeps exactly one |
+  | deleting a multi-line selection | wholly removed lines lose theirs; a partly kept line keeps its own; the rest move up |
+  | pasting multi-line text | lines below move down; breakpoints stay with their text |
+  | Alt+Up / Alt+Down | the block and the line it jumped over swap, each carrying its own |
+  | Shift+Alt+Up / Shift+Alt+Down | the original keeps it, the copy gets none |
+  | Ctrl+Shift+K | removed with the line; the rest move up |
+  | Ctrl+Enter / Ctrl+Shift+Enter | lines shift; insert-above carries the current line down |
+  | Ctrl+X on a whole line | removed with the line |
+  | Ctrl+V of a line copy | lines below move down |
+  | Ctrl+/, Tab, Shift+Tab, Ctrl+], Ctrl+[ | unchanged |
 
-  Pressing Enter at the top of the file already does it, and has since
-  breakpoints existed. The line commands are the same arithmetic: they are
-  edits, and an edit moves text past a number that does not move.
-- **Not fixed here**, by instruction. The fix is to hold breakpoints as
-  `QTextCursor`s (or `QTextBlockUserData`) so the document maintains them,
-  which is a change to how the editor and the VM exchange them and belongs
-  with that work, not with a set of key bindings.
-- **Diagnostic squiggles do NOT have this problem**, which is worth knowing
-  because it shows the fix shape. They are `QTextEdit::ExtraSelection`s
-  holding a `QTextCursor`, so the document moves them itself. Measured: an
-  error on line 2, then a move-down, a copy-down and a comment toggle - the
-  squiggle followed its text to line 3, then line 4, then onto the commented
-  line, every time. `ProblemsDock::problemCount()` stays where the last
-  assemble left it, because the dock's rows are re-derived only by a run.
+  And the invariants, asserted after each of 200 random keys from a fixed
+  seed: never below line 1, never past the end, never duplicated, and the
+  count never grows.
+- **Loading a file is unchanged.** `setPlainText` has always left the
+  numbers exactly as they were, out of range or not, and still does; only
+  the anchors are rebuilt. Telling that apart from a user wiping the
+  document took measuring — `setPlainText` arrives as *two* changes and the
+  first is indistinguishable from a select-all-and-delete by position and
+  length alone. The undo stack is the difference: `setPlainText` clears it,
+  an edit fills it.
+
+### Residual limitations
+
+- **Undo does not bring back a breakpoint that was removed with its line.**
+  Ctrl+Z restores the text, and every breakpoint still on the document moves
+  back with it, but one deleted along with its line is gone. An undo-aware
+  breakpoint store was explicitly out of scope. The tests assert only that
+  undo and redo leave every breakpoint in range and do not crash.
+- **A breakpoint that is already out of range stays out of range.** The only
+  way to get one is `setBreakpoints()` or loading a shorter file, both of
+  which are deliberately left as they were. No *edit* ever places one
+  outside the document.
+- **The Expanded pane still receives the Input pane's line numbers
+  verbatim** (`EditorTab` pushes them on each view switch). Where pseudo
+  instructions expand, those lines do not correspond; that is unchanged by
+  this work and is a separate question about what a breakpoint means in an
+  expanded view.
+- **Diagnostic squiggles were already right** and still are: they are
+  `ExtraSelection`s holding a `QTextCursor`, so the document moves them. An
+  error on line 2 followed by a move-down, a copy-down and a comment toggle
+  carries the squiggle to line 3, then 4, then onto the commented line.
+  `ProblemsDock::problemCount()` stays where the last assemble left it,
+  because the dock's rows are re-derived only by a run.
+
+---
+
+## 19. Debug Run reads past the end of an empty program-counter vector
+
+- **Where**: `src/processor/processor_manager.cpp` —
+  `ProcessorManager::updateEditorHighlight()`, the `programCounters[0]` in
+  the RVSS branch, reached from `processorClockedSlot()` which passes
+  `processorState.programCounters` straight through.
+- **What**: triggering **Debug Run** aborts with
+  `std::vector::operator[]: Assertion '__n < this->size()' failed` before
+  the program gets anywhere. `debugRunSlot()` sets `start_paused_` and the
+  first clocked state carries no program counters, so the subscript is out
+  of bounds. The assertion is Fedora's hardened libstdc++; without it the
+  same code reads past the end silently.
+- **Not introduced here, and not in this branch's area.** Reproduced in an
+  out-of-tree harness **with no breakpoints set and no edit made**, and
+  `git diff` over `src/processor/`, `src/ui/main_window/` and `src/common/`
+  for this whole branch is empty.
+- **Plain Run is fine**, breakpoints included: it pauses at the breakpoint
+  with a populated state. That is how the end-to-end breakpoint check was
+  run instead.
+- **Not fixed here**: processor code is out of scope by instruction. The fix
+  is a guard on `programCounters.empty()` in `updateEditorHighlight()`.
