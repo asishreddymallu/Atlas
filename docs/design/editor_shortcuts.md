@@ -1,0 +1,98 @@
+# Editor keys — Tier 1
+
+What the Editor tab's **Input** pane does with each key, whether Qt already
+did it or this work added it, and the test that pins it.
+
+The Output (disassembly) pane is read-only and is a different class
+(`DisassemblyEditor`), so none of the implemented keys reaches it at all.
+`EditorOutputPane.NoTextChangingKeyReachesIt` sends fifteen of them at it and
+checks the text is untouched, and that Ctrl+A and Ctrl+C still work there.
+
+The **Expanded** view is the same class as the Input pane but is set
+read-only, so it gets the caret-moving keys and refuses the rest. That is one
+guard, not two: every text-changing command checks `isReadOnly()` first
+(`EditorKeysReadOnly.AReadOnlyPaneRefusesEveryTextChangingKey`).
+
+## Where the code lives
+
+| | |
+|---|---|
+| The transformations | `src/ui/editor_tab/editor_commands.h` / `.cpp` — pure functions of document text and a selection, returning one `Edit` (range to replace, replacement, new anchor, new position). No widget, no cursor, no clipboard |
+| The keys | `Editor::handleEditingKey()` in `src/ui/editor_tab/main_editor.cpp` |
+| Applying an `Edit` | `Editor::applyEdit()` — one `beginEditBlock`/`endEditBlock`, replacing only the named range, so one Ctrl+Z undoes one command |
+| The indent unit | `Kites::editorTabWidth` in `src/ui/common/kites_editor.h` — the 4 that sets the tab stop distance and that one outdent removes from a space-indented line |
+
+**No QAction and no QShortcut was added.** The window owns exactly seven key
+sequences and `EditorShortcutSet.NothingNewBecameAnApplicationShortcut`
+asserts that, plus zero `QShortcut` objects, plus that none of the nine new
+sequences is owned by an action. Handling the keys in the widget is what
+keeps that true. No `ShortcutOverride` handling is needed either: none of
+F5, F6, F9, F10, Ctrl+O, Ctrl+S or Ctrl+Shift+M collides with any key below.
+
+## Implemented
+
+| Key | Behaviour | Test |
+|---|---|---|
+| `Home` / `Shift+Home` | To the first non-whitespace character; from there, or from inside the indentation, to column 0. Shift extends | `EditorCommandsSmartHome.*` |
+| `Ctrl+C` (no selection) | Copies the whole line including its newline; the last line gets one added. Marked on the clipboard as a line copy | `EditorKeysClipboard.CopyAndCutWithNoSelectionTakeTheWholeLine` |
+| `Ctrl+X` (no selection) | The same, and removes the line | same |
+| `Ctrl+V` (no selection, line-copy clipboard) | Pastes the line **above** the caret's line; the caret stays on its own line. Any other clipboard pastes normally | `EditorKeysClipboard.PasteOfALineCopyGoesAboveAndLeavesTheCaretAlone` |
+| `Alt+Up` / `Alt+Down` | Moves the touched lines one line, carrying the selection. Nothing at the first or last line | `EditorCommandsMoveLines.*` |
+| `Shift+Alt+Up` / `Shift+Alt+Down` | Copies the touched lines above or below. Down moves the selection onto the new copy; up leaves it on the same line numbers | `EditorCommandsDuplicateLines.*` |
+| `Ctrl+Shift+K` | Deletes the touched lines; the caret goes to the same column on the line below, clamped. On the last line, to the end of the one above | `EditorCommandsDeleteLines.*` |
+| `Ctrl+Enter` / `Ctrl+Shift+Enter` | An empty line below / above, carrying the current line's indentation, caret at the end of it. `Key_Return` and `Key_Enter` both | `EditorCommandsInsertLine.*` |
+| `Ctrl+L` | Selects the line including its newline; again, one line more | `EditorCommandsSelectLine.*` |
+| `Enter` | Auto-indent: the new line copies the current line's leading whitespace, capped at the caret's column so pressing Enter inside the indentation does not deepen it. No extra indent after a label | `EditorCommandsNewline.*` |
+| `Tab` (selection spanning lines) | Indents every touched line by one unit | `EditorCommandsIndent.*` |
+| `Shift+Tab` (`Key_Backtab`) | Outdents the current line, or every touched line, by a tab or up to four spaces | `EditorCommandsOutdent.*` |
+| `Ctrl+]` / `Ctrl+[` | Indent / outdent regardless of the selection | same two |
+| `Ctrl+/` | Toggles `#` comments. Blank lines skipped; uncommented if **every** non-blank touched line already starts with `#`, otherwise `# ` goes in at the column of the least-indented non-blank line | `EditorCommandsToggleComment.*` |
+
+**`Tab` with no selection, or with one inside a single line, is unchanged** —
+it inserts a tab character, as it always has.
+`EditorKeysWiring.TabWithNoSelectionStillInsertsATab` pins that.
+
+## Qt native — pinned, not re-implemented
+
+All in `EditorNativeKeys.*`.
+
+| Key | |
+|---|---|
+| `Ctrl+Z`, `Ctrl+Y`, `Ctrl+Shift+Z` | undo, redo, redo. All three already worked; nothing was added |
+| `Ctrl+A`, `Ctrl+C`, `Ctrl+X`, `Ctrl+V` | with a selection, the ordinary commands |
+| `End`, `Ctrl+Home`, `Ctrl+End` | |
+| `Ctrl+Left` / `Ctrl+Right`, with and without `Shift` | by word |
+| `Ctrl+Backspace` / `Ctrl+Delete` | delete word |
+| `Shift`+arrows, `PageUp`, `PageDown` | |
+
+`Home` is **not** in this list. Qt's plain Home goes straight to column 0;
+Smart Home replaces it.
+
+## One existing behaviour moved
+
+The completion popup guard in `Editor::keyPressEvent` ignored Enter, Escape,
+Tab and Backtab by key, whatever the modifiers were, so `Ctrl+Enter` and
+`Ctrl+Shift+Enter` went nowhere whenever a completion happened to be
+showing. It now guards only the unmodified keys, which are the ones the
+popup uses. `kites_test` links no instruction resources and so cannot open a
+popup — the in-tree case skips and says so, and the check runs in the
+out-of-tree `editorrecon` harness, which links them: with a popup open,
+Ctrl+Enter inserts a line and a bare Enter still goes to the completer.
+
+## Known limit
+
+Breakpoints are held by line number and do not move with the text, so a line
+command leaves one pointing at different text. Pressing Enter already did
+this and always has; see `docs/audit/known_issues.md` issue 18, which also
+records that diagnostic squiggles do **not** have the problem, because they
+are `QTextCursor`s the document maintains.
+
+## Not done yet (Tier 2)
+
+- `Ctrl+F` find, `F3` / `Shift+F3` find next / previous
+- `Ctrl+H` replace
+- `Ctrl+G` go to line
+- auto-closing `(` and `"`
+- bracket matching
+- `Ctrl+D` (add selection to next occurrence)
+- zoom

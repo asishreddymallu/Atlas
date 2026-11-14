@@ -506,3 +506,37 @@ Recorded because they changed reported columns on directive lines.
   derives the inset from `QStyle::PM_LayoutLeftMargin` and cross-checks it
   against a tab that still carries it, so the derivation is shown to be the
   right number rather than assumed. It fails against the zeroed behaviour.
+
+---
+
+## 18. Breakpoints are held by line number and do not move with the text
+
+- **Where**: `src/ui/editor_tab/main_editor.h` — `std::vector<uint64_t>
+  m_breakPoints`, filled by `BreakPointGutterColumn` with
+  `block.blockNumber() + 1`.
+- **What**: a breakpoint is a 1-based line number in a plain vector. Nothing
+  adjusts it when the document changes, so any edit that inserts or removes a
+  line leaves the breakpoint pointing at a line that now holds different
+  text.
+- **This is not new, and the Tier 1 editing keys did not introduce it.**
+  Measured on the shipped build, out of tree:
+
+  | action | before | after | breakpoints |
+  |---|---|---|---|
+  | **Enter** at offset 0 of `one/two/three`, breakpoint on line 3 | line 3 = `three` | line 3 = `two` | still `[3]` |
+  | **Alt+Down** on line 1 of the same file | line 3 = `three` | line 3 = `three` | still `[3]` |
+
+  Pressing Enter at the top of the file already does it, and has since
+  breakpoints existed. The line commands are the same arithmetic: they are
+  edits, and an edit moves text past a number that does not move.
+- **Not fixed here**, by instruction. The fix is to hold breakpoints as
+  `QTextCursor`s (or `QTextBlockUserData`) so the document maintains them,
+  which is a change to how the editor and the VM exchange them and belongs
+  with that work, not with a set of key bindings.
+- **Diagnostic squiggles do NOT have this problem**, which is worth knowing
+  because it shows the fix shape. They are `QTextEdit::ExtraSelection`s
+  holding a `QTextCursor`, so the document moves them itself. Measured: an
+  error on line 2, then a move-down, a copy-down and a comment toggle - the
+  squiggle followed its text to line 3, then line 4, then onto the commented
+  line, every time. `ProblemsDock::problemCount()` stays where the last
+  assemble left it, because the dock's rows are re-derived only by a run.
