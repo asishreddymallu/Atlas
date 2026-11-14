@@ -9,6 +9,7 @@
  * document.
  */
 #include "ui/editor_tab/main_editor.h"
+#include "ui/theme/font_manager.h"
 
 #include <gtest/gtest.h>
 
@@ -261,4 +262,63 @@ TEST(EditorZoom, AReadOnlyPaneZoomsToo)
     sendKey(&bench.editor, Qt::Key_Plus, Qt::ControlModifier, "+");
     EXPECT_EQ(fontSizeOf(bench.editor), base + 1);
     EXPECT_EQ(bench.text(), QString("one\ntwo"));
+}
+
+// ════════════════════ a font change, with a zoom standing ════════════════
+
+/**
+ * @brief Changing the font in Settings must not drop the session zoom.
+ *
+ * FontManager emits fontChangedSignal; KitesEditor re-clamps the standing
+ * delta and re-applies it on top of the NEW size, then re-measures the
+ * gutter. Three things can go wrong and all three are asserted: the delta
+ * silently resetting to 0, the new size being rendered without the delta,
+ * and the gutter keeping its old width because nothing re-measured it.
+ */
+TEST(EditorZoomFontChange, ASettingsFontChangeKeepsTheDeltaAndRemeasures)
+{
+    FontManager &fonts = FontManager::getInstance();
+    const int    original = fonts.currentFont().pointSize();
+
+    Bench bench;
+    bench.place("one\ntwo\nthree", 0, 0);
+    sendKey(&bench.editor, Qt::Key_0, Qt::ControlModifier, "0");
+
+    for (int i = 0; i < 3; ++i)
+        sendKey(&bench.editor, Qt::Key_Plus, Qt::ControlModifier, "+");
+    ASSERT_EQ(bench.editor.zoomDelta(), 3);
+    const int zoomedAtOriginal = bench.editor.viewport()->x();
+
+    // A LARGER font in Settings. The delta is well inside the clamp at both
+    // sizes, so it must survive untouched.
+    fonts.setSize(original + 4);
+    QApplication::processEvents();
+    EXPECT_EQ(bench.editor.zoomDelta(), 3) << "the session zoom was lost on a font change";
+    const int zoomedAtLarger = bench.editor.viewport()->x();
+    EXPECT_GT(zoomedAtLarger, zoomedAtOriginal)
+        << "the gutter did not re-measure for the larger font";
+
+    // The rendered size is the new configured size PLUS the delta, not one
+    // or the other. Reading it back through font() is what the application
+    // actually renders with.
+    const QFont rendered = bench.editor.font();
+    const int   renderedSize =
+        rendered.pixelSize() > 0 ? rendered.pixelSize() : rendered.pointSize();
+    EXPECT_EQ(renderedSize, original + 4 + 3)
+        << "the delta was not re-applied on top of the new size";
+
+    // And a SMALL font, where the standing delta would fall through the
+    // floor. It must be re-clamped, not rendered.
+    sendKey(&bench.editor, Qt::Key_0, Qt::ControlModifier, "0");
+    for (int i = 0; i < 6; ++i)
+        sendKey(&bench.editor, Qt::Key_Minus, Qt::ControlModifier, "-");
+    fonts.setSize(6);
+    QApplication::processEvents();
+    const QFont small = bench.editor.font();
+    const int   smallSize = small.pixelSize() > 0 ? small.pixelSize() : small.pointSize();
+    EXPECT_GE(smallSize, KitesEditor::minRenderedSize)
+        << "a small Settings font let the zoom render below the floor";
+
+    fonts.setSize(original);
+    QApplication::processEvents();
 }
