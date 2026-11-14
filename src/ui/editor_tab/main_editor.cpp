@@ -25,16 +25,6 @@
 #include "break_point_gutter_column.h"
 namespace Kites
 {
-namespace
-{
-bool isCompletionWordChar(QChar c)
-{
-    // default Qt word boundaries exclude '.'/'$', which real RISC-V syntax needs
-    // (fadd.s, and labels can contain '.'/'$')
-    return c.isLetterOrNumber() || c == '_' || c == '.' || c == '$';
-}
-} // namespace
-
 Editor::Editor(QWidget *parent )
     : KitesEditor(parent)
 {

@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include "ui/theme/font_manager.h"
 #include "ui/theme/theme_manager.h"
 #include <QMouseEvent>
 #include <cmath>
@@ -462,6 +463,16 @@ TEST(CompletionGeometry, ItFitsInsideANarrowPane)
 
 TEST(CompletionGeometry, RowsFollowTheZoom)
 {
+    // Pin the configured size. The zoom floor is relative to it, and
+    // SettingsSandbox.AWriteWithoutARestoreStaysInTheSandbox deliberately
+    // leaves 3 pt behind - at which the floor is 0 and -6 clamps to no
+    // change. Found by --gtest_shuffle, which is exactly what that test's
+    // comment said would happen to a case that assumed 11 silently.
+    FontManager &fonts   = FontManager::getInstance();
+    const int    restore = fonts.currentFont().pointSize();
+    fonts.setSize(11);
+    QApplication::processEvents();
+
     Bench bench;
     CompletionPopup *popup = openFull(bench);
     ASSERT_TRUE(popup->isVisible());
@@ -483,6 +494,8 @@ TEST(CompletionGeometry, RowsFollowTheZoom)
     EXPECT_GT(atMax, atZero) << "zooming in did not grow the rows";
     EXPECT_LT(atMin, atZero) << "zooming out did not shrink the rows";
     bench.editor.setZoomDelta(0);
+    fonts.setSize(restore);
+    QApplication::processEvents();
 }
 
 TEST(CompletionGeometry, AClickAcceptsAndAClickElsewhereCloses)
