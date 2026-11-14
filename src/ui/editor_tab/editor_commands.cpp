@@ -15,6 +15,15 @@ int indentWidth()
     return editorTabWidth;
 }
 
+int LineMap::mapped(int line) const
+{
+    if (lastLine < firstLine || line < firstLine)
+        return line;
+    if (line > lastLine)
+        return line + shiftBelow;
+    return movedTo.value(line - firstLine, -1);
+}
+
 namespace
 {
 /// The document as lines, without the separators. Joining with '\n' gives
@@ -90,6 +99,39 @@ int mapOffset(const QString &text, int offset, const QList<Splice> &splices)
     return moved;
 }
 
+/// Every old line in [first, last] stays where it is; nothing below moves.
+LineMap identityMap(int first, int last)
+{
+    LineMap map;
+    map.firstLine = first;
+    map.lastLine  = last;
+    for (int line = first; line <= last; ++line)
+        map.movedTo << line;
+    return map;
+}
+
+/**
+ * @brief The map for a pure INSERTION at `at`.
+ *
+ * One rule covers Enter, Ctrl+Enter, Ctrl+Shift+Enter and a line paste: the
+ * line the insertion lands in keeps its breakpoint unless the insertion is
+ * at its very first character, in which case the whole line - text and
+ * breakpoint together - is pushed down. Everything below moves by the number
+ * of newlines inserted.
+ */
+LineMap insertionMap(const QString &text, int at, const QString &inserted)
+{
+    const int added = inserted.count(QLatin1Char('\n'));
+    const int line  = lineOf(text, at);
+
+    LineMap map;
+    map.firstLine  = line;
+    map.lastLine   = line;
+    map.movedTo << (at == lineStart(text, line) ? line + added : line);
+    map.shiftBelow = added;
+    return map;
+}
+
 /// Builds the Edit that applies `splices`, replacing only the lines they
 /// touch. An empty list means the command does not apply.
 Edit spliced(const QString &text, int anchor, int position, const QList<Splice> &splices)
@@ -123,6 +165,9 @@ Edit spliced(const QString &text, int anchor, int position, const QList<Splice> 
     edit.text     = rebuilt.join(QLatin1Char('\n'));
     edit.anchor   = mapOffset(text, anchor, splices);
     edit.position = mapOffset(text, position, splices);
+    // Indent, outdent and the comment toggle rewrite the same lines in
+    // place: no line is created, removed or moved.
+    edit.lines    = identityMap(firstLine, lastLine);
     return edit;
 }
 
@@ -263,6 +308,13 @@ Edit deleteLines(const QString &text, int anchor, int position)
         edit.position = edit.start;
     }
     edit.anchor = edit.position;
+
+    // Every touched line is gone; everything below moves up by as many.
+    edit.lines.firstLine  = range.first;
+    edit.lines.lastLine   = range.last;
+    for (int line = range.first; line <= range.last; ++line)
+        edit.lines.movedTo << -1;
+    edit.lines.shiftBelow = -(range.last - range.first + 1);
     return edit;
 }
 
@@ -282,6 +334,7 @@ Edit pasteLineAbove(const QString &text, int anchor, int position, const QString
     // The caret stays on its own line, which the insertion has pushed down.
     edit.anchor   = anchor + inserted.size();
     edit.position = position + inserted.size();
+    edit.lines    = insertionMap(text, at, inserted);
     return edit;
 }
 
@@ -318,8 +371,28 @@ Edit moveLines(const QString &text, int anchor, int position, int delta)
         shift = lines.at(range.last + 1).size() + 1;
     }
 
-    return wholeLines(text, first, last, rebuilt.join(QLatin1Char('\n')), anchor + shift,
-                      position + shift);
+    Edit edit = wholeLines(text, first, last, rebuilt.join(QLatin1Char('\n')), anchor + shift,
+                           position + shift);
+
+    // The block and the line it jumped over swap places, and they carry
+    // their breakpoints with them. Nothing outside the pair moves.
+    edit.lines.firstLine = first;
+    edit.lines.lastLine  = last;
+    if (delta < 0)
+    {
+        // The line above goes to the bottom of the block.
+        edit.lines.movedTo << last;
+        for (int line = range.first; line <= range.last; ++line)
+            edit.lines.movedTo << line - 1;
+    }
+    else
+    {
+        // The line below comes to the top of the block.
+        for (int line = range.first; line <= range.last; ++line)
+            edit.lines.movedTo << line + 1;
+        edit.lines.movedTo << first;
+    }
+    return edit;
 }
 
 Edit duplicateLines(const QString &text, int anchor, int position, bool above)
@@ -335,8 +408,20 @@ Edit duplicateLines(const QString &text, int anchor, int position, bool above)
     // Identical text either way - two copies where there was one. Only the
     // selection tells the two commands apart.
     const int shift = above ? 0 : joined.size() + 1;
-    return wholeLines(text, range.first, range.last,
-                      joined + QLatin1Char('\n') + joined, anchor + shift, position + shift);
+    Edit      edit  = wholeLines(text, range.first, range.last,
+                                 joined + QLatin1Char('\n') + joined, anchor + shift,
+                                 position + shift);
+
+    // The ORIGINAL keeps its breakpoint and the copy gets none. Copying
+    // downwards leaves the original where it was; copying upwards puts the
+    // copy first, so the original - and its breakpoint - moves down.
+    const int count      = range.last - range.first + 1;
+    edit.lines.firstLine = range.first;
+    edit.lines.lastLine  = range.last;
+    for (int line = range.first; line <= range.last; ++line)
+        edit.lines.movedTo << (above ? line + count : line);
+    edit.lines.shiftBelow = count;
+    return edit;
 }
 
 Edit insertLine(const QString &text, int anchor, int position, bool above)
@@ -360,6 +445,14 @@ Edit insertLine(const QString &text, int anchor, int position, bool above)
         edit.position = edit.start + 1 + indent.size();
     }
     edit.anchor = edit.position;
+    // Said explicitly rather than through insertionMap: on an EMPTY line the
+    // end of the line and the start of it are the same offset, so the
+    // generic "inserting at the first character pushes the line down" rule
+    // cannot tell "below" from "above" there.
+    edit.lines.firstLine  = line;
+    edit.lines.lastLine   = line;
+    edit.lines.movedTo << (above ? line + 1 : line);
+    edit.lines.shiftBelow = 1;
     (void)anchor;
     return edit;
 }
@@ -403,6 +496,24 @@ Edit newlineWithIndent(const QString &text, int anchor, int position)
     edit.text     = QLatin1Char('\n') + indent;
     edit.anchor   = low + 1 + indent.size();
     edit.position = edit.anchor;
+
+    if (high == low)
+    {
+        // The ordinary case: one newline goes in and nothing is removed.
+        edit.lines = insertionMap(text, low, edit.text);
+    }
+    else
+    {
+        // Enter over a selection. The first line keeps its head and its
+        // breakpoint; the last line's tail becomes the new second line and
+        // takes its breakpoint with it; anything wholly inside is gone.
+        const int lastLine   = lineOf(text, high);
+        edit.lines.firstLine = line;
+        edit.lines.lastLine  = lastLine;
+        for (int at = line; at <= lastLine; ++at)
+            edit.lines.movedTo << (at == line ? line : (at == lastLine ? line + 1 : -1));
+        edit.lines.shiftBelow = 1 - (lastLine - line);
+    }
     return edit;
 }
 

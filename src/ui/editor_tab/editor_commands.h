@@ -21,6 +21,37 @@ namespace Kites
 namespace EditorCommands
 {
 /**
+ * @brief Where every line a command touches ends up.
+ *
+ * Breakpoints are per line, and the editor's own commands apply themselves
+ * as ONE replacement over a range - which is exactly the shape that makes a
+ * tracked position useless. Measured: a QTextCursor anchored to a line
+ * follows ordinary typing, Enter, Backspace, deletion and paste correctly,
+ * but inside a replaced range it collapses, so swapping two lines with one
+ * insertText leaves both anchors on the same line.
+ *
+ * So the commands say where the lines went, as part of the same pure
+ * function that says what the text becomes. Lines outside [first, last] are
+ * not rewritten: the ones above do not move, the ones below move by
+ * `shiftBelow`.
+ */
+struct LineMap
+{
+    int        firstLine  {0};
+    /// Inclusive. Less than firstLine means the edit rewrites no whole line,
+    /// and every line stays where it was.
+    int        lastLine   {-1};
+    /// One entry per old line firstLine..lastLine: its new line, or -1 when
+    /// the line is gone.
+    QList<int> movedTo;
+    /// Applied to every old line after lastLine.
+    int        shiftBelow {0};
+
+    /// Where old `line` (0-based) ends up, or -1 if it no longer exists.
+    int mapped(int line) const;
+};
+
+/**
  * @brief One command's result: a narrow replacement plus where the cursor
  *        ends up.
  *
@@ -41,6 +72,8 @@ struct Edit
     QString text;
     int     anchor   {0};
     int     position {0};
+    /// Where the lines this edit rewrites end up. Default is identity.
+    LineMap lines;
 
     /// True when nothing is replaced and only the cursor moves.
     bool isCursorOnly() const { return length == 0 && text.isEmpty(); }
