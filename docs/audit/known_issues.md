@@ -859,12 +859,16 @@ Recorded because they changed reported columns on directive lines.
   user's configured font size.
 - **Applies to the Input, Expanded and Output panes.** `zoomEnabled()` is
   opt-in, so the profiler and compiler views are unchanged.
-- **The breakpoint dot does not scale.** It is a fixed 9 px, centred on its
-  line through the font metrics, so it stays centred at every zoom level —
-  measured at −6, 0 and +18. It is only its size that is fixed, and that
-  shows at both ends: against 29 px text it reads as a small dot, and
-  against 5 px text it is taller than the line it marks. Legible either
-  way, which is why it is recorded rather than changed.
+- **The floor is absolute, not six steps.** −6 steps from the default
+  11 pt is 5 pt, which renders 7 px text on a 10 px line. −6 steps from a
+  configured 8 pt would be 2 pt — a 3 px glyph on a 4 px line — so the
+  clamp takes whichever is higher, the step limit or the delta that
+  reaches `minRenderedSize` (5). Measured at configured 6, 8 and 11 pt:
+  every one bottoms out at 5 pt / 7 px. The ceiling stays relative.
+- **Measured range at the default 11 pt:** 5 pt (7 px, 9 px line) to
+  29 pt (39 px, 51 px line). The line-number column fits its digits at
+  every step of that range.
+- The breakpoint dot **does** scale now — see the correction below.
 
 ---
 
@@ -886,3 +890,82 @@ Recorded because they changed reported columns on directive lines.
   with a stylesheet in play that returns the *resolved* font, so it would
   read back whatever it wrote last time. It computes from the configured
   font plus the zoom delta instead.
+
+---
+
+## 32. Corrections to 30 and 31, from measuring instead of looking
+
+Three things recorded earlier in this file were wrong. They are corrected
+here rather than quietly edited away, because the way each was found says
+something about the checks.
+
+- **"The breakpoint dot does not scale, and at −6 it is taller than the
+  line it marks."** The first half was true, the second was not. It came
+  from reading a screenshot, not a measurement. Measured at the default
+  11 pt the −6 line is 10 px and the dot's ink is 8 px: it fitted. What a
+  sweep of *configured* sizes then showed was a real version of the same
+  bug — at a configured 8 pt the line is 4 px and the dot still 9, because
+  the clamp was relative. The dot now shrinks to fit
+  (`clamp(lineHeight - 2, 3, 9)`) and the floor is absolute, so it is
+  inside its line at every delta and every configured size measured.
+- **"Zoom's gutter work costs one character comparison."** That described
+  the comparison and ignored building the string it compared in.
+  `toPlainText()` ran on every cursor move and every key event. Measured
+  on an 877,000 character document: 1804 µs per caret move, now 53 µs.
+- **"The transcript is identical to the baseline."** It was compared
+  against a file that had drifted. See 34.
+
+---
+
+## 33. Two costs and one bug that are outside the editor's own code
+
+Found while measuring the above. All three are pre-existing and none is
+touched, because they are outside the files this work is allowed to edit.
+
+- **The autocompleter rebuilds the document on every keystroke.**
+  `Editor::keyPressEvent` calls
+  `LanguageService::completions(prefix, toPlainText())` for every key with
+  a non-empty prefix. Measured at 877,043 characters it is **2.3–3.3 ms
+  per key press**, which is all of the remaining typing latency: with it
+  stubbed out a keystroke costs 83 µs and a caret move 53 µs. Typing `(`
+  is already fast only because punctuation gives an empty prefix and skips
+  it.
+- **The Run button loses its shortcut hint.** `setActionHint()` appends
+  `  (F5)` to the tooltip, but the path that resets the button when a
+  program finishes calls `setToolTip("Run program")` directly and drops
+  the suffix. Introduced by `871a869`. This is why the `17-final` row of
+  the role transcript differs. In `src/ui/main_window/main_window.cpp`,
+  which this work may not edit.
+- **The find bar was see-through** — fixed, since it is in this work's
+  files. `#findBar` carried `background-color` and a border from the day
+  it was written and neither ever reached the screen, because `FindBar` is
+  a plain `QWidget` and a plain `QWidget` has no `paintEvent` that asks
+  the style to draw them. The same trap as `#ribbonPanel`'s separator
+  line. It only became visible once a screenshot was taken at a width
+  where the bar sits over code.
+
+---
+
+## 34. The role-transcript baseline was stale, and the gates said "identical"
+
+The role-transcript baseline in the out-of-tree verification harness
+(`baseline/role_transcript_f5a0a00`, a TSV beside the harness, not in this
+repo) was recorded at `f5a0a00`. By the branch point `f76b7ed` — 70 commits later — **51 of its
+220 rows no longer matched**: 20 `PROBLEMS` rows differing in the icon-tag
+field, which was known, and **31 that were not**.
+
+Every earlier report in this project that said the transcript was
+"identical to the baseline" was comparing against that stale file, and the
+md5 `f41286818d7ea889055807dfea9703aa` quoted for it was the **baseline
+file's own**, not a current run's. The checks were not wrong about this
+branch — they were not measuring what they claimed.
+
+The 31 rows are one tooltip (see 33) and five snapshots of the ribbon in
+its idle rather than its running form. None comes from the Debug Run fix
+`a481e5a`, which only skips a highlight update when there are no program
+counters.
+
+A new baseline is recorded at the branch point, with the commit in the
+name, so the next comparison is against something that was true:
+`role_transcript_f76b7ed`, md5
+`b518ba12776391c34cc520e77585d013`. HEAD matches it exactly.

@@ -303,8 +303,12 @@ none of `Ctrl++`, `Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl+wheel` did anything
 at all. Handling it here also keeps the gutters in step, which Qt's would
 not.
 
-It is a **session delta**, clamped to `[-6, +18]` around the configured
-size. It never writes the setting and **does not survive a restart**.
+It is a **session delta**. The ceiling is `+18` steps; the floor is
+whichever is higher, `-6` steps or the delta that reaches a rendered 5 pt,
+because six steps down from a configured 8 pt would be 2 pt. At the
+default 11 pt the range is **5 pt (7 px text, 9 px line) to 29 pt (39 px,
+51 px)**, and the line numbers fit at every step of it. It never writes
+the setting and **does not survive a restart**.
 Applies to the Input, Expanded and Output panes — `zoomEnabled()` is opt-in,
 so the profiler and compiler views are untouched. It works in a read-only
 pane, because it changes nothing in the document
@@ -314,7 +318,15 @@ undo stack and the breakpoints alone
 (`EditorZoom.TheGutterFollowsTheFont`) and both ends clamp
 (`EditorZoom.ItClampsAtBothEnds`).
 
-The find bar and the ribbon do not zoom.
+The find bar and the ribbon do not zoom. The bar does **re-fit** on every
+zoom step, though: it is an overlay in a pane that can be narrower than
+the row wants, so `FindBar::fitToWidth()` drops previous/next, then the
+match count, then the input's minimum, then the toggles rarest first,
+rather than letting Qt resolve the squeeze by overlapping them. Every
+dropped button's key still works. Measured over width 849/1000/1200 x
+replace hidden/shown x zoom 0/+18: 18 overlapping children before, 0
+after (`FindBarGeometry.NothingSitsOnTopOfTheInputAtAnyWidth`,
+`FindBarGeometry.WideningRestoresTheButtonsItDropped`).
 
 ## Not done yet (Tier 2B remainder)
 
