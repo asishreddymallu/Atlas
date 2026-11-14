@@ -861,7 +861,10 @@ Recorded because they changed reported columns on directive lines.
   opt-in, so the profiler and compiler views are unchanged.
 - **The breakpoint dot does not scale.** It is a fixed 9 px, centred on its
   line through the font metrics, so it stays centred at every zoom level —
-  measured — but at a large zoom it is small relative to the text.
+  measured at −6, 0 and +18. It is only its size that is fixed, and that
+  shows at both ends: against 29 px text it reads as a small dot, and
+  against 5 px text it is taller than the line it marks. Legible either
+  way, which is why it is recorded rather than changed.
 
 ---
 
