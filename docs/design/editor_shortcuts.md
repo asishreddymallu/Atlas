@@ -46,7 +46,7 @@ F5, F6, F9, F10, Ctrl+O, Ctrl+S or Ctrl+Shift+M collides with any key below.
 | `Tab` (selection spanning lines) | Indents every touched line by one unit | `EditorCommandsIndent.*` |
 | `Shift+Tab` (`Key_Backtab`) | Outdents the current line, or every touched line, by a tab or up to four spaces | `EditorCommandsOutdent.*` |
 | `Ctrl+]` / `Ctrl+[` | Indent / outdent regardless of the selection | same two |
-| `Ctrl+/` | Toggles `#` comments. Blank lines skipped; uncommented if **every** non-blank touched line already starts with `#`, otherwise `# ` goes in at the column of the least-indented non-blank line | `EditorCommandsToggleComment.*` |
+| `Ctrl+/` | Toggles comments — see **The two comment characters** below. Blank lines skipped; uncommented if **every** non-blank touched line already starts with `#`, otherwise `# ` goes in at the column of the least-indented non-blank line | `EditorCommandsToggleComment.*` |
 
 **`Tab` with no selection, or with one inside a single line, is unchanged** —
 it inserts a tab character, as it always has.
@@ -353,6 +353,73 @@ Every harness invocation goes through it — transcript, the four-theme
 smoke, the ink check, the width sweep, findshots, the zoom and font probes
 and the find-bar fit probe. See `known_issues.md` 35 for what happened
 before it existed.
+
+## The two comment characters
+
+`Lexer::getNextToken()` starts a comment on **either** `#` or `;`:
+
+```cpp
+else if (current_char == '#' || current_char == ';')
+{
+    skipComment();
+    return getNextToken();
+}
+```
+
+Either one, at any column, including with no space before it — measured,
+not inferred: `    j loop; j other` yields `OPCODE(j) LABEL_REF(loop)` and
+nothing else (`atlas-verify/harness/commentprobe` runs the real lexer over
+fifteen lines and prints the token stream).
+
+The editor had **four** independent answers to "is this offset in a
+comment", and three of them knew only about `#`.
+
+| Component | Was | Is | Who reads it |
+|---|---|---|---|
+| `LabelIndex::tokenise()` | `#` only | `#` and `;` | F12, Shift+F12, F2, the Ctrl-hover, the completion label cache |
+| `EditorCommands::contextAt()` | `#` only | `#` and `;` | auto-pairs, bracket matching, the completion trigger |
+| `EditorCommands::toggleComment()` | `#` only | recognises both | `Ctrl+/` |
+| `SyntaxHighlighter` | `#[^\n]*` | both, and steps over strings | the colouring |
+
+So inside a `;` comment: nothing auto-pairs, brackets do not match, the
+suggestion list does not open, and the text is coloured as a comment.
+Verified in all four real themes through the harness — the `#` tail and
+the `;` tail come out the same colour, and so does a character typed into
+one.
+
+### What `Ctrl+/` does
+
+It **recognises** a line commented with either character, so `Ctrl+/` on a
+`;` line takes the comment off rather than commenting it twice, and a
+block that mixes the two counts as commented. It **inserts** `#`.
+
+A `;` line therefore does not round-trip: `Ctrl+/` twice turns
+`; j loop` into `# j loop`. That is deliberate — `#` is what the corpus
+uses — and it is written down here rather than left to be discovered.
+
+### Strings, and the things the lexer gives up on
+
+Two more places the editor disagreed with the lexer, both found while
+reading it for the `;` work and both measured:
+
+- **There are no single-quoted strings.** `getNextToken()` has no case for
+  `'` at all. `.string 'a # b'` measures as `DIRECTIVE(string) INVALID()`.
+  The editor still auto-pairs `'` when you type one; that is a typing
+  convenience, not a claim about what the assembler reads.
+- **A backslash does not escape a quote.** `.string "a\"b"` measures as
+  `STRING(a\) INVALID(b) INVALID()` — the string ends at the quote after
+  the backslash. `contextAt()` was skipping the escaped character and so
+  sat in a string where the assembler sat in code.
+
+And one that goes further. Any character the lexer has no case for sends
+it to `skipLine()`: it abandons the **rest of the line**. `'`, `%`, `@`,
+`+` and `[` all land there. `LabelIndex` now does the same, so
+`    ' j loop` holds no reference — which is what the assembler sees.
+
+`contextAt()` deliberately stops short of that. It also drives
+auto-pairs, and making a stray `'` end the line would stop a bracket
+pairing after one. The divergence is recorded in `known_issues` rather
+than left implicit.
 
 ## Suggestions
 

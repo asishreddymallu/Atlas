@@ -1449,3 +1449,64 @@ edited, so they are corrected here.
    byte: md5 `b518ba12776391c34cc520e77585d013`, 0 differing rows. The 845
    positional rows have no counterpart in the baseline and are not a
    behavioural difference.
+
+---
+
+## 48. `contextAt()` stops short of the lexer on characters it cannot read
+
+`Lexer::getNextToken()` ends in `else { skipLine(); return INVALID; }`:
+any character it has no case for — `'`, `%`, `@`, `+`, `[` — makes it
+abandon the rest of the line. `LabelIndex::tokenise()` now does the same,
+because its only job is to agree with the assembler.
+
+`EditorCommands::contextAt()` does **not**. It stops at "a single quote
+does not open a string" and keeps scanning the line.
+
+**Why.** `contextAt()` has two readers with different needs. Bracket
+matching and the completion trigger want the assembler's view. Auto-pairs
+want the editor's: `'` is a pair opener that the editor deliberately
+offers, and if a stray `'` ended the line for `contextAt()`, typing `(`
+anywhere after one would stop pairing. That would be a visible regression
+in a shipped, tested behaviour (`editor_pairs_test.cpp` has five cases for
+`'`) in exchange for agreeing with an assembler that has already given up
+on the line.
+
+**What it costs.** On a line the assembler discards, the editor may still
+pair a bracket, match a bracket, or offer a completion. The line does not
+assemble either way, so nothing the editor does there can be read back.
+
+**OPEN**, in the sense that the split is a judgement rather than a
+certainty. If the pair rules ever grow their own line scanner, the two
+jobs come apart and `contextAt()` should simply mirror the lexer.
+
+---
+
+## 49. The highlighter cannot be checked by rendering in `kites_test`
+
+`kites_test` loads no theme resources, so
+`ThemeManager::getSyntaxFormat()` returns a default-constructed
+`QTextCharFormat`. `QSyntaxHighlighter::setFormat()` with an empty format
+adds **no format range at all**, and `block.layout()->formats()` comes
+back empty for every line.
+
+Two instruments were tried and both are useless there:
+
+- comparing the painted colour against the Comment colour — every format
+  compares equal to every other, so the assertion passes whatever the
+  rules say. A test written this way **passed against a highlighter with
+  no `;` rule in it**, which is how this was found.
+- asking whether any format range covers the offset — that fails even for
+  `#`, because no range exists.
+
+What is testable without a theme is the **rule**.
+`SyntaxHighlighter::commentPattern()` is public and static so the test and
+the highlighter share one definition, and
+`CommentSyntaxHighlighter.TheCommentRuleCoversBothCharacters` drives it
+over eight lines. The rendering is checked in
+`atlas-verify/harness/commentshots`, which has the resources: the `#`
+tail, the `;` tail and a character typed into a `;` comment all come out
+the same colour in all four real themes, and the inside of a string comes
+out uncoloured.
+
+This is the same constraint as the contrast and zoom work — see the note
+in AGENTS.md — reached from a different direction.
