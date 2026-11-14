@@ -567,7 +567,13 @@ TEST(BreakpointKeysDocumentSwap, LoadingAFileLeavesTheNumbersWhereTheyWere)
 TEST(BreakpointKeysInvariants, TwoHundredRandomKeysKeepThemLegal)
 {
     Bench bench;
-    bench.place("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight", 0, 0, {1, 3, 5, 7});
+    // ADJACENT lines, deliberately. With gaps between them a join or a
+    // delete can never land two breakpoints on one line, and the "no
+    // duplicates" assertion below never gets to do anything - which a
+    // negative control proved by disabling the de-duplication and watching
+    // this case pass anyway.
+    bench.place("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight", 0, 0,
+                {1, 2, 3, 4, 5});
     const int started = bench.breakpoints().size();
 
     struct Step { Qt::Key key; Qt::KeyboardModifiers mods; const char *text; };
