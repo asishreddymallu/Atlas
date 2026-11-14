@@ -289,6 +289,64 @@ QToolTip {
     padding: 4px 8px;
 }
 
+/* ── The editor's find and go-to-line overlays ──────────────────
+ * Both float over the editor's viewport, so they need an opaque surface of
+ * their own and a border to lift them off the text. Every colour here is an
+ * existing token; the match highlights inside the text are derived in C++
+ * from the same `info` colour, because an extra selection's format is not
+ * reachable from a stylesheet.
+ *
+ * The error state is a property rather than a second object name, so one
+ * rule covers the find field, the status label and the go-to-line field. */
+#findBar, #gotoLineBar {
+    background-color: {{surface}};
+    border: 1px solid {{border}};
+    border-radius: 4px;
+}
+#findBar QLineEdit, #gotoLineBar QLineEdit {
+    background-color: {{background}};
+    color: {{foreground}};
+    border: 1px solid {{border}};
+    min-width: 140px;
+}
+#findBar QLineEdit:focus, #gotoLineBar QLineEdit:focus {
+    border-color: {{accent}};
+}
+#findStatus {
+    color: {{mutedForeground}};
+    padding: 0px 4px;
+}
+/* Something the user typed that cannot be used: an invalid regex, a line
+ * number that is not one. The text stays {{foreground}} so it is still
+ * readable; the border and the message carry the state. */
+#findBar QLineEdit[findError="true"],
+#gotoLineBar QLineEdit[findError="true"] {
+    border: 1px solid {{error}};
+}
+#findStatus[findError="true"] {
+    color: {{error}};
+}
+/* The three option toggles and the four plain buttons. Flat at rest like
+ * the ribbon's, with the checked state carrying the same accent border the
+ * ribbon uses, so "on" reads the same way everywhere. */
+#findBar QToolButton {
+    background-color: transparent;
+    color: {{foreground}};
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+#findBar QToolButton:hover {
+    background-color: {{currentLine}};
+}
+#findBar QToolButton:checked {
+    background-color: {{selection}};
+    border: 1px solid {{accent}};
+}
+#findBar QToolButton:disabled {
+    color: {{mutedForeground}};
+}
+
 /* ── Ribbon panel, captions and separators ─────────────────────
  * The panel is FLAT. A vertical lift from surface to background was the
  * other option and was tried: on a band this shallow it reads as a bevel and

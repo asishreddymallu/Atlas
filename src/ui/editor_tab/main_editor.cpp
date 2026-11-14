@@ -386,9 +386,11 @@ void Editor::refreshFindColors()
     const QColor accentish  = theme.getInfoColor();
 
     // A wash, so ordinary foreground text is as readable on a match as it is
-    // on the page. The exact amount is checked against 4.5:1 in the
-    // out-of-tree theme harness, in all four themes.
-    m_findMatchColor       = blended(background, accentish, 0.32);
+    // on the page. The amount is not a guess: the theme harness sweeps it
+    // and reports text-on-match contrast per theme. 0.32 put
+    // tokyo-night-storm at 4.45, under the 4.5 gate; 0.25 leaves the worst
+    // theme at 5.32 and is still a clearly visible tint.
+    m_findMatchColor       = blended(background, accentish, 0.25);
     m_findCurrentColor     = accentish;
     m_findCurrentTextColor = background;
 }
