@@ -55,16 +55,29 @@ public:
      * A delta, never a new size, so the font chosen in Settings is untouched
      * and a zoom is forgotten when the window closes.
      *
-     * Clamped to [-6, +18] AROUND whatever the configured size is, rather
-     * than to absolute sizes, because the configured size is the user's.
-     * Six steps down is where the line numbers stop being legible and the
-     * 9 px breakpoint dot stops fitting its line; eighteen up is where an
-     * 849 px window shows almost nothing. Measured at both ends.
+     * Clamped to [-6, +18] steps AND to an absolute floor, because the two
+     * are not the same thing. Six steps down from the default 11 pt is
+     * 5 pt, which renders at 7 px with a 10 px line - legible, and the dot
+     * fits. Six steps down from a configured 8 pt is 2 pt, a 3 px glyph on
+     * a 4 px line, which is neither. The step range alone let that happen;
+     * it was measured, not guessed.
+     *
+     * So the floor is whichever is HIGHER: minZoomDelta steps, or whatever
+     * delta brings the size up to minRenderedSize. The ceiling stays
+     * relative - a large configured size has no legibility problem.
+     *
+     * minRenderedSize is in the unit of the configured font, which
+     * FontManager always gives in POINTS (QFont(family, int) is a point
+     * size). The pixel branch below is defensive only.
      */
-    static constexpr int minZoomDelta = -6;
-    static constexpr int maxZoomDelta = 18;
+    static constexpr int minZoomDelta   = -6;
+    static constexpr int maxZoomDelta   = 18;
+    static constexpr int minRenderedSize = 5;
 
     int  zoomDelta() const;
+    /// The clamp, exposed so a caller that has to re-apply (a font change)
+    /// can re-clamp without going through setZoomDelta's "did it move" test.
+    int  clampZoomDelta(int delta) const;
     /// Clamps, applies and re-measures. Returns what it landed on, which is
     /// not `delta` at the ends.
     int  setZoomDelta(int delta);

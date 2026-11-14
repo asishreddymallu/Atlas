@@ -28,7 +28,14 @@ KitesEditor::KitesEditor(QWidget *parent)
     // in Settings has to come back through the same path so the session
     // zoom delta is re-applied on top of it and the gutters are re-measured.
     connect(&FontManager::getInstance(), &FontManager::fontChangedSignal, this,
-            [this](const QFont &) { applyZoomedFont(); });
+            [this](const QFont &)
+            {
+                // Re-clamp first: a smaller font in Settings can put the
+                // standing delta below the floor, and applyZoomedFont()
+                // would otherwise render a size the clamp forbids.
+                m_zoomDelta = clampZoomDelta(m_zoomDelta);
+                applyZoomedFont();
+            });
     connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,
             &KitesEditor::themeChangedSlot);
 
@@ -181,9 +188,20 @@ int KitesEditor::zoomDelta() const
     return m_zoomDelta;
 }
 
+int KitesEditor::clampZoomDelta(int delta) const
+{
+    const QFont configured = FontManager::getInstance().currentFont();
+    const int   base = configured.pixelSize() > 0 ? configured.pixelSize()
+                                                  : configured.pointSize();
+    // Never force a zoom IN: if the configured size is already under the
+    // floor, that is the user's choice and 0 stays available.
+    const int floor = std::min(0, std::max(minZoomDelta, minRenderedSize - base));
+    return std::clamp(delta, floor, maxZoomDelta);
+}
+
 int KitesEditor::setZoomDelta(int delta)
 {
-    const int clamped = std::clamp(delta, minZoomDelta, maxZoomDelta);
+    const int clamped = clampZoomDelta(delta);
     if (clamped != m_zoomDelta)
     {
         m_zoomDelta = clamped;
