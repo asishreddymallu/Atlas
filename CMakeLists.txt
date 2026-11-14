@@ -38,10 +38,15 @@ set_source_files_properties(${LUA_SRC_FILES}
 )
 
 
-file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp")
-file(GLOB_RECURSE TEST_FILES "${TEST_DIR}/*.cpp")
-file(GLOB_RECURSE UI_FILES "${SRC_DIR}/*.ui")
-file(GLOB_RECURSE HEADER_FILES
+# CONFIGURE_DEPENDS so a new source or header is picked up by a plain
+# `cmake --build`, without remembering to re-run cmake. Adding a new
+# Q_OBJECT header without it meant the build linked against a moc that was
+# never generated, and the error named the missing symbol rather than the
+# missing file.
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.cpp")
+file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "${TEST_DIR}/*.cpp")
+file(GLOB_RECURSE UI_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.ui")
+file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
     "${SRC_DIR}/*.h")
 
 list(APPEND SRC_FILES ${LUA_SRC_FILES})
