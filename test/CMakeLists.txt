@@ -25,11 +25,21 @@ if(VM_DEBUG_PRINTS)
     target_compile_definitions(kites_test PRIVATE VM_DEBUG_PRINTS)
 endif()
 
+# A settings sandbox for the whole suite. test_main.cpp makes its own
+# per-process temporary directory and overrides these on the way in - that
+# is what actually protects, and it protects kites_test however it is
+# launched. These are belt-and-braces for the discovery pass, which runs
+# the binary to list tests before any of that code is reached.
+set(KITES_TEST_SANDBOX ${CMAKE_BINARY_DIR}/test-sandbox)
+file(MAKE_DIRECTORY ${KITES_TEST_SANDBOX}/config ${KITES_TEST_SANDBOX}/data
+                    ${KITES_TEST_SANDBOX}/cache)
+
 gtest_discover_tests(kites_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
     DISCOVERY_MODE PRE_TEST
     PROPERTIES
         FAIL_REGULAR_EXPRESSION ".*FAILED.*"
+        ENVIRONMENT "XDG_CONFIG_HOME=${KITES_TEST_SANDBOX}/config;XDG_DATA_HOME=${KITES_TEST_SANDBOX}/data;XDG_CACHE_HOME=${KITES_TEST_SANDBOX}/cache"
 )
 
 # ---------------------------------------------------------------------------

@@ -542,3 +542,33 @@ TEST(EditorPairsBlockOffset, TypingOnTheLastLineEditsTheLastLine)
     EXPECT_EQ(bench.editor.document()->findBlockByNumber(0).text(), QString("aaa"));
     EXPECT_EQ(bench.editor.document()->findBlockByNumber(1).text(), QString("bbb"));
 }
+
+// ══════════════════════ the settings sandbox canary ══════════════════════
+
+/**
+ * @brief Writes a setting and deliberately does NOT put it back.
+ *
+ * Every other font test here captures the configured size and restores it.
+ * This one does not, on purpose: it is the canary for the sandbox in
+ * test_main.cpp. If the redirect is ever removed or stops working, this
+ * test writes editor/fontSize=3 into the developer's real
+ * ~/.config/Kites/Kites.conf - which is exactly what happened once, and
+ * what made EditorZoom.ItClampsAtBothEnds fail on the next run.
+ *
+ * It is safe to leave 3 behind inside the sandbox because every
+ * size-sensitive test either pins the size itself (ItClampsAtBothEnds) or
+ * captures and restores whatever it finds (ASettingsFontChangeKeeps...,
+ * TheDotStaysInsideItsLine...). A test added later that assumes 11 without
+ * saying so would be the thing at fault.
+ *
+ * The assertion is only that the write took effect in-process; where it
+ * LANDED is proved outside, by comparing a sentinel file's md5.
+ */
+TEST(SettingsSandbox, AWriteWithoutARestoreStaysInTheSandbox)
+{
+    FontManager &fonts = FontManager::getInstance();
+    fonts.setSize(3);
+    QApplication::processEvents();
+    EXPECT_EQ(fonts.currentFont().pointSize(), 3)
+        << "the write did not take effect at all";
+}
