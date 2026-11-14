@@ -38,9 +38,7 @@ protected:
             if (block.isVisible() && bottom >= event->rect().top())
             {
                 const bool hasBreakpoint =
-                    std::find(m_mainEditor->m_breakPoints.begin(),
-                              m_mainEditor->m_breakPoints.end(),
-                              blockNumber + 1) != m_mainEditor->m_breakPoints.end();
+                    m_mainEditor->hasBreakpointAtLine(blockNumber + 1);
 
                 // A faint ghost on the hovered line shows where a click would
                 // place a breakpoint; a solid dot marks one that exists.
@@ -81,15 +79,9 @@ protected:
                 clickPos.y() <= blockTop(block) + blockHeight(block))
             {
                 int lineNumber = block.blockNumber() + 1; // +1 for 1-based line numbers
-                auto it = std::find(m_mainEditor->m_breakPoints.begin(), m_mainEditor->m_breakPoints.end(), lineNumber);
-                if (it != m_mainEditor->m_breakPoints.end())
-                {
-                    m_mainEditor->m_breakPoints.erase(it);
-                }
-                else
-                {
-                    m_mainEditor->m_breakPoints.push_back(lineNumber);
-                }
+                // Through the editor rather than at the vector: it anchors
+                // the new breakpoint so it follows the text from here on.
+                m_mainEditor->toggleBreakpointAtLine(lineNumber);
                 update(); // Trigger a repaint to show/hide the breakpoint indicator
             }
         };
@@ -113,7 +105,7 @@ protected:
             }
             else if (selectedAction == action2)
             {
-                m_mainEditor->m_breakPoints.clear();
+                m_mainEditor->clearBreakpoints();
                 update(); // Trigger a repaint to remove all breakpoint indicators
             }
             return; // Prevent base class selection

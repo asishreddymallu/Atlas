@@ -2,6 +2,8 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMimeData>
+#include <QTextDocument>
+#include <algorithm>
 #include "language_service/language_service.h"
 #include <QAbstractItemView>
 #include <QKeyEvent>
@@ -49,6 +51,133 @@ Editor::Editor(QWidget *parent )
     m_autoCompleter->setWidget(this);
     connect(m_autoCompleter, QOverload<const QString &>::of(&QCompleter::activated), this,
             &Editor::insertCompletion);
+
+    m_lastBlockCount = document()->blockCount();
+    connect(document(), &QTextDocument::contentsChange, this,
+            [this](int from, int charsRemoved, int charsAdded)
+            {
+                // applyEdit() remaps its own change through the command's
+                // LineMap; anchors collapse inside a replaced range.
+                if (m_remappingBreakpoints)
+                    return;
+
+                // Loading a file has always left the breakpoint NUMBERS
+                // alone, and still does; they are only re-anchored to the
+                // new document. Telling that apart from a user wiping the
+                // document took measuring, because setPlainText arrives as
+                // TWO changes and the first of them looks exactly like a
+                // select-all-and-delete:
+                //
+                //   setPlainText     (0, removed=15, added=0,  undo=0)
+                //                    (0, removed=0,  added=14, undo=0)
+                //   select all + del (0, removed=13, added=0,  undo=1)
+                //
+                // The undo stack is the discriminator: setPlainText clears
+                // it, an edit fills it. characterCount() counts the final
+                // block separator, which is why the second test is >=.
+                const bool everythingGone =
+                    from == 0 && charsAdded == 0 && document()->characterCount() <= 1;
+                const bool everythingArrived =
+                    from == 0 && charsRemoved == 0 &&
+                    charsAdded >= document()->characterCount() - 1;
+                const bool documentReplaced =
+                    everythingArrived || (everythingGone && !document()->isUndoAvailable());
+                if (documentReplaced)
+                {
+                    m_lastBlockCount = document()->blockCount();
+                    reanchorBreakpoints();
+                    return;
+                }
+                refreshBreakpointsFromAnchors();
+            });
+}
+
+QTextCursor Editor::anchorForLine(int line) const
+{
+    const QTextBlock block = document()->findBlockByNumber(line - 1);
+    if (!block.isValid())
+        return QTextCursor();
+
+    QTextCursor cursor(document());
+    cursor.setPosition(block.position());
+    if (block.next().isValid())
+        cursor.setPosition(block.next().position(), QTextCursor::KeepAnchor);
+    else
+        cursor.setPosition(block.position() + block.length() - 1, QTextCursor::KeepAnchor);
+    return cursor;
+}
+
+void Editor::reanchorBreakpoints()
+{
+    m_breakpointAnchors.clear();
+    for (uint64_t line : m_breakPoints)
+        m_breakpointAnchors << anchorForLine(int(line));
+}
+
+void Editor::normaliseBreakpoints()
+{
+    const int lines = document()->blockCount();
+    std::vector<uint64_t> kept;
+    for (uint64_t line : m_breakPoints)
+        if (line >= 1 && int(line) <= lines &&
+            std::find(kept.begin(), kept.end(), line) == kept.end())
+            kept.push_back(line);
+    std::sort(kept.begin(), kept.end());
+    m_breakPoints = kept;
+}
+
+void Editor::refreshBreakpointsFromAnchors()
+{
+    const int  blocks       = document()->blockCount();
+    // A line can only have been created or destroyed if the count moved. If
+    // it did not, an anchor whose selection went empty merely had its text
+    // deleted - the line is still there, and so is its breakpoint.
+    const bool linesChanged = blocks != m_lastBlockCount;
+    m_lastBlockCount        = blocks;
+
+    std::vector<uint64_t> lines;
+    for (int i = 0; i < m_breakpointAnchors.size() && i < int(m_breakPoints.size()); ++i)
+    {
+        const QTextCursor &anchor = m_breakpointAnchors.at(i);
+        if (anchor.isNull())
+        {
+            // Never anchored, because the line does not exist. It keeps its
+            // number, which is what loading a shorter file has always done.
+            lines.push_back(m_breakPoints.at(i));
+            continue;
+        }
+        if (!anchor.hasSelection() && linesChanged)
+            continue; // the line itself is gone
+        lines.push_back(uint64_t(document()->findBlock(anchor.anchor()).blockNumber() + 1));
+    }
+
+    m_breakPoints = lines;
+    normaliseBreakpoints();
+    reanchorBreakpoints();
+    viewport()->update();
+}
+
+bool Editor::hasBreakpointAtLine(int line) const
+{
+    return std::find(m_breakPoints.begin(), m_breakPoints.end(), uint64_t(line)) !=
+           m_breakPoints.end();
+}
+
+void Editor::toggleBreakpointAtLine(int line)
+{
+    auto it = std::find(m_breakPoints.begin(), m_breakPoints.end(), uint64_t(line));
+    if (it != m_breakPoints.end())
+        m_breakPoints.erase(it);
+    else
+        m_breakPoints.push_back(uint64_t(line));
+    normaliseBreakpoints();
+    reanchorBreakpoints();
+}
+
+void Editor::clearBreakpoints()
+{
+    m_breakPoints.clear();
+    m_breakpointAnchors.clear();
 }
 
 std::vector<uint64_t> Editor::getBreakpoints() const
@@ -58,8 +187,13 @@ std::vector<uint64_t> Editor::getBreakpoints() const
 
 void Editor::setBreakpoints(const std::vector<uint64_t> &breakpoints)
 {
+    // Deliberately NOT normalised: this is the setter the Expanded pane and
+    // a restored session come through, and it has always taken the numbers
+    // as given, out of range or not. Anchoring is what is added.
     m_breakPoints = breakpoints;
-    viewport()->update(); 
+    reanchorBreakpoints();
+    m_lastBlockCount = document()->blockCount();
+    viewport()->update();
 }
 
 void Editor::setBreakpointInteractionEnabled(bool enabled)
@@ -215,6 +349,13 @@ void Editor::applyEdit(const EditorCommands::Edit &edit)
     if (!edit.valid)
         return;
 
+    const std::vector<uint64_t> before = m_breakPoints;
+
+    // The anchors cannot survive this: the whole range goes in one
+    // insertText and they collapse inside it. The command's LineMap says
+    // where the lines went, so that is what the breakpoints follow.
+    m_remappingBreakpoints = true;
+
     QTextCursor cursor = textCursor();
     cursor.beginEditBlock();
     if (!edit.isCursorOnly() || edit.length > 0)
@@ -231,6 +372,20 @@ void Editor::applyEdit(const EditorCommands::Edit &edit)
     cursor.setPosition(edit.position, QTextCursor::KeepAnchor);
     setTextCursor(cursor);
     ensureCursorVisible();
+
+    std::vector<uint64_t> after;
+    for (uint64_t line : before)
+    {
+        const int moved = edit.lines.mapped(int(line) - 1);
+        if (moved >= 0)
+            after.push_back(uint64_t(moved + 1));
+    }
+    m_breakPoints = after;
+    normaliseBreakpoints();
+    reanchorBreakpoints();
+    m_lastBlockCount       = document()->blockCount();
+    m_remappingBreakpoints = false;
+    viewport()->update();
 }
 
 void Editor::putLineOnClipboard(const QString &lineText)
