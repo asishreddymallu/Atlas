@@ -142,11 +142,80 @@ line 1, never past the end, never duplicated, and the count never grows.
 The pure maps have their own table in `BreakpointMap*`, driven straight off
 `EditorCommands::LineMap::mapped()`.
 
-## Not done yet (Tier 2)
+## Find, Replace and Go to line (Tier 2A)
 
-- `Ctrl+F` find, `F3` / `Shift+F3` find next / previous
-- `Ctrl+H` replace
-- `Ctrl+G` go to line
+The search itself is `src/ui/editor_tab/find_engine.{h,cpp}` — pure, text in
+and offsets out, with its own table in `test/find_engine_test.cpp`. The bar
+is `find_bar.{h,cpp}`, the go-to-line overlay is `goto_line_bar.{h,cpp}`,
+and `Editor` wires them up. Both overlays are children of the editor's
+**viewport**, in no layout, so the viewport is the same size open or closed.
+
+Still no `QAction` and no `QShortcut`: the application owns exactly seven key
+sequences and `FindShortcutSet.StillExactlySevenApplicationKeySequences`
+asserts it.
+
+| Key | Behaviour | Test |
+|---|---|---|
+| `Ctrl+F` | Opens the bar and focuses the field, selecting what is in it. Prefills from a selection, but never a multi-line one | `FindKeys.CtrlFOpensAndPrefillsFromASingleLineSelectionOnly` |
+| `Enter` (find field) / `F3` | Next match, wrapping | `FindKeys.EnterAndF3WalkForwardAndBackwardAndWrap` |
+| `Shift+Enter` / `Shift+F3` | Previous match, wrapping | same |
+| `F3` with the bar closed | Opens it and goes to the next match for the last term; with no term, just opens | `FindKeys.F3WithTheBarClosedOpensItAndGoesOn` |
+| `Esc` | Closes, returns focus to the editor, leaves the current match selected. In the editor it closes the bar too | `FindKeys.EscClosesLeavesTheMatchSelectedAndReturnsFocus` |
+| `Alt+C` / `Alt+W` / `Alt+R` | Match case / whole word / regex, **while focus is in the bar** | `FindKeys.AltCWRToggleTheOptionsFromInsideTheBar` |
+| `Ctrl+H` | Opens with the replace row, focus in the find field | `ReplaceKeys.CtrlHOpensTheReplaceRowWithFocusInTheFindField` |
+| `Enter` (replace field) | Replace this match, then move on | `ReplaceOne.ReplacesTheCurrentMatchInOneUndoStepAndMovesOn` |
+| `Ctrl+Alt+Enter` | Replace All, in one undo step | `ReplaceAll.IsExactlyOneUndoStepAndSaysHowMany` |
+| `Ctrl+G` | Go to line. `12` or `12:5`; past the end goes to the last line | `GotoLine.AcceptsALineAndALineColonColumn`, `GotoLine.PastTheEndGoesToTheLastLineAndRubbishDoesNothing` |
+
+`Alt+C`, `Alt+W` and `Alt+R` are handled **in the bar**, not in the editor,
+because in the editor `Alt`+letter types that letter — measured on a bare
+`KitesEditor` — and that behaviour is not this feature's to change.
+
+### Behaviours worth stating
+
+- **Finding never touches the undo stack.** Ten next/previous round trips
+  and two re-searches leave `document()->revision()`, `isUndoAvailable()`
+  and `isRedoAvailable()` exactly as they were
+  (`FindIncremental.NoAmountOfFindingTouchesTheUndoStack`). The same for go
+  to line (`GotoLine.NeverTouchesTheUndoStack`).
+- **Incremental search runs from where the caret was when the bar opened**,
+  not from the previous match, so the selection does not crawl forward as
+  the pattern grows (`FindIncremental.TypingSelectsTheFirstMatchFromWhereTheBarWasOpened`).
+- **Highlights compose, they do not replace.** They are a third list in
+  `KitesEditor::refreshExtraSelections()`, under the diagnostics, so a
+  squiggle is never masked and survives the bar closing
+  (`FindHighlights.DiagnosticsSurviveDuringAndAfterASearch`). The execution
+  highlight is painted in `Editor::paintEvent`, not an extra selection, so
+  it composes without any help.
+- **Only matches on screen get a selection**; the count is the whole
+  document. 2000 matches hand Qt fewer than 200 formats and still read
+  "1 of 2000" (`FindHighlights.OnlyVisibleMatchesGetASelectionButTheCountIsTheWholeDocument`).
+- **Replace All is one undo step**, applied back to front so an earlier
+  offset is never invalidated. `^` → `# ` comments every line, blank lines
+  included (`ReplaceAll.CaretReplaceCommentsEveryLineAndTerminates`).
+- **Replace is refused in a read-only pane** by the editor, not just by
+  greyed buttons (`ReplaceReadOnly.AReadOnlyPaneRefusesToReplace`).
+- **Only one overlay is open at a time**, in both directions
+  (`GotoLine.EscClosesAndOnlyOneOverlayIsOpenAtATime`).
+- **Breakpoints and a replacement that changes the line count**: a line a
+  replacement splits keeps its breakpoint on the **last** of the lines that
+  come out of it; lines below shift by the change in count; a breakpoint
+  whose line is swallowed by a multi-line removal is dropped. This comes
+  from the anchors, not a `LineMap` — Replace All is not an
+  `EditorCommands` edit (`ReplaceBreakpoints.TheRuleWhenAReplacementChangesTheNumberOfLines`).
+- **Esc with the completion popup open** goes to the popup, not the bar.
+  `kites_test` links no `.qrc` and cannot open a popup, so that one is
+  measured in the out-of-tree `findshots` harness.
+
+### Limitations
+
+Each is an entry in `docs/audit/known_issues.md`: a regex may match across
+lines (21), the search stops at 10000 matches (22), "whole word" means
+`[A-Za-z0-9_]` (23), the Output pane has no Find (24), and the breakpoint
+rule above (25).
+
+## Not done yet (Tier 2B)
+
 - auto-closing `(` and `"`
 - bracket matching
 - `Ctrl+D` (add selection to next occurrence)

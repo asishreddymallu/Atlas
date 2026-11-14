@@ -663,3 +663,91 @@ Recorded because they changed reported columns on directive lines.
   call. Two cases, because the guard must skip nothing else — an empty state
   produces no highlight signal, a populated one still does. Without the
   guard the case does not fail, it aborts the test binary.
+
+---
+
+## 21. A regex search may match across lines
+
+- **Where**: `src/ui/editor_tab/find_engine.cpp` — `compile()` always sets
+  `QRegularExpression::MultilineOption`.
+- **What**: `^` and `$` are per line, and a pattern like `one\ntwo` matches
+  across a line break. `.` still does not cross one, because
+  `DotMatchesEverythingOption` is deliberately off.
+- **Why it is listed**: a Replace All whose pattern spans lines can change
+  the number of lines, which is issue 25. Pinned by
+  `FindEngineRegex.CaretAndDollarArePerLineAndAMatchMaySpanLines`.
+
+---
+
+## 22. A search stops at 10000 matches
+
+- **Where**: `FindEngine::matchCap` in
+  `src/ui/editor_tab/find_engine.h`.
+- **What**: `findAll` stops after 10000 matches and sets `truncated`. The
+  status line then reads "1 of 10000 (first 10000)". Navigation and Replace
+  All only ever see that first 10000.
+- **Why**: a 20,000 line file with a pattern that matches every line would
+  otherwise produce a selection list Qt has to lay out. The cap is a
+  parameter, so the behaviour is testable without building a 10000-match
+  document (`FindEngineCap.TenThousandMatchesAndThenTruncated`).
+- **Consequence to know**: Replace All on a truncated search replaces the
+  first 10000 only. Running it again picks up the next 10000.
+
+---
+
+## 23. "Whole word" means `[A-Za-z0-9_]`, not Unicode word characters
+
+- **Where**: `FindEngine::isWordCharacter()` and `wrappedForWholeWord()`.
+- **What**: the boundaries are explicit lookarounds over `[A-Za-z0-9_]`,
+  not `\b`. `\b` is Unicode-aware, so with it an accented letter would
+  count as part of a word and a search for a word next to one would behave
+  differently from the same search next to an ASCII letter.
+- **The same rule wraps a regex pattern**, non-capturing, so the user's own
+  group numbers are untouched and "whole word" means one thing in both
+  modes (`FindEngineWholeWord.BoundariesAreNonWordCharactersOnly`).
+- **Consequence**: in a language whose identifiers use non-ASCII letters,
+  whole-word would break words at those letters. RISC-V assembly does not,
+  so this is the right trade here and the wrong one elsewhere.
+
+---
+
+## 24. The Output (disassembly) pane has no Find
+
+- **Where**: the bar is created by `Editor`, in
+  `src/ui/editor_tab/main_editor.cpp`.
+- **What**: Find works in the **Input** pane and in the **Expanded** pane,
+  because both are `Editor`. The Output pane is `DisassemblyEditor`, a
+  different class, so Ctrl+F does nothing there.
+- **Not done, deliberately**: sharing the bar would mean hoisting it into
+  `KitesEditor`, which also carries `ProfilerEditor` and `CompilerEditor`
+  into the feature. That is a wider change than this stage was scoped for,
+  and it was not made silently.
+- **Replace is refused in the Expanded pane** because it is read-only
+  (`ReplaceReadOnly.AReadOnlyPaneRefusesToReplace`).
+
+---
+
+## 25. A replacement that changes the number of lines moves breakpoints
+
+- **Where**: `Editor::replaceEveryMatch()` and `replaceCurrentMatch()` in
+  `src/ui/editor_tab/main_editor.cpp`.
+- **The rule, pinned rather than left undefined** —
+  `ReplaceBreakpoints.TheRuleWhenAReplacementChangesTheNumberOfLines`:
+
+  | replacement | breakpoint |
+  |---|---|
+  | same number of lines | stays exactly where it was |
+  | splits a line into several | ends up on the **last** of the lines that come out of it |
+  | removes lines | one on a line that is swallowed whole is dropped |
+  | either | everything below shifts by the change in line count |
+
+- **Why it is the anchors and not a `LineMap`**: Replace All is not an
+  `EditorCommands` edit, so `applyEdit()`'s remap is not involved. The
+  line-selection cursors from issue 18 do the work, and the rule above is
+  what they produce — measured, then pinned.
+- **Invariants hold regardless**: a sweep of 100 pattern/replacement pairs
+  from a fixed seed, including replacements that insert and remove
+  newlines, asserts no breakpoint leaves 1..lineCount, none duplicates, and
+  the count never grows.
+- **Not "fixed"**, because there is no obviously right answer for which of
+  several new lines a breakpoint belongs to. It is written down instead.
