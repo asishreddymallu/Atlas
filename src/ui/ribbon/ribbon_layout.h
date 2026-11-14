@@ -62,9 +62,13 @@ struct RibbonLayoutResult
  *   3. compact, chevron reserved, page groups into the menu RIGHTMOST FIRST
  *
  * There is no step for the persistent groups. Compact Run plus compact File
- * plus a chevron is about 700 px, below the 799 px the content splitter needs
- * on its own, so a step that overflowed them could never be reached - the
+ * plus a chevron is 636 px, below the 849 px the content splitter needs on
+ * its own, so a step that overflowed them could never be reached - the
  * window stops shrinking first.
+ *
+ * Step 3 is NOT theoretical. At the shipped widths it is reached on the two
+ * busiest pages: Registers goes in the menu on Processor at 900 px and
+ * below, Display on Memory at 849 px. See issue #11 for the sweep.
  *
  * The chevron costs width only once something is in the menu: steps 1 and 2
  * are tried without reserving it, and only if neither fits is it paid for.

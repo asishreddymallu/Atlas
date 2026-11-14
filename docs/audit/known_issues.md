@@ -244,6 +244,13 @@ Recorded because they changed reported columns on directive lines.
   splitter's tab stack plus the register panel plus the handle come to
   **849 px**, which is the whole window's `minimumSizeHint()`. It was 799 px
   at the 13 px font; the text size moved it, not the ribbon.
+
+  (A freshly shown window reports **796 px**, not 849, until the other tabs
+  have been displayed once: a `QStackedWidget` takes the largest of its
+  children's minimums, and a page that has never been laid out does not yet
+  contribute one. Walk the six tabs and it settles at 849 and stays there.
+  Anything probing this number has to walk the tabs first or it will read the
+  transient.)
 - **The ribbon is no longer part of this.** It used to force 1623 px, because
   a `QStackedWidget` takes the largest of its children's minimums and the
   busiest page therefore set the floor for every tab. `RibbonPage` now
@@ -264,11 +271,41 @@ Recorded because they changed reported columns on directive lines.
   to keep it: File 263 -> 168, Find 115 -> 58, Datapath 181 -> 70, Output
   188 -> 59. The net effect on the floor was 594 -> 543.
 
-  **A consequence worth knowing**: compact mode alone now fits at every width
-  the window can reach, so the overflow chevron never appears in normal use.
-  The overflow code is unchanged and still covered - by the synthetic
-  0..2000 px sweep in `test/ribbon_layout_test.cpp` and by the widget tests
-  that widen a group until it has to overflow.
+  **The chevron DOES appear, on two of the six tabs.** An earlier draft of
+  this entry said compact mode alone fitted at every reachable width and the
+  chevron therefore never appeared. That was true of the widths the layout
+  function believed in before Stage 8; correcting `currentWidth()` to ask for
+  `max(sizeHint, minimumWidth)` raised the persistent area's compact total
+  from 506 to 599 px, and 93 px is the difference between fitting and not.
+
+  Measured at the shipped state (1x, Fusion, all four themes, every page, at
+  1700 / 1366 / 1230 / 1200 / 1100 / 1000 / 900 / 849 px):
+
+  | width | tabs with the chevron | what goes in the menu |
+  |---|---|---|
+  | 1700, 1366, 1230, 1200, 1100, 1000 | none | - |
+  | 900 | Processor | Registers |
+  | 849 | Memory, Processor | Display / Registers |
+
+  Compacting alone still covers Editor, Cache, Compiler and Profiler at every
+  width. Memory and Processor are the two busiest pages: Processor's compact
+  total is 392 px and Memory's 284, against 599 for the persistent groups, so
+  at 900 px and below the page runs out of room first.
+
+  Three rows out of 48 - and the overflowed group is a segmented run of
+  display bases both times, which is the one kind of group that cannot shed
+  a label to get smaller, having no icons.
+
+  Every action remains reachable by exactly one route at every width: a
+  visible button XOR a menu entry, checked at all 54 width-page combinations
+  with zero failures. The checked entry in the menu carries a check mark (the
+  `QMenu::item:checked` rule, issue #16).
+
+  Covered by the synthetic 0..2000 px sweep in `test/ribbon_layout_test.cpp`,
+  by the widget tests that widen a group until it has to overflow, and - for
+  the real widths above, which `kites_test` cannot reproduce because it links
+  no stylesheet and no icons and so measures every group far narrower than
+  the application does - by the out-of-tree `widthsweep` harness.
 
   (An earlier draft of this entry said 617. That was taken halfway through
   Stage 5, after the buttons lost their padding but before the captions
@@ -276,7 +313,10 @@ Recorded because they changed reported columns on directive lines.
   `RibbonBar::minimumSizeHint()` returns now, and it is read from
   `RibbonGroup::fullWidth()` / `compactWidth()` - not from
   `minimumSizeHint()`, which is a different and larger number that the
-  harness used to print beside it.) See `src/ui/ribbon/ribbon_layout.h`.
+  harness used to print beside it. 594 was itself superseded: 543 after the
+  four icons landed, then 636 once Stage 8 corrected the measurement. 636 is
+  what `RibbonBar::minimumSizeHint()` returns at the shipped state.)
+  See `src/ui/ribbon/ribbon_layout.h`.
 - **Below 849 px** the window simply refuses to shrink. Nothing is clipped
   and nothing is hidden; the layout stops rather than cutting anything off.
 - **To go lower**, the register panel (minimum 225 px, maximum 350 px) would
