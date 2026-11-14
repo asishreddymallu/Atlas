@@ -824,3 +824,92 @@ TEST(FindStaleMatches, NextUsesTheCurrentTextNotTheLastSearch)
         << "Next landed at " << after.selectionStart()
         << ", which is not where a match is in the current text";
 }
+
+// ═══════════════════ the bar fits the pane it is drawn in ════════════════
+
+/**
+ * @brief No child of the find bar may sit on top of the input.
+ *
+ * kites_test CAN lay the bar out: it is a plain widget in a real layout
+ * and openFind() builds it, so the geometry below is the geometry the
+ * application gets. What it cannot do is prove the bar is OPAQUE - that
+ * needs pixels, and it is checked in the out-of-tree harness instead.
+ *
+ * The widths are the ones the bar is actually squeezed at. 180 is below
+ * anything the application produces and is here to prove the fallback
+ * holds rather than merely that the common case does.
+ */
+TEST(FindBarGeometry, NothingSitsOnTopOfTheInputAtAnyWidth)
+{
+    Editor editor;
+    editor.resize(900, 400);
+    editor.show();
+    QApplication::processEvents();
+    editor.setPlainText("lw t0, 4(sp)\nsw t1, 8(sp)\n");
+    editor.openFind(false);
+    QApplication::processEvents();
+
+    FindBar *bar = editor.findBar();
+    ASSERT_NE(bar, nullptr);
+    auto *input = bar->findChild<QLineEdit *>("findInput");
+    ASSERT_NE(input, nullptr);
+
+    for (int width : {180, 240, 320, 460, 900})
+        for (bool withReplace : {false, true})
+            for (int zoom : {0, 9, 18})
+            {
+                editor.resize(width, 400);
+                editor.setZoomDelta(zoom);
+                editor.openFind(withReplace);
+                QApplication::processEvents();
+
+                for (QWidget *child : bar->findChildren<QWidget *>())
+                {
+                    if (child == input || child->parentWidget() != bar)
+                        continue;
+                    if (child->objectName().isEmpty() || !child->isVisibleTo(bar))
+                        continue;
+                    EXPECT_FALSE(child->geometry().intersects(input->geometry()))
+                        << child->objectName().toStdString() << " covers the find input at "
+                        << width << " px, replace " << (withReplace ? "shown" : "hidden")
+                        << ", zoom " << zoom;
+                }
+                // And the bar itself stays inside the viewport it overlays.
+                EXPECT_LE(bar->geometry().right(), editor.viewport()->width())
+                    << "the bar hangs off the viewport at " << width << " px";
+            }
+    editor.setZoomDelta(0);
+}
+
+/**
+ * @brief Widening puts back what narrowing took away.
+ *
+ * A one-way fit would leave the bar permanently stripped after a single
+ * narrow moment, which a user would see as buttons that never come back.
+ */
+TEST(FindBarGeometry, WideningRestoresTheButtonsItDropped)
+{
+    Editor editor;
+    editor.resize(900, 400);
+    editor.show();
+    editor.openFind(false);
+    QApplication::processEvents();
+
+    FindBar *bar = editor.findBar();
+    ASSERT_NE(bar, nullptr);
+    auto *next = bar->findChild<QToolButton *>("findNextButton");
+    ASSERT_NE(next, nullptr);
+
+    editor.resize(900, 400);
+    QApplication::processEvents();
+    const bool wideShowsNext = next->isVisibleTo(bar);
+
+    editor.resize(200, 400);
+    QApplication::processEvents();
+    EXPECT_FALSE(next->isVisibleTo(bar)) << "the next button survived a 200 px pane";
+
+    editor.resize(900, 400);
+    QApplication::processEvents();
+    EXPECT_EQ(next->isVisibleTo(bar), wideShowsNext)
+        << "the next button did not come back when the pane widened";
+}

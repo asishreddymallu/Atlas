@@ -2,6 +2,8 @@
 
 #include "goto_line_bar.h"
 
+#include <QPainter>
+#include <QStyleOption>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -73,15 +75,15 @@ FindBar::FindBar(QWidget *parent) : QWidget(parent)
     m_status->setObjectName("findStatus");
     findRow->addWidget(m_status);
 
-    QToolButton *previous = makeButton(this, "<", "findPreviousButton", tr("Previous  (Shift+F3)"));
-    QToolButton *next     = makeButton(this, ">", "findNextButton", tr("Next  (F3)"));
-    QToolButton *close    = makeButton(this, "x", "findCloseButton", tr("Close  (Esc)"));
-    findRow->addWidget(previous);
-    findRow->addWidget(next);
-    findRow->addWidget(close);
-    connect(previous, &QToolButton::clicked, this, &FindBar::findPrevious);
-    connect(next, &QToolButton::clicked, this, &FindBar::findNext);
-    connect(close, &QToolButton::clicked, this, &FindBar::closeRequested);
+    m_previous = makeButton(this, "<", "findPreviousButton", tr("Previous  (Shift+F3)"));
+    m_next     = makeButton(this, ">", "findNextButton", tr("Next  (F3)"));
+    m_close    = makeButton(this, "x", "findCloseButton", tr("Close  (Esc)"));
+    findRow->addWidget(m_previous);
+    findRow->addWidget(m_next);
+    findRow->addWidget(m_close);
+    connect(m_previous, &QToolButton::clicked, this, &FindBar::findPrevious);
+    connect(m_next, &QToolButton::clicked, this, &FindBar::findNext);
+    connect(m_close, &QToolButton::clicked, this, &FindBar::closeRequested);
 
     column->addLayout(findRow);
 
@@ -187,8 +189,73 @@ void FindBar::setReplaceEnabled(bool enabled)
     m_replaceAll->setEnabled(enabled);
 }
 
+void FindBar::paintEvent(QPaintEvent *event)
+{
+    QStyleOption option;
+    option.initFrom(this);
+    QPainter painter(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+    QWidget::paintEvent(event);
+}
+
+void FindBar::fitToWidth(int available)
+{
+    // Restore everything first, so widening puts the buttons back rather
+    // than leaving the bar permanently stripped by one narrow moment.
+    m_previous->setVisible(true);
+    m_next->setVisible(true);
+    m_status->setVisible(true);
+    m_caseButton->setVisible(true);
+    m_wordButton->setVisible(true);
+    m_regexButton->setVisible(true);
+    m_find->setStyleSheet(QString());
+
+    // What the row wants with everything shown. Each step below re-asks,
+    // rather than assuming a button's width, because the sizes come from
+    // the stylesheet and change with the theme.
+    if (sizeHint().width() <= available)
+        return;
+
+    m_previous->setVisible(false);
+    m_next->setVisible(false);
+    if (sizeHint().width() <= available)
+        return;
+
+    // The count is the last thing to go: it is information, where the two
+    // buttons it outlived have keys that still work.
+    m_status->setVisible(false);
+    if (sizeHint().width() <= available)
+        return;
+
+    // Then the toggles, rarest first. Each one keeps its key - Alt+R,
+    // Alt+W, Alt+C - so what is lost is the button, not the option. Close
+    // and the input are the two things that always stay: without Close
+    // there is no way out of the bar with the mouse, and without the
+    // input there is no bar.
+    for (QToolButton *toggle : {m_regexButton, m_wordButton, m_caseButton})
+    {
+        toggle->setVisible(false);
+        if (sizeHint().width() <= available)
+            return;
+    }
+
+    // Last resort. The input's minimum comes from the stylesheet, and a
+    // stylesheet minimum cannot be lowered with setMinimumWidth() - the
+    // layout takes the larger of the two - so the only way under it is
+    // another stylesheet rule on the widget itself. Without this the row
+    // stays wider than the pane and Qt resolves that by letting the
+    // toggles sit on top of the input, which is the bug being fixed.
+    const int overflow = sizeHint().width() - available;
+    const int floor    = 24; // still shows a couple of characters
+    m_find->setStyleSheet(
+        QString("min-width: %1px;")
+            .arg(std::max(floor, m_find->minimumSizeHint().width() - overflow)));
+}
+
 void FindBar::reposition(const QWidget *viewport)
 {
+    if (viewport)
+        fitToWidth(viewport->width() - 2 * overlayMargin);
     // Shared with the goto bar, so the two overlays cannot drift apart.
     repositionOverlay(this, viewport);
 }

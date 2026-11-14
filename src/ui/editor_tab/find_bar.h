@@ -58,6 +58,25 @@ class FindBar : public QWidget
     /// minus the margin on each side.
     void reposition(const QWidget *viewport);
 
+    /**
+     * @brief Drops what will not fit, in order of how little it is missed.
+     *
+     * The bar is an overlay in a pane that can be narrower than the row
+     * wants. Qt's answer to that is to let the children overlap, which put
+     * the toggle buttons on top of the input - measured at 849, 1000 and
+     * 1200 px, the input was covered at all three.
+     *
+     * So the row gives things up rather than overlapping, in order of how
+     * little it is missed: the previous/next buttons (F3 and Shift+F3
+     * still work), then the match-count label, then the input's stylesheet
+     * minimum, then the three toggles rarest first (Alt+R, Alt+W, Alt+C
+     * still work). Close and the input always stay - without Close there
+     * is no way out of the bar with the mouse, and without the input there
+     * is no bar. Called from reposition(), so it re-runs on every resize
+     * and on every zoom step.
+     */
+    void fitToWidth(int available);
+
   signals:
     void patternChanged();
     void optionsChanged();
@@ -70,6 +89,21 @@ class FindBar : public QWidget
   protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    /**
+     * @brief Paints the stylesheet's own background and border.
+     *
+     * FindBar is a plain QWidget, and a plain QWidget draws NEITHER the
+     * background-color nor the border a stylesheet gives it - it has no
+     * paintEvent that asks the style to. #findBar has carried both since
+     * it was written and neither reached the screen, so the overlay was
+     * see-through and the code underneath read straight through the
+     * buttons. setAutoFillBackground(true) does not cover it either: with
+     * an application stylesheet in play the palette it would fill from is
+     * not the one the rule sets.
+     *
+     * This is the same trap as #ribbonPanel's missing separator line.
+     */
+    void paintEvent(QPaintEvent *event) override;
 
   private:
     /// True when the key was one of the bar's own.
@@ -84,5 +118,8 @@ class FindBar : public QWidget
     QLabel      *m_status      {nullptr};
     QToolButton *m_replaceOne  {nullptr};
     QToolButton *m_replaceAll  {nullptr};
+    QToolButton *m_previous    {nullptr};
+    QToolButton *m_next        {nullptr};
+    QToolButton *m_close       {nullptr};
 };
 } // namespace Kites
