@@ -46,6 +46,18 @@ public:
     void setBracketSelections(const QList<QTextEdit::ExtraSelection> &selections);
 
     /**
+     * @brief The Ctrl-hover link underline.
+     *
+     * Goes AFTER the bracket and BEFORE the diagnostics, for the same
+     * reason the bracket does: later entries win on conflicting format
+     * properties, so putting the link before the diagnostics is what keeps
+     * a wave underline from being replaced by a plain one. A squiggle must
+     * never be masked by a link - the editor is telling you the label is
+     * broken at the same moment it offers to jump to it.
+     */
+    void setLinkSelections(const QList<QTextEdit::ExtraSelection> &selections);
+
+    /**
      * @brief Session zoom, as a delta on the configured font size.
      *
      * Here, in src/ui/common, because the GUTTERS are here: a font change
@@ -123,6 +135,7 @@ private:
     QList<QTextEdit::ExtraSelection> m_currentLineSelections{};
     QList<QTextEdit::ExtraSelection> m_findSelections{};
     QList<QTextEdit::ExtraSelection> m_bracketSelections{};
+    QList<QTextEdit::ExtraSelection> m_linkSelections{};
     QList<QTextEdit::ExtraSelection> m_diagnosticSelections{};
 };
 } // namespace Kites

@@ -240,3 +240,139 @@ TEST(LabelNavigation, TheIndexIsCachedAgainstTheDocumentRevision)
     EXPECT_EQ(nav.editor.labelIndex().definitions.size(), 3)
         << "the index did not notice the document changed";
 }
+
+// ════════════════════════ Ctrl+click and the hover link ══════════════════
+
+namespace
+{
+/// The viewport point of `offset`, for a synthetic mouse event.
+QPoint pointOf(Editor &editor, int offset)
+{
+    QTextCursor at(editor.document());
+    at.setPosition(offset);
+    const QRect r = editor.cursorRect(at);
+    return QPoint(r.left() + 2, r.center().y());
+}
+// Mouse events go to the VIEWPORT, not the editor. QAbstractScrollArea
+// forwards them from there to the editor's handlers with coordinates in
+// viewport space - which is the space cursorRect() and cursorForPosition()
+// both speak. Sending them straight to the editor delivers coordinates
+// offset by the gutter, and every one of these cases failed that way first.
+void moveMouse(Editor &editor, QPoint where, Qt::KeyboardModifiers mods)
+{
+    QMouseEvent move(QEvent::MouseMove, where, editor.viewport()->mapToGlobal(where),
+                     Qt::NoButton, Qt::NoButton, mods);
+    QApplication::sendEvent(editor.viewport(), &move);
+    QApplication::processEvents();
+}
+void clickMouse(Editor &editor, QPoint where, Qt::KeyboardModifiers mods)
+{
+    QMouseEvent press(QEvent::MouseButtonPress, where, editor.viewport()->mapToGlobal(where),
+                      Qt::LeftButton, Qt::LeftButton, mods);
+    QApplication::sendEvent(editor.viewport(), &press);
+    QApplication::processEvents();
+}
+} // namespace
+
+TEST(LabelLink, CtrlClickNavigatesLikeF12)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    clickMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    EXPECT_EQ(nav.line(), 2) << "Ctrl+click did not reach the definition";
+    EXPECT_EQ(nav.editor.backStackDepth(), 1) << "it did not push the back stack";
+}
+
+TEST(LabelLink, APlainClickIsUnchanged)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    clickMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::NoModifier);
+    EXPECT_EQ(nav.line(), 3) << "a plain click navigated";
+    EXPECT_EQ(nav.editor.backStackDepth(), 0);
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty());
+}
+
+TEST(LabelLink, CtrlHoverUnderlinesADefinedLabelOnly)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    EXPECT_EQ(nav.editor.linkedName(), QString("loop"));
+
+    // Over a register, which is not a label.
+    const int register_ = kProgram.indexOf("x1");
+    moveMouse(nav.editor, pointOf(nav.editor, register_), Qt::ControlModifier);
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty()) << "it underlined something that is not a label";
+}
+
+TEST(LabelLink, HoveringWithoutCtrlUnderlinesNothing)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::NoModifier);
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty());
+}
+
+// ── the four clear paths. A stuck pointing hand is the classic bug, so
+//    each one is its own case and each has its own negative control.
+
+TEST(LabelLinkClears, ReleasingCtrlClearsIt)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    ASSERT_EQ(nav.editor.linkedName(), QString("loop"));
+
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Control, Qt::NoModifier);
+    QApplication::sendEvent(&nav.editor, &release);
+    QApplication::processEvents();
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty()) << "releasing Ctrl left the link up";
+}
+
+TEST(LabelLinkClears, TheMouseLeavingClearsIt)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    ASSERT_EQ(nav.editor.linkedName(), QString("loop"));
+
+    QEvent leave(QEvent::Leave);
+    QApplication::sendEvent(&nav.editor, &leave);
+    QApplication::processEvents();
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty()) << "the mouse left and the link stayed";
+}
+
+TEST(LabelLinkClears, FocusLossClearsIt)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    ASSERT_EQ(nav.editor.linkedName(), QString("loop"));
+
+    QFocusEvent out(QEvent::FocusOut, Qt::OtherFocusReason);
+    QApplication::sendEvent(&nav.editor, &out);
+    QApplication::processEvents();
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty()) << "focus loss left the link up";
+}
+
+TEST(LabelLinkClears, MovingOffTheLabelClearsIt)
+{
+    Nav nav;
+    nav.load(kProgram);
+    const int reference = kProgram.indexOf("loop", kProgram.indexOf("    j loop"));
+    moveMouse(nav.editor, pointOf(nav.editor, reference + 1), Qt::ControlModifier);
+    ASSERT_EQ(nav.editor.linkedName(), QString("loop"));
+
+    // Same line, but over the "j" - not a defined label.
+    moveMouse(nav.editor, pointOf(nav.editor, reference - 2), Qt::ControlModifier);
+    EXPECT_TRUE(nav.editor.linkedName().isEmpty())
+        << "the link stayed on a label the mouse is no longer over";
+}

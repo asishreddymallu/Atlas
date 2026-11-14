@@ -133,6 +133,12 @@ void KitesEditor::setBracketSelections(const QList<QTextEdit::ExtraSelection> &s
     refreshExtraSelections();
 }
 
+void KitesEditor::setLinkSelections(const QList<QTextEdit::ExtraSelection> &selections)
+{
+    m_linkSelections = selections;
+    refreshExtraSelections();
+}
+
 void KitesEditor::clearFindSelections()
 {
     if (m_findSelections.isEmpty())
@@ -143,7 +149,8 @@ void KitesEditor::clearFindSelections()
 
 void KitesEditor::refreshExtraSelections()
 {
-    // current line, find highlights, the bracket pair, then diagnostics:
+    // current line, find highlights, the bracket pair, the Ctrl-hover link,
+    // then diagnostics:
     // where
     // entries overlap Qt lets the later one win on conflicting format
     // properties, so the wave underline is never masked by the current-line
@@ -152,6 +159,7 @@ void KitesEditor::refreshExtraSelections()
     QList<QTextEdit::ExtraSelection> merged = m_currentLineSelections;
     merged.append(m_findSelections);
     merged.append(m_bracketSelections);
+    merged.append(m_linkSelections);
     merged.append(m_diagnosticSelections);
     setExtraSelections(merged);
 }

@@ -119,6 +119,18 @@ public:
     /// Cleared on File > Open, like the breakpoints.
     void clearBackStack();
 
+    /**
+     * @brief The Ctrl-hover link: underline the label under the mouse.
+     *
+     * Four things must clear it, and a stuck pointing hand is the classic
+     * bug here, so each has its own test and its own negative control:
+     * releasing Ctrl, the mouse leaving the viewport, the editor losing
+     * focus, and the label under the mouse changing.
+     */
+    void clearLinkHighlight();
+    /// The label currently underlined, for the tests. Empty when none.
+    QString linkedName() const { return m_linkName; }
+
     bool hasBreakpointAtLine(int line) const;
     void toggleBreakpointAtLine(int line);
     void clearBreakpoints();
@@ -132,6 +144,10 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     /// Keeps the find overlay in the top-right of the viewport.
     void resizeEvent(QResizeEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void leaveEvent(QEvent *event) override;
     /// K7: focus loss closes the suggestion list.
     void focusOutEvent(QFocusEvent *event) override;
     /// The Input and Expanded panes zoom; see KitesEditor::zoomEnabled().
@@ -307,6 +323,11 @@ private:
     /// screen. Does not touch the back stack.
     void revealOffset(int offset);
 
+    /// Underlines the label at `position` if Ctrl is down and it is one.
+    void updateLinkHighlight(const QPoint &position, Qt::KeyboardModifiers mods);
+
+    QString                   m_linkName;
+    int                       m_linkOffset {-1};
     mutable LabelIndex::Index m_labelIndex;
     mutable int               m_labelIndexRevision {-1};
     /// At most 32, oldest dropped first.

@@ -1563,6 +1563,9 @@ void Editor::focusOutEvent(QFocusEvent *event)
 {
     // K7. Window deactivation arrives here too, as a focus-out.
     closeCompletion();
+    // Clear path 3: focus loss. Without this the pointing hand survives a
+    // window switch, which is the classic stuck-cursor bug.
+    clearLinkHighlight();
     KitesEditor::focusOutEvent(event);
 }
 
@@ -1691,6 +1694,98 @@ bool Editor::goBack()
     else
         ensureCursorVisible();
     return true;
+}
+
+// ───────────────────────── the Ctrl-hover link ──────────────────────────
+
+void Editor::clearLinkHighlight()
+{
+    if (m_linkName.isEmpty() && m_linkOffset < 0)
+        return;
+    m_linkName   = QString();
+    m_linkOffset = -1;
+    setLinkSelections({});
+    viewport()->unsetCursor();
+}
+
+void Editor::updateLinkHighlight(const QPoint &position, Qt::KeyboardModifiers mods)
+{
+    if (!(mods & Qt::ControlModifier))
+    {
+        clearLinkHighlight();
+        return;
+    }
+
+    const QTextCursor under  = cursorForPosition(position);
+    const QString     text   = toPlainText();
+    const QString     name   = LabelIndex::nameAt(text, under.position());
+    if (name.isEmpty() || !labelIndex().isDefined(name))
+    {
+        clearLinkHighlight();
+        return;
+    }
+
+    // Where the token under the mouse starts, so the underline covers it
+    // exactly rather than the whole word Qt would select.
+    int start = under.position();
+    while (start > 0 && LabelIndex::isLabelChar(text.at(start - 1)))
+        --start;
+
+    if (start == m_linkOffset && name == m_linkName)
+        return; // same token: nothing to redraw
+
+    m_linkName   = name;
+    m_linkOffset = start;
+
+    QTextEdit::ExtraSelection link;
+    link.cursor = QTextCursor(document());
+    link.cursor.setPosition(start);
+    link.cursor.setPosition(start + name.size(), QTextCursor::KeepAnchor);
+    // The theme's info colour, the same one the find bar and the bracket
+    // highlight already use. No new token.
+    link.format.setForeground(ThemeManager::getInstance().getInfoColor());
+    link.format.setFontUnderline(true);
+    setLinkSelections({link});
+    viewport()->setCursor(Qt::PointingHandCursor);
+}
+
+void Editor::mouseMoveEvent(QMouseEvent *event)
+{
+    updateLinkHighlight(event->pos(), event->modifiers());
+    KitesEditor::mouseMoveEvent(event);
+}
+
+void Editor::mousePressEvent(QMouseEvent *event)
+{
+    // Ctrl+click navigates with exactly the same rules as F12. A plain
+    // click, a shift-click and a drag are untouched - they fall through.
+    if (event->button() == Qt::LeftButton && (event->modifiers() & Qt::ControlModifier))
+    {
+        const QTextCursor under = cursorForPosition(event->pos());
+        setTextCursor(under);
+        closeCompletion();
+        clearLinkHighlight();
+        goToDefinitionAtCaret();
+        event->accept();
+        return;
+    }
+    KitesEditor::mousePressEvent(event);
+}
+
+void Editor::keyReleaseEvent(QKeyEvent *event)
+{
+    // Clear path 1: Ctrl released. Qt reports the modifier state AFTER the
+    // release, so Control no longer being among them is the signal.
+    if (event->key() == Qt::Key_Control || !(event->modifiers() & Qt::ControlModifier))
+        clearLinkHighlight();
+    KitesEditor::keyReleaseEvent(event);
+}
+
+void Editor::leaveEvent(QEvent *event)
+{
+    // Clear path 2: the mouse left the viewport.
+    clearLinkHighlight();
+    KitesEditor::leaveEvent(event);
 }
 
 } // namespace Kites
