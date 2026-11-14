@@ -589,7 +589,12 @@ TEST(ReplaceBreakpoints, AHundredRandomReplacementsKeepThemLegal)
         lines << QString("line %1 aa bb cc").arg(i);
     const QString document = lines.join('\n');
 
-    const QStringList patterns     = {"aa", "bb", "line", "c", " ", "\\d"};
+    // "\\n" is in the list on purpose: in regex mode it matches the line
+    // separators themselves, so a replacement can JOIN lines and land two
+    // breakpoints on one. Without it the marked lines are five apart and
+    // nothing in the sweep can ever collide - which a negative control
+    // proved by disabling the de-duplication and watching this pass.
+    const QStringList patterns     = {"aa", "bb", "line", "c", " ", "\\d", "\\n"};
     const QStringList replacements = {"X", "", "a\nb", "longer text", "\n", "YY"};
 
     std::mt19937 rng(20260116); // fixed, so a failure is reproducible
