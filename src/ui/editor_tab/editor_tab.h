@@ -36,6 +36,24 @@ public:
     /// expanded text can be pointed back at the line the user wrote. With no
     /// custom pseudo-instructions defined this is the identity.
     void setExpansionMapping(const std::vector<int> &expandedToOriginalLine);
+    /**
+     * @brief The Input pane's breakpoints, as lines of the EXPANDED text.
+     *
+     * The same mapping read the other way: for each breakpoint, the FIRST
+     * expanded line that came from its source line. A pseudo-instruction
+     * that expands to several lines therefore shows one dot, on the first
+     * of them, rather than one per line.
+     *
+     * A breakpoint on a source line that produces no expanded line at all
+     * gets no dot - there is nowhere to put it.
+     *
+     * `expandedToOriginalLine` is indexed by expanded line - 1 and holds
+     * 1-based original lines, exactly as
+     * customPseudoManager::expandPseudoInstruction fills it.
+     */
+    std::vector<uint64_t>
+    breakpointsForExpandedView(const std::vector<int> &expandedToOriginalLine) const;
+
     /// 1-based original source line for a 1-based expanded line. Returns the
     /// input unchanged when no mapping was recorded (lines are then 1:1).
     int mappedOriginalLine(int expandedLine) const;

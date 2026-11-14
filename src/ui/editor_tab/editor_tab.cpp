@@ -28,7 +28,9 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
     m_expandedView = ui->expandedTextEdit;
     m_expandedView->setReadOnly(true);
     m_expandedView->setBreakpointInteractionEnabled(false);
-    m_expandedView->setBreakpoints(m_editor->getBreakpoints());
+    // Nothing is set yet; the dots are filled in when the view is shown,
+    // mapped onto the expanded lines they belong to.
+    m_expandedView->setBreakpoints({});
     m_editor->setPlaceholderText(
         "Write RISC-V assembly here, or press Ctrl+O to open a file.");
     m_disassemblyView->setPlaceholderText(
@@ -92,9 +94,17 @@ void EditorTab::onExpandButtonClicked(bool checked)
 
     if (checked)
     {
-        std::string expandedCode = customPseudoManager::expandPseudoInstruction(getRawText());
+        // The two-argument overload, so the dots can be put on the expanded
+        // lines the user's breakpoints actually became. Computed fresh from
+        // the text being shown rather than read from m_expandedToOriginalLine,
+        // which MainWindow sets at assemble time and which is stale the
+        // moment the source is edited. That member is left alone: it belongs
+        // to the diagnostics path.
+        std::vector<int> expandedToOriginalLine;
+        std::string      expandedCode =
+            customPseudoManager::expandPseudoInstruction(getRawText(), expandedToOriginalLine);
         m_expandedView->setPlainText(QString::fromStdString(expandedCode));
-        m_expandedView->setBreakpoints(m_editor->getBreakpoints());
+        m_expandedView->setBreakpoints(breakpointsForExpandedView(expandedToOriginalLine));
         ui->stackedWidget->setCurrentIndex(1);
     }
     else
@@ -431,6 +441,30 @@ bool EditorTab::goToDiagnostic(const Diagnostic &diagnostic)
 int EditorTab::sourceLineCount() const
 {
     return m_editor->document()->blockCount();
+}
+
+std::vector<uint64_t>
+EditorTab::breakpointsForExpandedView(const std::vector<int> &expandedToOriginalLine) const
+{
+    std::vector<uint64_t> dots;
+    for (uint64_t sourceLine : m_editor->getBreakpoints())
+    {
+        if (expandedToOriginalLine.empty())
+        {
+            // No mapping recorded: the two texts are line for line.
+            dots.push_back(sourceLine);
+            continue;
+        }
+        for (size_t index = 0; index < expandedToOriginalLine.size(); ++index)
+        {
+            if (expandedToOriginalLine[index] == static_cast<int>(sourceLine))
+            {
+                dots.push_back(static_cast<uint64_t>(index + 1));
+                break; // the FIRST expanded line only
+            }
+        }
+    }
+    return dots;
 }
 
 int EditorTab::mappedOriginalLine(int expandedLine) const
