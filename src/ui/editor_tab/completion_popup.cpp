@@ -65,17 +65,17 @@ double contrastOf(const QColor &a, const QColor &b)
  * HARDER of the two grounds, so it stays dimmer than the label and stays
  * readable. Pure arithmetic from existing tokens; no new one is introduced.
  */
-QColor legibleDetail(const QColor &muted, const QColor &text, const QColor &page,
-                     const QColor &selected)
+QColor legible(const QColor &want, const QColor &toward, const QColor &groundA,
+               const QColor &groundB)
 {
-    QColor candidate = muted;
+    QColor candidate = want;
     for (int step = 0; step <= 20; ++step)
     {
-        candidate = blend(muted, text, step / 20.0);
-        if (contrastOf(candidate, page) >= 4.5 && contrastOf(candidate, selected) >= 4.5)
+        candidate = blend(want, toward, step / 20.0);
+        if (contrastOf(candidate, groundA) >= 4.5 && contrastOf(candidate, groundB) >= 4.5)
             return candidate;
     }
-    return text; // nothing dimmer is legible on this theme
+    return toward; // nothing closer to the wanted colour is legible here
 }
 
 Palette paletteNow()
@@ -90,8 +90,13 @@ Palette paletteNow()
     // The same wash the find bar uses for a non-current match, which was
     // measured to keep ordinary text at 4.5:1 or better on every theme.
     p.selected = blend(p.page, theme.getInfoColor(), 0.25);
-    p.detail   = legibleDetail(theme.getEditorMutedForegroundColor(), p.text, p.page,
-                               p.selected);
+    p.detail   = legible(theme.getEditorMutedForegroundColor(), p.text, p.page, p.selected);
+    // The accent is lifted the same way. Measured on the four real themes,
+    // info on the selected row came to 4.18 on kites-dark and 4.19 on
+    // kites-light - the in-tree test could not see it, because setTheme()
+    // does nothing without theme resources and it measured one theme four
+    // times. The harness is what found this.
+    p.matched  = legible(theme.getInfoColor(), p.text, p.page, p.selected);
     return p;
 }
 
@@ -127,6 +132,16 @@ CompletionPopup::CompletionPopup(QWidget *parent) : QWidget(parent)
 void CompletionPopup::setEditorFont(const QFont &font)
 {
     setFont(font);
+    // setFont() alone is not enough: the application stylesheet carries
+    // QWidget { font-size: ... }, and a stylesheet rule beats setFont(). The
+    // list rendered at the chrome's size at every zoom level until the size
+    // went into its OWN sheet - the same trap the editor hit, and kites_test
+    // cannot see it because it has no application stylesheet. The harness
+    // screenshots are what showed it.
+    const bool    inPixels = font.pixelSize() > 0;
+    const int     size     = inPixels ? font.pixelSize() : font.pointSize();
+    const QString unit     = inPixels ? QStringLiteral("px") : QStringLiteral("pt");
+    setStyleSheet(QStringLiteral("font-size: %1%2;").arg(size).arg(unit));
     updateGeometry();
     update();
 }
