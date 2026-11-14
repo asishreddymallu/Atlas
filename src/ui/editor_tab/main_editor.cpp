@@ -173,6 +173,8 @@ Editor::Editor(QWidget *parent )
                 // spanning lines only ever looked at the first of them, so a
                 // label defined on a later line was never seen.
                 //
+                // A document swap reaches here twice; see documentLabels().
+                //
                 // Now the blocks the change actually touched are rescanned
                 // and compared with what they held. The aggregate is rebuilt
                 // only when some line's labels really differ, so typing
@@ -1554,13 +1556,20 @@ QStringList Editor::documentLabels() const
 
     // Rescans every line and REFRESHES what each block holds.
     //
-    // The per-block data is a change DETECTOR, not the record. It cannot be
-    // the record, because charsAdded is not reliable: measured,
-    // setPlainText("loop:\n...") on an empty document emits a single
-    // contentsChange of from=0, charsRemoved=1, charsAdded=0, so the
-    // handler scanned block 0 while its text was still empty and stored
-    // "no labels here" for a line that defines one. Trusting that gave an
-    // empty list for a document full of labels.
+    // The per-block data is a change DETECTOR, not the record, and that is
+    // load-bearing. setPlainText emits TWO contentsChange signals -
+    // measured, for a 25 character document: (from=0, removed=25, added=0)
+    // and then (from=0, removed=0, added=24). The first runs while the
+    // document is momentarily empty and stores "no labels here" for block
+    // 0; the second carries a correct charsAdded and covers every block.
+    //
+    // Even so, trusting the stored data after a setPlainText returns an
+    // EMPTY list: a build that reads stored->labels here instead of
+    // rescanning fails CompletionLabelCache.DeletingTheColonRetiresTheLabel
+    // at its SETUP, before any colon has been deleted. That is measured,
+    // not reasoned - why the stored copy is still stale once both signals
+    // have run has not been pinned down, and the rescan makes the answer
+    // independent of it.
     //
     // So the handler's job is only to notice that something MIGHT have
     // moved; this is where the answer is actually computed. It runs only

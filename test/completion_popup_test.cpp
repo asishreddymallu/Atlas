@@ -8,6 +8,7 @@
  * slower bug, so the navigation cases assert the counter did not move.
  */
 #include "ui/editor_tab/completion_popup.h"
+#include "ui/editor_tab/editor_tab.h"
 #include "ui/editor_tab/find_bar.h"
 #include "ui/editor_tab/main_editor.h"
 
@@ -764,4 +765,90 @@ TEST(CompletionLabelCache, DeletingTheLineRetiresTheLabel)
 
     EXPECT_EQ(bench.offered("lo"), QStringList())
         << "the label survived its line being deleted";
+}
+
+/**
+ * @brief (a) A document SWAP that keeps the line count, new label later on.
+ *
+ * setPlainText does not report what it added - measured, it emits one
+ * contentsChange of from=0, charsRemoved=N, charsAdded=0 - so the handler
+ * only ever looks at block 0. With the line count unchanged and both
+ * documents' first lines unlabelled, nothing tells the cache to move.
+ */
+TEST(CompletionLabelCache, ASwapKeepingTheLineCountSeesANewLabel)
+{
+    LabelBench bench;
+    bench.setText("    nop\n    nop\n    nop\n");
+    EXPECT_EQ(bench.offered("fr"), QStringList()) << "setup: nothing defined in A";
+
+    // Same number of lines; the label is on the SECOND line.
+    bench.setText("    nop\nfresh:\n    nop\n");
+    EXPECT_EQ(bench.offered("fr"), QStringList({"fresh"}))
+        << "a label in the newly loaded document was never seen";
+}
+
+/// (b) The same, the other way: A defines it, B does not.
+TEST(CompletionLabelCache, ASwapKeepingTheLineCountRetiresAGoneLabel)
+{
+    LabelBench bench;
+    bench.setText("    nop\nstale:\n    nop\n");
+    EXPECT_EQ(bench.offered("st"), QStringList({"stale"})) << "setup: A defines it";
+
+    bench.setText("    nop\n    nop\n    nop\n");
+    EXPECT_EQ(bench.offered("st"), QStringList())
+        << "a label from the previous document is still being offered";
+}
+
+/// (c) Select all and paste over it - a real edit, not a document swap.
+TEST(CompletionLabelCache, SelectAllAndPasteOfTheSameLineCount)
+{
+    LabelBench bench;
+    bench.setText("    nop\n    nop\n    nop\n");
+    QTextCursor all(bench.editor.document());
+    all.select(QTextCursor::Document);
+    all.insertText("    nop\npasted:\n    nop\n");
+    QApplication::processEvents();
+    EXPECT_EQ(bench.offered("pa"), QStringList({"pasted"}))
+        << "a label pasted over a selection was not seen";
+}
+
+/**
+ * @brief (d) The real File > Open path.
+ *
+ * MainWindow calls EditorTab::loadFileContent(), which clears the
+ * breakpoints and then setRawText() -> Editor::setPlainText(). This drives
+ * the same call the application does, with a replacement of equal line
+ * count.
+ */
+TEST(CompletionLabelCache, TheFileOpenPathSeesTheNewDocumentsLabels)
+{
+    EditorTab tab;
+    tab.resize(800, 400);
+    tab.show();
+    QApplication::processEvents();
+
+    Editor *editor = nullptr;
+    for (QPlainTextEdit *pane : tab.findChildren<QPlainTextEdit *>())
+        if (!pane->isReadOnly())
+            editor = static_cast<Editor *>(pane);
+    ASSERT_NE(editor, nullptr);
+
+    auto labelsFor = [&](const QString &prefix)
+    {
+        QStringList out;
+        for (const Completion::Item &item : editor->completionItemsForTest(prefix))
+            if (item.kind == Completion::Kind::Label)
+                out << item.label;
+        out.sort();
+        return out;
+    };
+
+    tab.loadFileContent("    nop\n    nop\n    nop\n");
+    QApplication::processEvents();
+    ASSERT_EQ(labelsFor("op"), QStringList()) << "setup: nothing defined";
+
+    tab.loadFileContent("    nop\nopened:\n    nop\n");
+    QApplication::processEvents();
+    EXPECT_EQ(labelsFor("op"), QStringList({"opened"}))
+        << "File > Open loaded a document whose labels were never scanned";
 }
