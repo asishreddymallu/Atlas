@@ -3,6 +3,12 @@
 #include <QTextEdit>
 namespace Kites
 {
+/// How many columns a tab stands for in every Kites editor. It sets the tab
+/// stop distance here, and it is what one outdent removes from a line that
+/// is indented with spaces instead - the same number, named once rather than
+/// typed in two places.
+inline constexpr int editorTabWidth = 4;
+
 class GutterColumn; //forward declaration
 class KitesEditor : public QPlainTextEdit
 {

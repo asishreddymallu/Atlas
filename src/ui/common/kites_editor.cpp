@@ -27,8 +27,7 @@ KitesEditor::KitesEditor(QWidget *parent)
     setFont(FontManager::getInstance().currentFont());
     applyEditorTheme();
 
-    const int tapspace = 4;
-    setTabStopDistance(tapspace * fontMetrics().horizontalAdvance(' '));
+    setTabStopDistance(editorTabWidth * fontMetrics().horizontalAdvance(' '));
 
     // Breathing room between the gutter and the first character, and above the
     // first line. Set on the document rather than as QSS padding: padding on a
