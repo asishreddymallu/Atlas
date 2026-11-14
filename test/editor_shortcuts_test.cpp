@@ -20,6 +20,7 @@
  * signals are counted with lambdas rather than QSignalSpy.
  */
 #include "ui/editor_tab/editor_commands.h"
+#include "ui/editor_tab/completion_model.h"
 #include "ui/editor_tab/main_editor.h"
 #include "ui/main_window/main_window.h"
 
@@ -640,40 +641,37 @@ TEST(EditorKeysUnicode, LineOperationsPreserveMultiByteCharacters)
 
 TEST(EditorKeysWiring, AnOpenCompletionPopupDoesNotSwallowTheModifiedKeys)
 {
-    // The completer filters Enter, Tab, Backtab and Escape on the widget,
-    // ahead of keyPressEvent, and keeping those for the popup is right. The
-    // MODIFIED combinations mean something else entirely and the popup has
-    // no use for them, so they must still reach their command while a
+    // The suggestion list takes the UNMODIFIED Enter, Tab, Backtab and Esc.
+    // The modified combinations mean something else entirely - Ctrl+Enter is
+    // "new line below" - and must still reach their command while a
     // completion is showing.
+    //
+    // This used to SKIP. It opened the list by typing and gave up when none
+    // appeared, because kites_test links kites_core without the compiled
+    // .qrc objects and the old list came from the instruction resource. The
+    // list now takes an injected source, so the case can open one here and
+    // actually assert something.
     Bench   bench;
     Editor *editor = &bench.editor;
+    editor->setCompletionSource(
+        [](const QString &)
+        {
+            return QList<Kites::Completion::Item>{
+                {QStringLiteral("addi"), Kites::Completion::Kind::Instruction, {}},
+                {QStringLiteral("add"), Kites::Completion::Kind::Instruction, {}}};
+        });
 
     place(editor, "", 0, 0);
-    // Typing is what opens the popup; whether it opens depends on what the
-    // language service knows, so the case asserts on that rather than on a
-    // popup it only hopes for.
     for (QChar c : QString("ad"))
-        sendKey(editor, Qt::Key(c.unicode()), Qt::NoModifier, QString(c));
+        sendKey(editor, Qt::Key(c.toUpper().unicode()), Qt::NoModifier, QString(c));
 
-    bool popupShown = false;
-    for (QWidget *top : QApplication::topLevelWidgets())
-        if (top->isVisible() && qobject_cast<QAbstractItemView *>(top))
-            popupShown = true;
-
-    // kites_test links kites_core but not the compiled .qrc objects, and the
-    // completion list is built from the instruction set that lives in one of
-    // them - so no popup can open here and this case would pass without
-    // exercising anything. It skips rather than lying, and the real check
-    // runs in the out-of-tree editorrecon harness, which links the
-    // resources.
-    if (!popupShown)
-        GTEST_SKIP() << "no completion popup in this build (no instruction resources)";
+    ASSERT_TRUE(editor->isCompletionVisible())
+        << "the injected source did not produce a popup, so this proves nothing";
 
     const QString before = read(editor).text;
     sendKey(editor, Qt::Key_Return, Qt::ControlModifier);
     EXPECT_EQ(read(editor).text, before + "\n")
-        << "Ctrl+Enter was swallowed (completion popup "
-        << (popupShown ? "was" : "was not") << " open)";
+        << "Ctrl+Enter was swallowed while the completion popup was open";
 }
 
 // ═══════════════════ the Output pane, and the shortcut set ════════════════

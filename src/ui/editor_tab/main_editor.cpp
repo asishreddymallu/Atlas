@@ -1,4 +1,5 @@
 #include "main_editor.h"
+#include "completion_popup.h"
 #include "find_bar.h"
 #include "goto_line_bar.h"
 #include "ui/theme/theme_manager.h"
@@ -47,6 +48,21 @@ Editor::Editor(QWidget *parent )
     addLeftGutterColumn(new LineNumberGutterColumn(this));
     updateViewPortMargins();
 
+    // ── the suggestion list. A child of the viewport, like the find bar, so
+    //    it is clipped to the editor and can be driven in kites_test.
+    m_completionPopup = new CompletionPopup(viewport());
+    m_completionSource = [](const QString &prefix)
+    {
+        QList<Completion::Item> items;
+        // LanguageService hands back bare strings with no kind and no detail;
+        // the kind is derived from the symbol's shape. See known_issues.
+        for (const QString &symbol : LanguageService::completions(prefix, QString()))
+            items << Completion::Item{symbol, Completion::kindOf(symbol), {}};
+        return items;
+    };
+    connect(m_completionPopup, &CompletionPopup::rowActivated, this,
+            [this](const QString &label) { acceptCompletion(label, false); });
+
     m_autoCompleter = new QCompleter(this);
     m_autoCompleter->setModel(new QStringListModel(m_autoCompleter));
     m_autoCompleter->setCaseSensitivity(Qt::CaseInsensitive);
@@ -56,7 +72,41 @@ Editor::Editor(QWidget *parent )
             &Editor::insertCompletion);
 
     connect(this, &QPlainTextEdit::cursorPositionChanged, this,
-            [this] { updateBracketHighlight(); });
+            [this]
+            {
+                updateBracketHighlight();
+                // K6: Left/Right keep it open inside the word and close it
+                // the moment the caret leaves. A click lands here too, which
+                // is what closes the list on a click elsewhere.
+                if (isCompletionVisible() && !m_completionApplying)
+                {
+                    const Completion::WordRange word = caretWord();
+                    const bool leftTheWord =
+                        m_completionWordStart < 0 || word.start != m_completionWordStart ||
+                        textCursor().position() > word.end;
+                    // The caret reaching the word start empties the prefix,
+                    // and the list never shows with an empty prefix except
+                    // for the one Ctrl+Space opened explicitly.
+                    const bool emptyPrefix = word.caret <= word.start;
+                    if (leftTheWord || emptyPrefix)
+                        closeCompletion();
+                    else
+                        placeCompletionPopup();
+                }
+            });
+    // K7: it follows the caret while the editor scrolls, and goes when the
+    // caret line leaves the viewport.
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+            [this]
+            {
+                if (!isCompletionVisible())
+                    return;
+                const QRect caret = cursorRect();
+                if (caret.bottom() < 0 || caret.top() > viewport()->height())
+                    closeCompletion();
+                else
+                    placeCompletionPopup();
+            });
 
     m_lastBlockCount = document()->blockCount();
     connect(document(), &QTextDocument::contentsChange, this,
@@ -824,6 +874,8 @@ void Editor::replaceEveryMatch()
 
 void Editor::resizeEvent(QResizeEvent *event)
 {
+    // K7: a resize re-lays the viewport out under the popup.
+    closeCompletion();
     KitesEditor::resizeEvent(event);
     repositionOverlays();
 }
@@ -1137,73 +1189,292 @@ bool Editor::handleEditingKey(QKeyEvent *event)
 
 void Editor::keyPressEvent(QKeyEvent *event)
 {
-    if (m_autoCompleter && m_autoCompleter->popup()->isVisible())
+    // ── the suggestion list gets the keys it owns, ahead of every editing
+    //    key. Esc is the one worth naming: it closes the popup and nothing
+    //    else, so an open find bar stays open (K3).
+    if (handleCompletionKey(event))
     {
-        // let the completer's own popup handle these - it has an event filter
-        // installed on this widget that already intercepts most of them, this
-        // guard covers the rest (matches Qt's own QCompleter usage pattern)
-        //
-        // Only the UNMODIFIED keys, which are the ones the popup actually
-        // uses. Ctrl+Enter and Ctrl+Shift+Enter mean "new line below/above"
-        // and the popup has no use for them; guarding on the key alone sent
-        // them nowhere whenever a completion happened to be showing.
-        const bool bare    = event->modifiers() == Qt::NoModifier;
-        const bool backtab = event->key() == Qt::Key_Backtab &&
-                             event->modifiers() == Qt::ShiftModifier;
-        switch (event->key())
-        {
-        case Qt::Key_Enter:
-        case Qt::Key_Return:
-        case Qt::Key_Escape:
-        case Qt::Key_Tab:
-        case Qt::Key_Backtab:
-            if (bare || backtab)
-            {
-                event->ignore();
-                return;
-            }
-            break;
-        default:
-            break;
-        }
+        event->accept();
+        return;
     }
+
+    // ── Ctrl+Space opens the list at any caret position, with an empty
+    //    prefix if need be. Handled HERE rather than in handleEditingKey,
+    //    because a command that ran there closes the popup on the way out -
+    //    which would close the one this just opened.
+    //    Still an ordinary key in the editor: no QAction, no QShortcut.
+    if (event->key() == Qt::Key_Space && event->modifiers() == Qt::ControlModifier)
+    {
+        openCompletionExplicitly();
+        event->accept();
+        return;
+    }
+
+    // ── K7: undo and redo close it. They are handled by QPlainTextEdit
+    //    itself further down, so the list is dismissed on the way past.
+    if (event->matches(QKeySequence::Undo) || event->matches(QKeySequence::Redo))
+        closeCompletion();
 
     if (handleEditingKey(event))
     {
         event->accept();
-        if (m_autoCompleter)
-            m_autoCompleter->popup()->hide();
+        // Every Tier 1 command, find, go-to-line and zoom close it.
+        closeCompletion();
         return;
     }
+
+    // What the key TYPED decides whether the list opens - never the fact
+    // that a key arrived. A navigation key reaches here having moved the
+    // caret, and must leave the list exactly as it found it.
+    const QString typed = event->text();
+    const bool    wordCharacter =
+        typed.size() == 1 && Completion::isWordChar(typed.at(0)) &&
+        (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::ShiftModifier);
 
     KitesEditor::keyPressEvent(event);
 
-    if (!m_autoCompleter)
+    if (wordCharacter)
+    {
+        triggerCompletionFromTyping();
+        return;
+    }
+    if (event->key() == Qt::Key_Backspace || event->key() == Qt::Key_Delete)
+    {
+        // Re-filters while open; never opens. Backspace to the word start
+        // closes, which refreshCompletion() does when the prefix empties.
+        refreshCompletion();
+        return;
+    }
+    // Everything else - every arrow, Home/End, PageUp/PageDown, Ctrl+anything
+    // - leaves it alone, and the caret-move handler decides whether the caret
+    // has left the word.
+}
+
+// ════════════════════════ the suggestion list ════════════════════════════
+
+void Editor::setCompletionSource(Completion::Source source)
+{
+    m_completionSource = std::move(source);
+}
+
+bool Editor::isCompletionVisible() const
+{
+    return m_completionPopup && m_completionPopup->isVisible();
+}
+
+void Editor::closeCompletion()
+{
+    // THE closing list. Everything that must dismiss the suggestions calls
+    // this and nothing else, so a new overlay - Stage B's references and
+    // rename bars - closes it by adding one call here.
+    if (!m_completionPopup)
+        return;
+    m_completionPopup->hide();
+    m_completionWordStart = -1;
+}
+
+Completion::WordRange Editor::caretWord() const
+{
+    const QTextCursor cursor = textCursor();
+    const QTextBlock   block = cursor.block();
+    const int          base  = block.position();
+    Completion::WordRange range =
+        Completion::wordAt(block.text(), cursor.position() - base);
+    range.start += base;
+    range.caret += base;
+    range.end   += base;
+    return range;
+}
+
+void Editor::placeCompletionPopup()
+{
+    if (!m_completionPopup)
+        return;
+    const Completion::WordRange word = caretWord();
+    QTextCursor atWordStart(document());
+    atWordStart.setPosition(word.start);
+    const QRect wordRect  = cursorRect(atWordStart);
+    const QRect caretLine = cursorRect();
+    m_completionPopup->setEditorFont(font());
+    m_completionPopup->placeFor(caretLine, wordRect.left(), viewport()->size());
+}
+
+void Editor::triggerCompletionFromTyping()
+{
+    if (!m_completionPopup || !m_completionSource || m_completionApplying)
         return;
 
-    const QString prefix = textUnderCursor();
+    const Completion::WordRange word = caretWord();
+    const QString prefix = toPlainText().mid(word.start, word.caret - word.start);
     if (prefix.isEmpty())
     {
-        m_autoCompleter->popup()->hide();
+        closeCompletion();
         return;
     }
 
-    const QStringList matches = LanguageService::completions(prefix, toPlainText());
+    // T3: never inside a comment or a string. The same one-line scanner the
+    // pair rules use, so "never" means the same thing in both places.
+    const QTextBlock block = textCursor().block();
+    const EditorCommands::LineContext context =
+        EditorCommands::contextAt(block.text(), textCursor().position() - block.position());
+    if (context.inComment || context.inString)
+    {
+        closeCompletion();
+        return;
+    }
+
+    m_completionItems = m_completionSource(prefix);
+    const QList<Completion::Match> matches = Completion::filter(m_completionItems, prefix);
     if (matches.isEmpty())
     {
-        m_autoCompleter->popup()->hide();
+        closeCompletion(); // F3
         return;
     }
-
-    auto *model = qobject_cast<QStringListModel *>(m_autoCompleter->model());
-    model->setStringList(matches);
-
-    m_autoCompleter->setCompletionPrefix(prefix);
-    m_autoCompleter->popup()->setCurrentIndex(m_autoCompleter->completionModel()->index(0, 0));
-
-    QRect completionRect = cursorRect();
-    completionRect.setWidth(m_autoCompleter->popup()->sizeHintForColumn(0) +
-                            m_autoCompleter->popup()->verticalScrollBar()->sizeHint().width());
-    m_autoCompleter->complete(completionRect);
+    m_completionWordStart = word.start;
+    m_completionPopup->setCandidates(m_completionItems, matches);
+    placeCompletionPopup();
 }
+
+void Editor::openCompletionExplicitly()
+{
+    if (!m_completionPopup || !m_completionSource)
+        return;
+    const Completion::WordRange word = caretWord();
+    const QString prefix = toPlainText().mid(word.start, word.caret - word.start);
+    // T4: an empty prefix is allowed here and only here.
+    m_completionItems = m_completionSource(prefix);
+    const QList<Completion::Match> matches = Completion::filter(m_completionItems, prefix);
+    if (matches.isEmpty())
+    {
+        closeCompletion();
+        return;
+    }
+    m_completionWordStart = word.start;
+    m_completionPopup->setCandidates(m_completionItems, matches);
+    placeCompletionPopup();
+}
+
+void Editor::refreshCompletion()
+{
+    if (!isCompletionVisible() || !m_completionSource || m_completionApplying)
+        return;
+    const Completion::WordRange word = caretWord();
+    // K5/K6: the caret left the word it opened on.
+    if (m_completionWordStart >= 0 && word.start != m_completionWordStart)
+    {
+        closeCompletion();
+        return;
+    }
+    const QString prefix = toPlainText().mid(word.start, word.caret - word.start);
+    if (prefix.isEmpty())
+    {
+        closeCompletion();
+        return;
+    }
+    m_completionItems = m_completionSource(prefix);
+    const QList<Completion::Match> matches = Completion::filter(m_completionItems, prefix);
+    if (matches.isEmpty())
+    {
+        closeCompletion();
+        return;
+    }
+    m_completionPopup->setCandidates(m_completionItems, matches);
+    placeCompletionPopup();
+}
+
+void Editor::acceptCompletion(const QString &label, bool replaceTail)
+{
+    if (!isCompletionVisible() || label.isEmpty())
+        return;
+    const Completion::WordRange word = caretWord();
+    const int from = word.start;
+    const int to   = replaceTail ? word.end : word.caret;
+
+    m_completionApplying = true;
+    QTextCursor cursor = textCursor();
+    // One edit block, so one Ctrl+Z puts the typed prefix back.
+    cursor.beginEditBlock();
+    cursor.setPosition(from);
+    cursor.setPosition(to, QTextCursor::KeepAnchor);
+    cursor.insertText(label);
+    cursor.endEditBlock();
+    setTextCursor(cursor);
+    m_completionApplying = false;
+    closeCompletion();
+}
+
+bool Editor::handleCompletionKey(QKeyEvent *event)
+{
+    if (!isCompletionVisible())
+        return false;
+
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    const int                   key  = event->key();
+
+    switch (key)
+    {
+    case Qt::Key_Escape: // K3
+        closeCompletion();
+        return true;
+    case Qt::Key_Up:
+        if (mods == Qt::NoModifier) { m_completionPopup->moveSelection(-1); return true; }
+        break;
+    case Qt::Key_Down:
+        if (mods == Qt::NoModifier) { m_completionPopup->moveSelection(1); return true; }
+        break;
+    case Qt::Key_PageUp:
+        if (mods == Qt::NoModifier) { m_completionPopup->movePage(-1); return true; }
+        break;
+    case Qt::Key_PageDown:
+        if (mods == Qt::NoModifier) { m_completionPopup->movePage(1); return true; }
+        break;
+    case Qt::Key_Home:
+    case Qt::Key_End: // K6: close, then let the caret move
+        closeCompletion();
+        return false;
+    case Qt::Key_Enter:
+    case Qt::Key_Return:
+        if (mods == Qt::NoModifier || mods == Qt::ShiftModifier)
+        {
+            acceptCompletion(m_completionPopup->selectedLabel(), mods == Qt::ShiftModifier);
+            return true;
+        }
+        break;
+    case Qt::Key_Tab:
+        if (mods == Qt::NoModifier)
+        {
+            acceptCompletion(m_completionPopup->selectedLabel(), false);
+            return true;
+        }
+        break;
+    case Qt::Key_Backtab:
+        if (mods == Qt::ShiftModifier)
+        {
+            acceptCompletion(m_completionPopup->selectedLabel(), true);
+            return true;
+        }
+        break;
+    default:
+        break;
+    }
+
+    // K4: any non-word character closes it WITHOUT accepting. Assembly has no
+    // commit characters, unlike VS Code - see the docs.
+    const QString typed = event->text();
+    if (typed.size() == 1 && !Completion::isWordChar(typed.at(0)) && !typed.at(0).isNull() &&
+        (mods == Qt::NoModifier || mods == Qt::ShiftModifier))
+    {
+        closeCompletion();
+        return false; // the character itself is still typed
+    }
+    return false;
+}
+
+void Editor::focusOutEvent(QFocusEvent *event)
+{
+    // K7. Window deactivation arrives here too, as a focus-out.
+    closeCompletion();
+    KitesEditor::focusOutEvent(event);
+}
+
 } // namespace Kites

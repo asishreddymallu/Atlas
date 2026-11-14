@@ -2,6 +2,7 @@
 #include "ui/common/syntax_highlighter.h"
 #include "ui/common/kites_editor.h"
 #include "ui/editor_tab/editor_commands.h"
+#include "ui/editor_tab/completion_model.h"
 #include "ui/editor_tab/find_engine.h"
 #include <QCompleter>
 #include <QColor>
@@ -14,6 +15,7 @@
 
 namespace Kites
 {
+class CompletionPopup;
 class FindBar;
 class GotoLineBar;
 
@@ -67,6 +69,30 @@ public:
     /// Index into findResult().matches, or -1 when nothing is current.
     int currentMatchIndex() const;
 
+    /**
+     * @brief Where the suggestion list gets its items.
+     *
+     * Injected so a test can hand in a fixed list AND count how often it was
+     * asked. The counter is what proves a caret move does not query at all -
+     * "the popup is not visible" would also hold if it queried and found
+     * nothing, which is a different, slower bug.
+     *
+     * The default source calls LanguageService::completions(). That class is
+     * not modified by this work.
+     */
+    void setCompletionSource(Completion::Source source);
+    CompletionPopup *completionPopup() const { return m_completionPopup; }
+    bool isCompletionVisible() const;
+    /// Opens it at the caret whatever the prefix is - what Ctrl+Space does.
+    void openCompletionExplicitly();
+    /**
+     * @brief Everything that closes the suggestion list.
+     *
+     * One place, so a new overlay closes it by adding one line here rather
+     * than by remembering to call hide() from its own code.
+     */
+    void closeCompletion();
+
     bool hasBreakpointAtLine(int line) const;
     void toggleBreakpointAtLine(int line);
     void clearBreakpoints();
@@ -80,6 +106,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     /// Keeps the find overlay in the top-right of the viewport.
     void resizeEvent(QResizeEvent *event) override;
+    /// K7: focus loss closes the suggestion list.
+    void focusOutEvent(QFocusEvent *event) override;
     /// The Input and Expanded panes zoom; see KitesEditor::zoomEnabled().
     bool zoomEnabled() const override { return true; }
 
@@ -107,6 +135,24 @@ private:
      * collides with any key below, so none of them is swallowed on the way.
      */
     bool handleEditingKey(QKeyEvent *event);
+
+    /**
+     * @brief The suggestion list's own keys, ahead of every editing key.
+     *
+     * Returns true when the popup consumed the event. Only reached while it
+     * is visible, so none of these keys is taken from the editor otherwise.
+     */
+    bool handleCompletionKey(QKeyEvent *event);
+    /// Re-filters after the document or the caret moved. Never opens.
+    void refreshCompletion();
+    /// Opens or re-filters because a word character was typed.
+    void triggerCompletionFromTyping();
+    void placeCompletionPopup();
+    /// Replaces [word start, caret) - or [word start, word end) in replace
+    /// mode - with `label`, as one undo step.
+    void acceptCompletion(const QString &label, bool replaceTail);
+    /// The word the caret is in, in document offsets.
+    Completion::WordRange caretWord() const;
 
     /**
      * @brief Applies one command result as a SINGLE undo step.
@@ -200,6 +246,16 @@ private:
     void        normaliseBreakpoints();
 
     QCompleter *m_autoCompleter = nullptr;
+
+    CompletionPopup    *m_completionPopup {nullptr};
+    Completion::Source  m_completionSource;
+    QList<Completion::Item> m_completionItems;
+    /// The document offset the current word starts at, fixed while the popup
+    /// is open so the caret leaving the word can be detected.
+    int                 m_completionWordStart {-1};
+    /// True while acceptCompletion() is editing, so the document change it
+    /// makes does not re-trigger the popup it is closing.
+    bool                m_completionApplying {false};
 
     std::map<int, QString> m_errorMessages;
     SyntaxHighlighter *m_syntaxHighlighter;
