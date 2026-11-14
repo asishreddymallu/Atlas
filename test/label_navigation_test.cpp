@@ -9,6 +9,10 @@
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/editor_tab/completion_model.h"
 #include "ui/editor_tab/label_index.h"
+#include "ui/editor_tab/label_overlays.h"
+#include "ui/editor_tab/find_bar.h"
+#include "ui/editor_tab/goto_line_bar.h"
+#include <algorithm>
 #include "ui/editor_tab/main_editor.h"
 
 #include <gtest/gtest.h>
@@ -434,4 +438,244 @@ TEST(LabelScannerConsistency, TheCompletionScannerAgreesWithTheIndex)
             << "the completion scanner and the index disagree on:\n"
             << text.toStdString();
     }
+}
+
+// ═══════════════════════ Shift+F12: find references ═════════════════════
+
+namespace
+{
+/// main: line 0; loop: line 2; references on 3 and 5; a comment and a
+/// string each mention "loop" and must NOT be listed.
+const QString kRefs =
+    "main:\n"                       // 0
+    "    addi x1, x0, 4\n"          // 1
+    "loop:\n"                       // 2
+    "    j loop\n"                  // 3
+    "    .asciz \"loop here\"\n"    // 4
+    "    j loop        # loop\n"    // 5
+    "    ret\n";                    // 6
+} // namespace
+
+TEST(LabelReferences, ShiftF12OpensTheListFromTheIndex)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_NE(bar, nullptr);
+    ASSERT_TRUE(bar->isVisible()) << "Shift+F12 did not open the list";
+    // The definition plus the two real references. The mention inside the
+    // string on line 4 and the one in the comment on line 5 are not
+    // references - the list is built from the index, not a text search.
+    EXPECT_EQ(bar->count(), 3) << "the list is not the index's answer";
+}
+
+TEST(LabelReferences, CommentsAndStringsAreNotListed)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_TRUE(bar->isVisible());
+
+    QList<int> lines;
+    for (int i = 0; i < bar->count(); ++i)
+    {
+        bar->setCurrentRow(i);
+        ASSERT_NE(bar->selected(), nullptr);
+        lines << bar->selected()->line;
+    }
+    std::sort(lines.begin(), lines.end());
+    EXPECT_EQ(lines, QList<int>({2, 3, 5}))
+        << "a mention in a string or a comment was listed";
+}
+
+TEST(LabelReferences, EnterJumpsAndPushesTheBackStack)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    const int from = nav.caret();
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_TRUE(bar->isVisible());
+
+    key(&nav.editor, Qt::Key_Down);
+    key(&nav.editor, Qt::Key_Return);
+    EXPECT_FALSE(bar->isVisible()) << "picking a row left the list open";
+    EXPECT_NE(nav.caret(), from) << "picking a row did not move the caret";
+    EXPECT_EQ(nav.editor.backStackDepth(), 1) << "it did not push the back stack";
+
+    key(&nav.editor, Qt::Key_Left, Qt::AltModifier);
+    EXPECT_EQ(nav.caret(), from) << "Alt+Left did not return";
+}
+
+TEST(LabelReferences, UpAndDownMoveTheSelection)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_TRUE(bar->isVisible());
+    ASSERT_GT(bar->count(), 1);
+
+    EXPECT_EQ(bar->currentRow(), 0);
+    key(&nav.editor, Qt::Key_Down);
+    EXPECT_EQ(bar->currentRow(), 1);
+    key(&nav.editor, Qt::Key_Up);
+    EXPECT_EQ(bar->currentRow(), 0);
+    key(&nav.editor, Qt::Key_Up);
+    EXPECT_EQ(bar->currentRow(), bar->count() - 1) << "Up on the first row did not wrap";
+}
+
+TEST(LabelReferences, EscClosesTheListOnlyAndLeavesTheFindBarOpen)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.editor.openFind(false);
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.findBar()->isHidden());
+
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_TRUE(bar->isVisible());
+    const int before = nav.caret();
+
+    key(&nav.editor, Qt::Key_Escape);
+    EXPECT_FALSE(bar->isVisible()) << "Esc did not close the list";
+    EXPECT_EQ(nav.caret(), before) << "Esc moved the caret";
+    EXPECT_FALSE(nav.editor.findBar()->isHidden())
+        << "Esc closed the find bar as well; the list must take it first";
+}
+
+TEST(LabelReferences, OpeningItClosesTheOtherOverlays)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.editor.openGotoLine();
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.gotoLineBar()->isHidden());
+
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ASSERT_TRUE(nav.editor.referencesBar()->isVisible());
+    EXPECT_TRUE(nav.editor.gotoLineBar()->isHidden())
+        << "opening the references list left go-to-line up";
+
+    // And the other way: opening Find or go-to-line closes the list.
+    nav.editor.openFind(false);
+    EXPECT_FALSE(nav.editor.referencesBar()->isVisible())
+        << "opening Find left the references list up";
+}
+
+/// The one overlay the list does NOT close, because Esc has to be able to
+/// close the list alone and leave the search running. They own the same
+/// corner, so the list must be placed clear of the find bar, not over it.
+TEST(LabelReferences, ItOpensClearOfAnOpenFindBar)
+{
+    Nav nav;
+    nav.editor.resize(700, 420);
+    nav.editor.show();
+    QApplication::processEvents();
+    nav.load(kRefs);
+    nav.editor.openFind(false);
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.findBar()->isHidden());
+
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ASSERT_TRUE(nav.editor.referencesBar()->isVisible());
+    EXPECT_FALSE(nav.editor.findBar()->isHidden())
+        << "opening the list closed the search the reader was in the middle of";
+    EXPECT_GE(nav.editor.referencesBar()->geometry().top(),
+              nav.editor.findBar()->geometry().bottom())
+        << "the list was drawn on top of the find bar";
+}
+
+TEST(LabelReferences, ItClosesTheSuggestionList)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.editor.setCompletionSource(
+        [](const QString &)
+        {
+            return QList<Completion::Item>{
+                {QStringLiteral("loopy"), Completion::Kind::Label, {}}};
+        });
+    nav.editor.resize(700, 420);
+    nav.editor.show();
+    QApplication::processEvents();
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    nav.editor.openCompletionExplicitly(); // what Ctrl+Space does
+    QApplication::processEvents();
+    ASSERT_TRUE(nav.editor.isCompletionVisible());
+
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    EXPECT_FALSE(nav.editor.isCompletionVisible())
+        << "opening the references list left the suggestions up";
+}
+
+TEST(LabelReferences, AReadOnlyPaneOpensItToo)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.editor.setReadOnly(true);
+    nav.caretTo(kRefs.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    EXPECT_TRUE(nav.editor.referencesBar()->isVisible())
+        << "navigation is not an edit; a read-only pane must still list them";
+    nav.editor.setReadOnly(false);
+}
+
+TEST(LabelReferences, ANameWithNoReferencesStillListsItsDefinition)
+{
+    Nav nav;
+    nav.load("alone:\n    nop\n");
+    nav.caretTo(1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ReferencesBar *bar = nav.editor.referencesBar();
+    ASSERT_TRUE(bar->isVisible()) << "it refused to open for a label with no uses";
+    EXPECT_EQ(bar->count(), 1);
+}
+
+TEST(LabelReferences, ShiftF12OffALabelDoesNothing)
+{
+    Nav nav;
+    nav.load(kRefs);
+    nav.caretTo(kRefs.indexOf("    addi") + 2);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    EXPECT_FALSE(nav.editor.referencesBar() && nav.editor.referencesBar()->isVisible())
+        << "it opened for something that is not a label";
+}
+
+TEST(LabelReferences, FileOpenClosesIt)
+{
+    EditorTab tab;
+    tab.resize(700, 400);
+    tab.show();
+    QApplication::processEvents();
+    Editor *editor = nullptr;
+    for (QPlainTextEdit *pane : tab.findChildren<QPlainTextEdit *>())
+        if (!pane->isReadOnly())
+            editor = static_cast<Editor *>(pane);
+    ASSERT_NE(editor, nullptr);
+
+    tab.loadFileContent(kRefs);
+    QApplication::processEvents();
+    QTextCursor c(editor->document());
+    c.setPosition(kRefs.indexOf("loop:") + 1);
+    editor->setTextCursor(c);
+    QApplication::processEvents();
+    key(editor, Qt::Key_F12, Qt::ShiftModifier);
+    ASSERT_TRUE(editor->referencesBar()->isVisible());
+
+    tab.loadFileContent("other:\n    nop\n");
+    QApplication::processEvents();
+    EXPECT_FALSE(editor->referencesBar()->isVisible())
+        << "the list still points into the document that was closed";
 }

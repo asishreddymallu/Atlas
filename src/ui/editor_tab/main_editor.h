@@ -17,6 +17,7 @@ namespace Kites
 {
 class CompletionPopup;
 class FindBar;
+class ReferencesBar;
 class GotoLineBar;
 
 class Editor : public KitesEditor
@@ -110,10 +111,25 @@ public:
      */
     const LabelIndex::Index &labelIndex() const;
 
+    /**
+     * @brief The Shift+F12 references list.
+     *
+     * Created with the editor rather than on first use, so a test and the
+     * harness can ask whether it is up without having opened it once - the
+     * find bar's null-until-opened shape costs a null check at every call
+     * site and has already caused one crash in the harness.
+     */
+    ReferencesBar *referencesBar() const { return m_references; }
+    /// Shift+F12. Returns true when the list opened.
+    bool showReferencesAtCaret();
+    void closeReferences();
+
     /// F12 / Ctrl+click. Returns true when it jumped.
     bool goToDefinitionAtCaret();
     /// Alt+Left. Returns true when it moved.
     bool goBack();
+    /// One line's text, trimmed, for a references row.
+    QString lineTextFor(int line) const;
     /// How many positions the back stack holds, for the tests.
     int  backStackDepth() const { return int(m_backStack.size()); }
     /// Cleared on File > Open, like the breakpoints.
@@ -365,6 +381,7 @@ private:
     QColor                 m_findCurrentColor;
     QColor                 m_findCurrentTextColor;
     GotoLineBar           *m_gotoBar {nullptr};
+    ReferencesBar         *m_references {nullptr};
     // QSet<int> m_breakPointsSet; // for quick lookup
     // int m_gutterWidth = 30;
     bool m_isTextEditor; // to differentiate between text editor and disassembly viewer

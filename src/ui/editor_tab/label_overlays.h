@@ -38,12 +38,20 @@ class ReferencesBar : public QWidget
     void setRows(const QList<Row> &rows, const QString &name);
     int  count() const { return int(m_rows.size()); }
     int  currentRow() const { return m_current; }
+    /// Selects a row outright. For the tests, which read each row's line.
+    void setCurrentRow(int row);
     void moveSelection(int delta);
     /// The row the user is on, or -1.
     const Row *selected() const;
 
-    /// Keeps it in the top-right of the viewport and inside it.
-    void reposition(const QWidget *viewport);
+    /**
+     * @brief Keeps it in the top-right of the viewport and inside it.
+     *
+     * `topOffset` is how far down to start. The find bar occupies the same
+     * corner and is NOT closed when this opens - a reader mid-search keeps
+     * their search - so the list is placed under it rather than over it.
+     */
+    void reposition(const QWidget *viewport, int topOffset = 0);
     /// The editor's font, so the list follows zoom as the text does.
     void setEditorFont(const QFont &font);
     int  rowHeight() const;

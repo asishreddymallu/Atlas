@@ -74,6 +74,15 @@ const ReferencesBar::Row *ReferencesBar::selected() const
     return &m_rows.at(m_current);
 }
 
+void ReferencesBar::setCurrentRow(int row)
+{
+    if (row < 0 || row >= int(m_rows.size()))
+        return;
+    m_current = row;
+    ensureVisible();
+    update();
+}
+
 void ReferencesBar::moveSelection(int delta)
 {
     if (m_rows.isEmpty())
@@ -113,7 +122,7 @@ int ReferencesBar::rowHeight() const
     return fontMetrics().height() + 2 * rowPadY;
 }
 
-void ReferencesBar::reposition(const QWidget *viewport)
+void ReferencesBar::reposition(const QWidget *viewport, int topOffset)
 {
     if (!viewport || m_rows.isEmpty())
         return;
@@ -126,12 +135,13 @@ void ReferencesBar::reposition(const QWidget *viewport)
     const int available = viewport->width() - 2 * overlayMargin;
     const int width     = std::clamp(widest + 2 * (rowPadX + framePad), 120, available);
     const int visible   = std::min(int(m_rows.size()), maxVisibleRows);
+    const int top       = overlayMargin + std::max(0, topOffset);
     // One row for the header, then the list.
     const int height =
         std::min((visible + 1) * rowHeight() + 2 * framePad,
-                 std::max(rowHeight(), viewport->height() - 2 * overlayMargin));
+                 std::max(rowHeight(), viewport->height() - top - overlayMargin));
     setGeometry(std::max(overlayMargin, viewport->width() - width - overlayMargin),
-                overlayMargin, width, height);
+                top, width, height);
     show();
     raise();
 }

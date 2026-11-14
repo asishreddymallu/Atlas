@@ -3,6 +3,7 @@
 #include "ui/editor_tab/label_index.h"
 #include "find_bar.h"
 #include "goto_line_bar.h"
+#include "ui/editor_tab/label_overlays.h"
 #include "ui/theme/theme_manager.h"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -69,6 +70,17 @@ Editor::Editor(QWidget *parent )
     // ── the suggestion list. A child of the viewport, like the find bar, so
     //    it is clipped to the editor and can be driven in kites_test.
     m_completionPopup = new CompletionPopup(viewport());
+    m_references      = new ReferencesBar(viewport());
+    connect(m_references, &ReferencesBar::closeRequested, this, [this] { closeReferences(); });
+    connect(m_references, &ReferencesBar::picked, this,
+            [this](int offset)
+            {
+                // The jump is a jump: it pushes the back stack exactly as
+                // F12 does, so Alt+Left returns to where the list opened.
+                pushBackPosition();
+                closeReferences();
+                revealOffset(offset);
+            });
     m_completionSource = [this](const QString &prefix)
     {
         QList<Completion::Item> items;
@@ -554,6 +566,11 @@ void Editor::repositionOverlays()
     repositionFindBar();
     if (m_gotoBar && !m_gotoBar->isHidden())
         m_gotoBar->reposition(viewport());
+    if (m_references && m_references->isVisible())
+        m_references->reposition(viewport(),
+                                 (m_findBar && !m_findBar->isHidden())
+                                     ? m_findBar->geometry().bottom() + 1 - overlayMargin
+                                     : 0);
 }
 
 GotoLineBar *Editor::gotoLineBar() const
@@ -565,6 +582,7 @@ void Editor::openGotoLine()
 {
     // Only one overlay at a time.
     closeFind();
+    closeReferences();
 
     if (!m_gotoBar)
     {
@@ -604,6 +622,7 @@ void Editor::openFind(bool withReplace)
 {
     if (m_gotoBar && !m_gotoBar->isHidden())
         closeGotoLine();
+    closeReferences();
 
     if (!m_findBar)
     {
@@ -1020,6 +1039,15 @@ bool Editor::handleEditingKey(QKeyEvent *event)
         goToDefinitionAtCaret();
         return true;
     }
+    if (key == Qt::Key_F12 && mods == Qt::ShiftModifier)
+    {
+        showReferencesAtCaret();
+        return true;
+    }
+    // The list's own keys, while it is up. Before everything else, so Down
+    // moves the selection rather than the caret under it.
+    if (m_references && m_references->isVisible() && m_references->handleKey(event))
+        return true;
     if (key == Qt::Key_Left && mods == Qt::AltModifier)
     {
         closeCompletion();
@@ -1597,6 +1625,10 @@ const LabelIndex::Index &Editor::labelIndex() const
 void Editor::clearBackStack()
 {
     m_backStack.clear();
+    // The rows hold offsets into the document that is being closed, so the
+    // list has to go with it - a row picked afterwards would jump into
+    // whatever text now happens to sit at that offset.
+    closeReferences();
 }
 
 void Editor::pushBackPosition()
@@ -1767,6 +1799,68 @@ void Editor::leaveEvent(QEvent *event)
     // Clear path 2: the mouse left the viewport.
     clearLinkHighlight();
     KitesEditor::leaveEvent(event);
+}
+
+
+// ──────────────── Shift+F12: the references list ─────────────────
+
+bool Editor::showReferencesAtCaret()
+{
+    const QString name = LabelIndex::nameAt(toPlainText(), textCursor().position());
+    if (name.isEmpty())
+        return false;
+
+    // From the INDEX, never a text search. That is the whole difference
+    // between this and Ctrl+F: the index knows that a mention inside a
+    // comment or a string is not a reference, and Find cannot.
+    const LabelIndex::Index &index = labelIndex();
+    const QList<LabelIndex::Definition> definitions = index.definitionsOf(name);
+    if (definitions.isEmpty())
+        return false; // not a label of this file - say nothing, like F12
+
+    QList<ReferencesBar::Row> rows;
+    for (const LabelIndex::Definition &definition : definitions)
+        rows << ReferencesBar::Row{definition.line,
+                                   lineTextFor(definition.line), true,
+                                   definition.offset};
+    for (const LabelIndex::Reference &reference : index.references)
+    {
+        if (reference.name != name)
+            continue;
+        rows << ReferencesBar::Row{reference.line, lineTextFor(reference.line), false,
+                                   reference.offset};
+    }
+    std::sort(rows.begin(), rows.end(),
+              [](const ReferencesBar::Row &a, const ReferencesBar::Row &b)
+              { return a.offset < b.offset; });
+
+    // The overlays that take the same keys go away. The FIND bar does not:
+    // a reader half way through a search keeps it, and Esc then closes the
+    // list alone. It owns the same corner, so the list starts below it.
+    closeCompletion();
+    closeGotoLine();
+    const int below = (m_findBar && !m_findBar->isHidden())
+                          ? m_findBar->geometry().bottom() + 1 - overlayMargin
+                          : 0;
+
+    m_references->setRows(rows, name);
+    m_references->setEditorFont(font());
+    m_references->reposition(viewport(), below);
+    return true;
+}
+
+void Editor::closeReferences()
+{
+    if (!m_references || !m_references->isVisible())
+        return;
+    m_references->hide();
+    setFocus();
+}
+
+QString Editor::lineTextFor(int line) const
+{
+    const QTextBlock block = document()->findBlockByNumber(line);
+    return block.isValid() ? block.text().trimmed() : QString();
 }
 
 } // namespace Kites
