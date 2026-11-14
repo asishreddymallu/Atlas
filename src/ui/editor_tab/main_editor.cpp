@@ -51,25 +51,28 @@ Editor::Editor(QWidget *parent )
     // ── the suggestion list. A child of the viewport, like the find bar, so
     //    it is clipped to the editor and can be driven in kites_test.
     m_completionPopup = new CompletionPopup(viewport());
-    m_completionSource = [](const QString &prefix)
+    m_completionSource = [this](const QString &prefix)
     {
         QList<Completion::Item> items;
-        // LanguageService hands back bare strings with no kind and no detail;
-        // the kind is derived from the symbol's shape. See known_issues.
+        // The static half - mnemonics, directives, registers, custom pseudo
+        // instructions. LanguageService hands back bare strings with no kind
+        // and no detail; the kind is derived from the symbol's shape, because
+        // instructions.json holds nothing else. See known_issues.
         for (const QString &symbol : LanguageService::completions(prefix, QString()))
             items << Completion::Item{symbol, Completion::kindOf(symbol), {}};
+        // The buffer's own labels, from the revision-keyed cache rather than
+        // by handing the whole document over on every key.
+        for (const QString &label : documentLabels())
+        {
+            if (!prefix.isEmpty() && !label.startsWith(prefix, Qt::CaseInsensitive))
+                continue;
+            items << Completion::Item{label, Completion::Kind::Label, {}};
+        }
         return items;
     };
     connect(m_completionPopup, &CompletionPopup::rowActivated, this,
             [this](const QString &label) { acceptCompletion(label, false); });
 
-    m_autoCompleter = new QCompleter(this);
-    m_autoCompleter->setModel(new QStringListModel(m_autoCompleter));
-    m_autoCompleter->setCaseSensitivity(Qt::CaseInsensitive);
-    m_autoCompleter->setCompletionMode(QCompleter::PopupCompletion);
-    m_autoCompleter->setWidget(this);
-    connect(m_autoCompleter, QOverload<const QString &>::of(&QCompleter::activated), this,
-            &Editor::insertCompletion);
 
     connect(this, &QPlainTextEdit::cursorPositionChanged, this,
             [this]
@@ -114,6 +117,15 @@ Editor::Editor(QWidget *parent )
             {
                 // applyEdit() remaps its own change through the command's
                 // LineMap; anchors collapse inside a replaced range.
+                // The label cache: a label can only be created or destroyed
+                // by a line that holds a ':', or by lines appearing and
+                // disappearing. Anything else leaves it alone, which is what
+                // keeps ordinary typing off the scan.
+                if (document()->blockCount() != m_lastBlockCount)
+                    m_labelsDirty = true;
+                else if (document()->findBlock(from).text().contains(QLatin1Char(':')))
+                    m_labelsDirty = true;
+
                 if (m_remappingBreakpoints)
                     return;
 
@@ -374,35 +386,7 @@ void Editor::setErrorMessage(int line, const QString &message)
     m_errorMessages.emplace(line, message);
 }
 
-QString Editor::textUnderCursor() const
-{
-    const QTextCursor cursor = textCursor();
-    const QTextBlock block = cursor.block();
-    const QString blockText = block.text();
-    const int posInBlock = cursor.position() - block.position();
 
-    int start = posInBlock;
-    while (start > 0 && isCompletionWordChar(blockText[start - 1]))
-        --start;
-    int end = posInBlock;
-    while (end < blockText.size() && isCompletionWordChar(blockText[end]))
-        ++end;
-
-    return blockText.mid(start, end - start);
-}
-
-void Editor::insertCompletion(const QString &completion)
-{
-    if (m_autoCompleter->widget() != this)
-        return;
-
-    QTextCursor cursor = textCursor();
-    const int prefixLength = m_autoCompleter->completionPrefix().length();
-    cursor.setPosition(cursor.position() - prefixLength);
-    cursor.setPosition(cursor.position() + prefixLength, QTextCursor::KeepAnchor);
-    cursor.insertText(completion);
-    setTextCursor(cursor);
-}
 
 // ───────────────────────── find and replace ──────────────────────────────
 
@@ -1475,6 +1459,56 @@ void Editor::focusOutEvent(QFocusEvent *event)
     // K7. Window deactivation arrives here too, as a focus-out.
     closeCompletion();
     KitesEditor::focusOutEvent(event);
+}
+
+QStringList Editor::documentLabels() const
+{
+    if (!m_labelsDirty)
+        return m_labelCache;
+
+    // One left-to-right pass per line, tracking comment and string state as
+    // it goes rather than asking contextAt() at every colon - the same rule,
+    // without rescanning the line prefix for each one.
+    QStringList labels;
+    for (QTextBlock block = document()->begin(); block.isValid(); block = block.next())
+    {
+        const QString line = block.text();
+        bool   inString = false;
+        QChar  quote;
+        int    wordStart = -1;
+        for (int i = 0; i < line.size(); ++i)
+        {
+            const QChar c = line.at(i);
+            if (inString)
+            {
+                if (c == quote)
+                    inString = false;
+                continue;
+            }
+            if (c == QLatin1Char('#'))
+                break; // the rest of the line is a comment
+            if (c == QLatin1Char('"') || c == QLatin1Char('\''))
+            {
+                inString = true;
+                quote    = c;
+                wordStart = -1;
+                continue;
+            }
+            if (Completion::isWordChar(c))
+            {
+                if (wordStart < 0)
+                    wordStart = i;
+                continue;
+            }
+            if (c == QLatin1Char(':') && wordStart >= 0)
+                labels << line.mid(wordStart, i - wordStart);
+            wordStart = -1;
+        }
+    }
+    labels.removeDuplicates();
+    m_labelCache  = labels;
+    m_labelsDirty = false;
+    return m_labelCache;
 }
 
 } // namespace Kites

@@ -4,7 +4,6 @@
 #include "ui/editor_tab/editor_commands.h"
 #include "ui/editor_tab/completion_model.h"
 #include "ui/editor_tab/find_engine.h"
-#include <QCompleter>
 #include <QColor>
 #include <QTimer>
 #include <QEvent>
@@ -116,7 +115,6 @@ private slots:
 
 private:
     // int leftViewMargin() const override;
-    QString textUnderCursor() const;
 
     /**
      * @brief The VS Code-style editing keys, handled here and nowhere else.
@@ -245,8 +243,6 @@ private:
     /// Sorts, removes duplicates, and drops anything outside the document.
     void        normaliseBreakpoints();
 
-    QCompleter *m_autoCompleter = nullptr;
-
     CompletionPopup    *m_completionPopup {nullptr};
     Completion::Source  m_completionSource;
     QList<Completion::Item> m_completionItems;
@@ -256,6 +252,26 @@ private:
     /// True while acceptCompletion() is editing, so the document change it
     /// makes does not re-trigger the popup it is closing.
     bool                m_completionApplying {false};
+    /**
+     * @brief The buffer's own labels, cached against the document revision.
+     *
+     * The old code handed the WHOLE document to LanguageService::completions()
+     * on every key, which is where the 2.3-3.3 ms per keystroke went.
+     *
+     * Keying the cache on QTextDocument::revision() alone does not help:
+     * every keystroke bumps the revision, so the scan ran per key anyway -
+     * measured at 18 ms on the 877,000 character document, worse than what
+     * it replaced. What actually makes it cheap is WHEN it is invalidated.
+     *
+     * A label can only appear or disappear through a line that contains a
+     * ':', or through lines being added or removed. So the cache is marked
+     * dirty only when the edited block holds a ':' - before or after the
+     * edit - or when the block count changed. Typing ordinary code never
+     * touches it. Invalidated by document changes, never by a timer.
+     */
+    mutable QStringList m_labelCache;
+    mutable bool        m_labelsDirty {true};
+    QStringList         documentLabels() const;
 
     std::map<int, QString> m_errorMessages;
     SyntaxHighlighter *m_syntaxHighlighter;
