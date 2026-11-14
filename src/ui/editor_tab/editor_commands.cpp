@@ -1,6 +1,7 @@
 #include "editor_commands.h"
 
 #include "ui/common/kites_editor.h"
+#include "ui/editor_tab/find_engine.h"
 
 #include <algorithm>
 
@@ -552,6 +553,149 @@ Edit outdentLines(const QString &text, int anchor, int position)
     // Every touched line already starts at column 0: nothing to do, and
     // nothing should be pushed onto the undo stack.
     return spliced(text, anchor, position, splices);
+}
+
+bool isPairOpener(QChar c)
+{
+    return c == QLatin1Char('(') || c == QLatin1Char('"') || c == QLatin1Char('\'');
+}
+
+QChar closerFor(QChar opener)
+{
+    if (opener == QLatin1Char('('))
+        return QLatin1Char(')');
+    return opener; // a quote closes itself
+}
+
+LineContext contextAt(const QString &text, int offset)
+{
+    LineContext context;
+    const int   start = lineStart(text, lineOf(text, offset));
+    for (int i = start; i < offset && i < text.size(); ++i)
+    {
+        const QChar c = text.at(i);
+        if (context.inString)
+        {
+            // A backslash escapes the next character, so `.asciz "a\"b"` is
+            // one string and not two.
+            if (c == QLatin1Char('\\'))
+                ++i;
+            else if (c == context.stringQuote)
+                context.inString = false;
+            continue;
+        }
+        if (c == QLatin1Char('#'))
+        {
+            context.inComment = true;
+            break; // a comment runs to the end of the line
+        }
+        if (c == QLatin1Char('"') || c == QLatin1Char('\''))
+        {
+            context.inString   = true;
+            context.stringQuote = c;
+        }
+    }
+    return context;
+}
+
+Edit autoPair(const QString &text, int anchor, int position, const QString &typed)
+{
+    if (typed.size() != 1)
+        return {};
+    const QChar c = typed.at(0);
+
+    const int low  = std::min(anchor, position);
+    const int high = std::max(anchor, position);
+
+    // ── a non-empty selection: an opener wraps it and keeps it selected
+    if (high > low && isPairOpener(c))
+    {
+        const QChar closer = closerFor(c);
+        Edit        edit;
+        edit.valid  = true;
+        edit.start  = low;
+        edit.length = high - low;
+        edit.text   = c + text.mid(low, high - low) + closer;
+        edit.anchor   = low + 1;
+        edit.position = high + 1;
+        // Wrapping a selection that spans lines rewrites those lines, so the
+        // breakpoints need the same map every other command provides. No
+        // line is created or destroyed: the quotes go inside the span.
+        const int first = lineOf(text, low);
+        const int last  = lineOf(text, high);
+        edit.lines.firstLine = first;
+        edit.lines.lastLine  = last;
+        for (int line = first; line <= last; ++line)
+            edit.lines.movedTo << line;
+        return edit;
+    }
+    if (high > low)
+        return {}; // a closer or anything else with a selection: ordinary
+
+    const QChar next = low < text.size() ? text.at(low) : QChar();
+    const QChar previous = low > 0 ? text.at(low - 1) : QChar();
+    const LineContext context = contextAt(text, low);
+
+    // ── typing a closer over the one that is already there
+    const bool closesSomething = c == QLatin1Char(')') || c == QLatin1Char('"') ||
+                                 c == QLatin1Char('\'');
+    if (closesSomething && next == c)
+    {
+        Edit edit;
+        edit.valid    = true;
+        edit.start    = low + 1; // cursor only: step over it
+        edit.length   = 0;
+        edit.anchor   = low + 1;
+        edit.position = low + 1;
+        return edit;
+    }
+
+    if (!isPairOpener(c))
+        return {};
+
+    // ── when an opener is allowed to close itself
+    const bool nextIsFree = next.isNull() || next == QLatin1Char('\n') || next.isSpace() ||
+                            next == QLatin1Char(')');
+    if (!nextIsFree)
+        return {};
+    if (context.inComment)
+        return {};
+
+    const bool isQuote = c == QLatin1Char('"') || c == QLatin1Char('\'');
+    if (isQuote && FindEngine::isWordCharacter(previous))
+        return {}; // don\'t
+    if (isQuote && context.inString)
+        return {}; // closing the string that is already open
+    if (!isQuote && context.inString)
+        return {}; // a ( inside "..." is just text
+
+    Edit edit;
+    edit.valid    = true;
+    edit.start    = low;
+    edit.length   = 0;
+    edit.text     = QString(c) + closerFor(c);
+    edit.anchor   = low + 1;
+    edit.position = low + 1;
+    return edit;
+}
+
+Edit pairBackspace(const QString &text, int anchor, int position)
+{
+    if (anchor != position || position <= 0 || position >= text.size())
+        return {};
+
+    const QChar before = text.at(position - 1);
+    const QChar after  = text.at(position);
+    if (!isPairOpener(before) || after != closerFor(before))
+        return {};
+
+    Edit edit;
+    edit.valid    = true;
+    edit.start    = position - 1;
+    edit.length   = 2;
+    edit.anchor   = position - 1;
+    edit.position = position - 1;
+    return edit;
 }
 
 Edit toggleComment(const QString &text, int anchor, int position)

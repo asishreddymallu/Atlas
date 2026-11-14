@@ -1,0 +1,233 @@
+/**
+ * @file editor_pairs_test.cpp
+ * @brief Auto-closing pairs, as a table of strings.
+ *
+ * Pure: document text and a selection in, one Edit out. The rules are
+ * driven by the typed TEXT rather than Qt::Key, so a layout where `(` is
+ * not Shift+9 behaves identically, and the table reflects that by typing
+ * strings.
+ */
+#include "ui/editor_tab/editor_commands.h"
+
+#include <gtest/gtest.h>
+
+#include <QList>
+#include <QString>
+
+using namespace Kites;
+using namespace Kites::EditorCommands;
+
+namespace
+{
+QString applyTo(const QString &text, const Edit &edit)
+{
+    if (!edit.valid)
+        return text;
+    QString out = text;
+    out.replace(edit.start, edit.length, edit.text);
+    return out;
+}
+
+struct Case
+{
+    const char *name;
+    QString     before;
+    int         anchor;
+    int         position;
+    const char *typed;
+    QString     after;      // the document; same as `before` when nothing applies
+    int         newAnchor;
+    int         newPosition;
+};
+
+void runTable(const QList<Case> &rows)
+{
+    for (const Case &row : rows)
+    {
+        const Edit edit = autoPair(row.before, row.anchor, row.position, row.typed);
+        EXPECT_EQ(applyTo(row.before, edit), row.after) << "text: " << row.name;
+        EXPECT_EQ(edit.valid ? edit.anchor : row.anchor, row.newAnchor)
+            << "anchor: " << row.name;
+        EXPECT_EQ(edit.valid ? edit.position : row.position, row.newPosition)
+            << "position: " << row.name;
+    }
+}
+
+/// Types `keys` one character at a time, applying the pair rule where it
+/// applies and inserting the character where it does not - which is what
+/// the editor does.
+QPair<QString, int> typeAll(const QString &keys)
+{
+    QString text;
+    int     caret = 0;
+    for (const QChar &key : keys)
+    {
+        const Edit edit = autoPair(text, caret, caret, QString(key));
+        if (edit.valid)
+        {
+            text.replace(edit.start, edit.length, edit.text);
+            caret = edit.position;
+        }
+        else
+        {
+            text.insert(caret, key);
+            ++caret;
+        }
+    }
+    return {text, caret};
+}
+} // namespace
+
+TEST(EditorPairsOpening, AnOpenerClosesItselfOnlyWhereThereIsRoom)
+{
+    runTable({
+        {"( at the end of a line", "", 0, 0, "(", "()", 1, 1},
+        // caret 1 is between "a" and the space, so the next character is
+        // the space and the pair is wanted. (At caret 2 the next character
+        // is "b" and it is not - the row below.)
+        {"( before a space", "a b", 1, 1, "(", "a() b", 2, 2},
+        {"( before a letter after a space", "a b", 2, 2, "(", "a b", 2, 2},
+        {"( before a closing paren", "x)", 1, 1, "(", "x())", 2, 2},
+        {"( before a word character", "abc", 0, 0, "(", "abc", 0, 0},
+        {"( before a digit", "4(sp)", 0, 0, "(", "4(sp)", 0, 0},
+        {"\" at the end of a line", "", 0, 0, "\"", "\"\"", 1, 1},
+        {"' at the end of a line", "", 0, 0, "'", "''", 1, 1},
+    });
+}
+
+TEST(EditorPairsOpening, AQuoteRefusesAfterAWordCharacterAndInAComment)
+{
+    runTable({
+        // don't
+        {"' after a letter", "don", 3, 3, "'", "don", 3, 3},
+        {"' after a digit", "x9", 2, 2, "'", "x9", 2, 2},
+        {"' after an underscore", "a_", 2, 2, "'", "a_", 2, 2},
+        {"' after a space still pairs", "a ", 2, 2, "'", "a ''", 3, 3},
+        // inside a comment nothing pairs
+        {"\" inside a comment", "# say ", 6, 6, "\"", "# say ", 6, 6},
+        {"( inside a comment", "# note ", 7, 7, "(", "# note ", 7, 7},
+        {"' inside a comment", "# it", 4, 4, "'", "# it", 4, 4},
+        // a # inside a string is not a comment
+        {"( after a # that is inside a string", "\"a# \"", 4, 4, "(", "\"a# \"", 4, 4},
+    });
+}
+
+TEST(EditorPairsOpening, ParenthesesDoNotPairInsideAString)
+{
+    runTable({
+        {"( inside a string", ".asciz \"a \"", 10, 10, "(", ".asciz \"a \"", 10, 10},
+        {"( after the string has closed", ".asciz \"ab\" ", 12, 12, "(", ".asciz \"ab\" ()",
+         13, 13},
+        {"an escaped quote does not close the string", ".asciz \"a\\\" \"", 12, 12, "(",
+         ".asciz \"a\\\" \"", 12, 12},
+    });
+}
+
+TEST(EditorPairsClosing, TypingTheCloserStepsOverIt)
+{
+    runTable({
+        {") over a )", "()", 1, 1, ")", "()", 2, 2},
+        {"\" over a \"", "\"\"", 1, 1, "\"", "\"\"", 2, 2},
+        {"' over a '", "''", 1, 1, "'", "''", 2, 2},
+        // Not over something else.
+        {") in front of a letter", "(a)", 1, 1, ")", "(a)", 1, 1},
+        {") at the end of a line", "(", 1, 1, ")", "(", 1, 1},
+    });
+}
+
+TEST(EditorPairsSelection, AnOpenerWrapsASelectionAndKeepsItSelected)
+{
+    runTable({
+        {"( wraps a word", "alpha beta", 0, 5, "(", "(alpha) beta", 1, 6},
+        {"\" wraps a word", "alpha", 0, 5, "\"", "\"alpha\"", 1, 6},
+        {"backwards selection wraps the same", "alpha", 5, 0, "(", "(alpha)", 1, 6},
+        // A closer with a selection is just a character.
+        {") with a selection does nothing special", "alpha", 0, 5, ")", "alpha", 0, 5},
+    });
+
+    // A multi-line selection wraps too, and carries a line map so the
+    // breakpoints are handled like every other command.
+    const QString text = "one\ntwo\nthree";
+    const Edit    edit = autoPair(text, 0, 7, "(");
+    ASSERT_TRUE(edit.valid);
+    EXPECT_EQ(applyTo(text, edit), QString("(one\ntwo)\nthree"));
+    EXPECT_EQ(edit.lines.firstLine, 0);
+    EXPECT_EQ(edit.lines.lastLine, 1);
+    for (int line = 0; line <= 2; ++line)
+        EXPECT_EQ(edit.lines.mapped(line), line)
+            << "wrapping a selection moved line " << line;
+}
+
+TEST(EditorPairsBackspace, BetweenAnEmptyPairBothGo)
+{
+    struct Row { const char *name; QString text; int caret; QString after; int newCaret; };
+    const QList<Row> rows = {
+        {"()", "()", 1, "", 0},
+        {"\"\"", "\"\"", 1, "", 0},
+        {"''", "''", 1, "", 0},
+        {"inside a line", "a()b", 2, "ab", 1},
+    };
+    for (const Row &row : rows)
+    {
+        const Edit edit = pairBackspace(row.text, row.caret, row.caret);
+        ASSERT_TRUE(edit.valid) << row.name;
+        EXPECT_EQ(applyTo(row.text, edit), row.after) << row.name;
+        EXPECT_EQ(edit.position, row.newCaret) << row.name;
+    }
+
+    // Everything else is an ordinary Backspace.
+    for (const auto &[text, caret] : QList<QPair<QString, int>>{
+             {"(x)", 2}, {"()", 0}, {"()", 2}, {"ab", 1}, {"", 0}, {"(]", 1}})
+        EXPECT_FALSE(pairBackspace(text, caret, caret).valid)
+            << "\"" << text.toStdString() << "\" at " << caret;
+
+    // With a selection it is never the pair rule.
+    EXPECT_FALSE(pairBackspace("()", 0, 2).valid);
+}
+
+TEST(EditorPairsTyping, TypingRealAssemblyCharacterByCharacter)
+{
+    // The case from the brief: every character of a load, typed in order.
+    // "4(" does NOT pair, because a digit is a word character - which is
+    // what keeps `4(sp)` from becoming `4()sp)`.
+    const auto load = typeAll("lw t0, 4(sp)");
+    EXPECT_EQ(load.first, QString("lw t0, 4(sp)"));
+    EXPECT_EQ(load.second, 12);
+
+    // A string with a parenthesis inside it.
+    const auto asciz = typeAll(".asciz \"a(b\"");
+    EXPECT_EQ(asciz.first, QString(".asciz \"a(b\""));
+
+    // An apostrophe in a comment.
+    const auto comment = typeAll("# it's");
+    EXPECT_EQ(comment.first, QString("# it's"));
+
+    // And one where the pair IS wanted: a call with nothing after it.
+    const auto call = typeAll("jal ra, f");
+    EXPECT_EQ(call.first, QString("jal ra, f"));
+    const auto empty = typeAll("(");
+    EXPECT_EQ(empty.first, QString("()"));
+    EXPECT_EQ(empty.second, 1);
+}
+
+TEST(EditorPairsBreakpoints, OnlyAMultiLineWrapCarriesALineMap)
+{
+    // Every single-character case leaves the lines alone, so the default
+    // identity map is right and no breakpoint moves.
+    const QStringList documents = {"", "abc", "a b", "()", "\"\"", "# x"};
+    for (const QString &text : documents)
+        for (const char *typed : {"(", ")", "\"", "'"})
+        {
+            const Edit edit = autoPair(text, 0, 0, typed);
+            for (int line = 0; line < 3; ++line)
+                EXPECT_EQ(edit.lines.mapped(line), line)
+                    << "typing " << typed << " in \"" << text.toStdString()
+                    << "\" moved line " << line;
+        }
+
+    // Backspace over a pair likewise.
+    const Edit back = pairBackspace("a\n()\nb", 3, 3);
+    ASSERT_TRUE(back.valid);
+    for (int line = 0; line < 3; ++line)
+        EXPECT_EQ(back.lines.mapped(line), line);
+}

@@ -184,6 +184,57 @@ Edit indentLines(const QString &text, int anchor, int position);
 Edit outdentLines(const QString &text, int anchor, int position);
 
 /**
+ * @brief Where an offset sits, as far as the pair rules care.
+ *
+ * The syntax highlighter cannot answer this: it has no per-block state and
+ * no string rule at all - its only relevant pattern is `#[^\n]*`. So the
+ * pair rules carry their own one-line scanner, which is all they need,
+ * because a RISC-V assembly string cannot span lines.
+ */
+struct LineContext
+{
+    bool  inComment {false};
+    bool  inString  {false};
+    QChar stringQuote;
+};
+LineContext contextAt(const QString &text, int offset);
+
+/**
+ * @brief The pairs the editor closes for you.
+ *
+ * `(` `)`, `"` `"` and `'` `'`, and nothing else. `[` `]` and `{` `}` mean
+ * nothing in RISC-V assembly - no addressing mode or directive uses them -
+ * so closing them would be noise.
+ */
+bool isPairOpener(QChar c);
+QChar closerFor(QChar opener);
+
+/**
+ * @brief What typing `typed` should do, or an invalid Edit for "nothing
+ *        special - let the editor insert it".
+ *
+ * Driven by the typed TEXT rather than Qt::Key, so a layout where `(` is
+ * not Shift+9 behaves the same.
+ *
+ * An opener closes itself only when the next character is the end of the
+ * line, whitespace, or a closing `)`; never in front of a word character,
+ * where the user is far more likely to be editing an existing token. A
+ * quote additionally refuses after a word character (so `don't` stays one
+ * apostrophe) and inside a `#` comment, and `(` refuses inside a string.
+ *
+ * Typing a closer when that same closer is the next character types over it
+ * instead of adding a second one.
+ *
+ * With a non-empty selection, an opener WRAPS the selection and leaves it
+ * selected.
+ */
+Edit autoPair(const QString &text, int anchor, int position, const QString &typed);
+
+/// Backspace between the two halves of an empty pair removes both.
+/// Invalid when the caret is not between one, so the editor does its own.
+Edit pairBackspace(const QString &text, int anchor, int position);
+
+/**
  * @brief Toggles a '#' comment on the touched lines.
  *
  * Blank lines are skipped, and do not count towards the decision. If every
