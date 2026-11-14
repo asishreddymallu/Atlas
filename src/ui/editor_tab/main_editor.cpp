@@ -8,7 +8,6 @@
 #include <QMimeData>
 #include <QTextDocument>
 #include <algorithm>
-#include <cstdio>
 #include "language_service/language_service.h"
 #include <QAbstractItemView>
 #include <QKeyEvent>
