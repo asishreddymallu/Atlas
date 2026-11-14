@@ -1310,3 +1310,42 @@ was narrower than the text it drew) but not the overdraw, which is two
 `drawText` calls landing in the same place. Reading the images is
 currently the only thing that finds this class of defect, and it has now
 found it twice (see **36** for the suggestion list's elide).
+
+---
+
+## 45. The rename's `beginEditBlock` cannot be shown to do anything
+
+`Editor::applyRename()` wraps its edits in
+`beginEditBlock()`/`endEditBlock()` so that one Ctrl+Z puts every renamed
+site back. The negative control for that — removing both calls — **does
+not** make `LabelRename.OneCtrlZUndoesTheWholeRename` fail, and three
+different instruments say the same thing:
+
+| instrument | with the block | without |
+|---|---|---|
+| `Ctrl+Z` presses needed to restore | 1 | 1 |
+| `QTextDocument::availableUndoSteps()` after the rename | 7 | 7 |
+| `undoCommandAdded()` signals during the rename | 1 | 1 |
+
+Qt coalesces consecutive `insertText()` calls made on one `QTextCursor`
+into a single undo command on its own, so the explicit block changes
+nothing that can be observed here. (`availableUndoSteps()` reports 7 for a
+three-site rename either way: it counts internal operations, not the unit
+Ctrl+Z works in, and is the wrong instrument for this question.)
+
+**The block stays.** The coalescing is a heuristic of Qt's, not a
+documented guarantee, and it would stop applying the moment anything ran
+between two sites — a `processEvents()`, a signal handler that edits, a
+future version that rewrites sites through `applyEdit()`. The block states
+the intent and does not depend on that heuristic holding.
+
+**What this costs.** The test asserts the user-visible contract — exactly
+one undo command, and exactly one Ctrl+Z restores the document — and that
+contract does hold. It does **not** prove the block is what makes it hold.
+A commit message of mine claimed it did; that claim is wrong and is
+corrected here.
+
+This is the second control in this stage that could not be made to bite,
+and the second time the right answer was to say so rather than to write a
+control that fails for a different reason. See **44** for the first class
+of thing the tests cannot see.

@@ -21,6 +21,7 @@
 #include <QKeyEvent>
 #include <QTextBlock>
 #include <QLineEdit>
+#include <iostream>
 #include <QTextDocument>
 
 using namespace Kites;
@@ -804,13 +805,38 @@ TEST(LabelRename, OneCtrlZUndoesTheWholeRename)
     Nav nav;
     nav.load(kRen);
     const QString before = nav.editor.toPlainText();
+
+    // undoCommandAdded() fires once per undo COMMAND, which is the unit
+    // Ctrl+Z works in. availableUndoSteps() counts internal operations and
+    // reports 7 for a three-site rename either way, so it cannot tell a
+    // grouped rename from an ungrouped one.
+    int commands = 0;
+    QObject::connect(nav.editor.document(), &QTextDocument::undoCommandAdded,
+                     [&commands] { ++commands; });
+
     RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
     typeInto(bar->input(), QStringLiteral("spin"));
     key(bar->input(), Qt::Key_Return);
     QApplication::processEvents();
     ASSERT_NE(nav.editor.toPlainText(), before);
 
-    key(&nav.editor, Qt::Key_Z, Qt::ControlModifier);
+    // The undo STEP COUNT, not just "one Ctrl+Z restored it". A control
+    // that removed beginEditBlock/endEditBlock left the round trip
+    // passing - Qt coalesces adjacent edits on its own often enough that
+    // a single Ctrl+Z happened to work - so the old assertion was blind to
+    // exactly the thing this test is named after.
+    EXPECT_EQ(commands, 1)
+        << "the rename pushed " << commands
+        << " undo commands; it must push exactly one";
+
+    int presses = 0;
+    while (nav.editor.toPlainText() != before && presses < 20)
+    {
+        key(&nav.editor, Qt::Key_Z, Qt::ControlModifier);
+        ++presses;
+    }
+    EXPECT_EQ(presses, 1) << "one Ctrl+Z did not put every site back";
+
     EXPECT_EQ(nav.editor.toPlainText(), before)
         << "one Ctrl+Z did not put every site back";
 
