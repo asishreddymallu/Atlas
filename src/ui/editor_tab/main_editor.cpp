@@ -8,6 +8,7 @@
 #include <QMimeData>
 #include <QTextDocument>
 #include <algorithm>
+#include <cstdio>
 #include "language_service/language_service.h"
 #include <QAbstractItemView>
 #include <QKeyEvent>
@@ -25,6 +26,63 @@
 #include "break_point_gutter_column.h"
 namespace Kites
 {
+namespace
+{
+/**
+ * @brief One line's label definitions, kept on the block itself.
+ *
+ * Block user data moves with the block: splitting a line gives the new
+ * block no data (so it is rescanned), and deleting a line takes its labels
+ * with it. Nothing else in this project uses the slot - the syntax
+ * highlighter keeps its state in setUserState(), which is a separate int.
+ */
+class BlockLabels : public QTextBlockUserData
+{
+  public:
+    explicit BlockLabels(QStringList found) : labels(std::move(found)) {}
+    QStringList labels;
+};
+
+/// The labels defined on one line. A name followed by ':' outside a '#'
+/// comment and outside a "string". One left-to-right pass.
+QStringList scanLineLabels(const QString &line)
+{
+    QStringList found;
+    bool        inString = false;
+    QChar       quote;
+    int         wordStart = -1;
+    for (int i = 0; i < line.size(); ++i)
+    {
+        const QChar c = line.at(i);
+        if (inString)
+        {
+            if (c == quote)
+                inString = false;
+            continue;
+        }
+        if (c == QLatin1Char('#'))
+            break;
+        if (c == QLatin1Char('"') || c == QLatin1Char('\''))
+        {
+            inString  = true;
+            quote     = c;
+            wordStart = -1;
+            continue;
+        }
+        if (Completion::isWordChar(c))
+        {
+            if (wordStart < 0)
+                wordStart = i;
+            continue;
+        }
+        if (c == QLatin1Char(':') && wordStart >= 0)
+            found << line.mid(wordStart, i - wordStart);
+        wordStart = -1;
+    }
+    return found;
+}
+} // namespace
+
 Editor::Editor(QWidget *parent )
     : KitesEditor(parent)
 {
@@ -107,14 +165,48 @@ Editor::Editor(QWidget *parent )
             {
                 // applyEdit() remaps its own change through the command's
                 // LineMap; anchors collapse inside a replaced range.
-                // The label cache: a label can only be created or destroyed
-                // by a line that holds a ':', or by lines appearing and
-                // disappearing. Anything else leaves it alone, which is what
-                // keeps ordinary typing off the scan.
-                if (document()->blockCount() != m_lastBlockCount)
-                    m_labelsDirty = true;
-                else if (document()->findBlock(from).text().contains(QLatin1Char(':')))
-                    m_labelsDirty = true;
+                // ── the label cache, rescanned where the edit landed.
+                //
+                // The previous rule - "the edited block's text contains a
+                // ':'" - was wrong in both directions and is kept here as a
+                // warning. Backspacing over a colon leaves a line WITHOUT
+                // one, so the label was never retired; and a replacement
+                // spanning lines only ever looked at the first of them, so a
+                // label defined on a later line was never seen.
+                //
+                // Now the blocks the change actually touched are rescanned
+                // and compared with what they held. The aggregate is rebuilt
+                // only when some line's labels really differ, so typing
+                // ordinary code still costs one scan of one short line.
+                {
+                    const int firstBlock = document()->findBlock(from).blockNumber();
+                    const int lastBlock =
+                        document()->findBlock(from + charsAdded).blockNumber();
+                    // A line appearing or disappearing moves the aggregate
+                    // whatever the touched lines now say.
+                    bool moved = document()->blockCount() != m_lastBlockCount;
+                    for (int number = firstBlock; number <= lastBlock; ++number)
+                    {
+                        QTextBlock block = document()->findBlockByNumber(number);
+                        if (!block.isValid())
+                            break;
+                        const QStringList found = scanLineLabels(block.text());
+                        auto *stored = static_cast<BlockLabels *>(block.userData());
+                        if (!stored)
+                        {
+                            block.setUserData(new BlockLabels(found));
+                            if (!found.isEmpty())
+                                moved = true;
+                        }
+                        else if (stored->labels != found)
+                        {
+                            stored->labels = found;
+                            moved = true;
+                        }
+                    }
+                    if (moved)
+                        m_labelsDirty = true;
+                }
 
                 if (m_remappingBreakpoints)
                     return;
@@ -1231,6 +1323,11 @@ void Editor::setCompletionSource(Completion::Source source)
     m_completionSource = std::move(source);
 }
 
+QList<Completion::Item> Editor::completionItemsForTest(const QString &prefix) const
+{
+    return m_completionSource ? m_completionSource(prefix) : QList<Completion::Item>{};
+}
+
 bool Editor::isCompletionVisible() const
 {
     return m_completionPopup && m_completionPopup->isVisible();
@@ -1456,44 +1553,29 @@ QStringList Editor::documentLabels() const
     if (!m_labelsDirty)
         return m_labelCache;
 
-    // One left-to-right pass per line, tracking comment and string state as
-    // it goes rather than asking contextAt() at every colon - the same rule,
-    // without rescanning the line prefix for each one.
+    // Rescans every line and REFRESHES what each block holds.
+    //
+    // The per-block data is a change DETECTOR, not the record. It cannot be
+    // the record, because charsAdded is not reliable: measured,
+    // setPlainText("loop:\n...") on an empty document emits a single
+    // contentsChange of from=0, charsRemoved=1, charsAdded=0, so the
+    // handler scanned block 0 while its text was still empty and stored
+    // "no labels here" for a line that defines one. Trusting that gave an
+    // empty list for a document full of labels.
+    //
+    // So the handler's job is only to notice that something MIGHT have
+    // moved; this is where the answer is actually computed. It runs only
+    // when the flag is set, which ordinary typing never does.
     QStringList labels;
     for (QTextBlock block = document()->begin(); block.isValid(); block = block.next())
     {
-        const QString line = block.text();
-        bool   inString = false;
-        QChar  quote;
-        int    wordStart = -1;
-        for (int i = 0; i < line.size(); ++i)
-        {
-            const QChar c = line.at(i);
-            if (inString)
-            {
-                if (c == quote)
-                    inString = false;
-                continue;
-            }
-            if (c == QLatin1Char('#'))
-                break; // the rest of the line is a comment
-            if (c == QLatin1Char('"') || c == QLatin1Char('\''))
-            {
-                inString = true;
-                quote    = c;
-                wordStart = -1;
-                continue;
-            }
-            if (Completion::isWordChar(c))
-            {
-                if (wordStart < 0)
-                    wordStart = i;
-                continue;
-            }
-            if (c == QLatin1Char(':') && wordStart >= 0)
-                labels << line.mid(wordStart, i - wordStart);
-            wordStart = -1;
-        }
+        const QStringList found = scanLineLabels(block.text());
+        auto *stored = static_cast<BlockLabels *>(block.userData());
+        if (!stored)
+            block.setUserData(new BlockLabels(found));
+        else
+            stored->labels = found;
+        labels << found;
     }
     labels.removeDuplicates();
     m_labelCache  = labels;

@@ -627,3 +627,141 @@ TEST(CompletionTrigger, ADocumentSwapClosesAnOpenList)
     // it" check was written, measured to change nothing, and removed rather
     // than kept as a second mechanism nobody would know was redundant.
 }
+
+// ═══════════════════ the label cache, and when it goes stale ═════════════
+
+namespace
+{
+/// A bench whose source offers the DOCUMENT's labels, so these cases see
+/// what the real editor's default source sees. The static symbols are left
+/// out: what is under test is the buffer scan, not the merge.
+struct LabelBench
+{
+    Editor editor;
+    LabelBench()
+    {
+        editor.resize(800, 400);
+        editor.show();
+        QApplication::processEvents();
+    }
+    /// The labels the editor would offer for `prefix`, straight from the
+    /// cache the completion source reads.
+    QStringList offered(const QString &prefix)
+    {
+        QStringList out;
+        // The default source is what the editor installs; ask it the same
+        // way the trigger does.
+        for (const Completion::Item &item : editor.completionItemsForTest(prefix))
+            if (item.kind == Completion::Kind::Label)
+                out << item.label;
+        out.sort();
+        return out;
+    }
+    void setText(const QString &t)
+    {
+        editor.setPlainText(t);
+        QApplication::processEvents();
+    }
+    void caretTo(int offset)
+    {
+        QTextCursor c(editor.document());
+        c.setPosition(offset);
+        editor.setTextCursor(c);
+        QApplication::processEvents();
+    }
+};
+} // namespace
+
+/**
+ * @brief (a) Deleting the ':' must retire the label.
+ *
+ * The cache is invalidated by looking at the edited block AFTER the change.
+ * Backspacing over the colon leaves a line with no ':' in it, so the check
+ * does not fire and the label survives in the suggestions - for a name that
+ * is no longer defined anywhere.
+ */
+TEST(CompletionLabelCache, DeletingTheColonRetiresTheLabel)
+{
+    LabelBench bench;
+    bench.setText("loop:\n    addi x1, x1, 1\n");
+    EXPECT_EQ(bench.offered("lo"), QStringList({"loop"})) << "setup: loop should be offered";
+
+    // Backspace over the ':' at offset 5.
+    bench.caretTo(5);
+    sendKey(&bench.editor, Qt::Key_Backspace);
+    QApplication::processEvents();
+    ASSERT_EQ(bench.editor.toPlainText().left(4), QString("loop"));
+    ASSERT_FALSE(bench.editor.toPlainText().startsWith("loop:"));
+
+    EXPECT_EQ(bench.offered("lo"), QStringList())
+        << "the label survived the deletion of its colon";
+}
+
+/**
+ * @brief (b) A replacement whose colon is on a LATER line.
+ *
+ * Two lines replaced by two lines, so the block count does not move, and
+ * the block at `from` is the first one - which has no colon. Only the
+ * second pasted line defines a label.
+ */
+TEST(CompletionLabelCache, AReplacementDefiningALabelOnALaterLineIsSeen)
+{
+    LabelBench bench;
+    bench.setText("aaa\nbbb\nccc\n");
+    EXPECT_EQ(bench.offered("fr"), QStringList()) << "setup: nothing defined yet";
+
+    // Select the first two lines and replace them with two lines whose
+    // SECOND line carries the colon.
+    QTextCursor cursor(bench.editor.document());
+    cursor.setPosition(0);
+    cursor.setPosition(8, QTextCursor::KeepAnchor); // "aaa\nbbb\n"
+    cursor.insertText("nop\nfresh:\n");
+    QApplication::processEvents();
+
+    EXPECT_EQ(bench.offered("fr"), QStringList({"fresh"}))
+        << "a label defined on a later line of the replacement was not seen";
+}
+
+/**
+ * @brief (c) Undo and redo of both.
+ */
+TEST(CompletionLabelCache, UndoAndRedoKeepTheLabelsHonest)
+{
+    LabelBench bench;
+    bench.setText("loop:\n    addi x1, x1, 1\n");
+    bench.caretTo(5);
+    sendKey(&bench.editor, Qt::Key_Backspace);
+    QApplication::processEvents();
+    ASSERT_EQ(bench.offered("lo"), QStringList()) << "precondition: the colon is gone";
+
+    sendKey(&bench.editor, Qt::Key_Z, Qt::ControlModifier);
+    QApplication::processEvents();
+    ASSERT_TRUE(bench.editor.toPlainText().startsWith("loop:"));
+    EXPECT_EQ(bench.offered("lo"), QStringList({"loop"}))
+        << "undo put the colon back but the label did not return";
+
+    sendKey(&bench.editor, Qt::Key_Y, Qt::ControlModifier);
+    QApplication::processEvents();
+    if (!bench.editor.toPlainText().startsWith("loop:"))
+        EXPECT_EQ(bench.offered("lo"), QStringList())
+            << "redo removed the colon again but the label came back";
+}
+
+/**
+ * @brief (d) Deleting the whole line a label lives on.
+ */
+TEST(CompletionLabelCache, DeletingTheLineRetiresTheLabel)
+{
+    LabelBench bench;
+    bench.setText("start:\nloop:\n    nop\n");
+    EXPECT_EQ(bench.offered("lo"), QStringList({"loop"})) << "setup";
+
+    // Ctrl+Shift+K deletes the line the caret is on.
+    bench.caretTo(8); // inside "loop:"
+    sendKey(&bench.editor, Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier);
+    QApplication::processEvents();
+    ASSERT_FALSE(bench.editor.toPlainText().contains("loop:"));
+
+    EXPECT_EQ(bench.offered("lo"), QStringList())
+        << "the label survived its line being deleted";
+}

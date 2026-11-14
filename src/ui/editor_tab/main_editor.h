@@ -80,6 +80,9 @@ public:
      * not modified by this work.
      */
     void setCompletionSource(Completion::Source source);
+    /// What the installed source would offer for `prefix`. Read-only, for
+    /// tests that need to see the label cache without driving the popup.
+    QList<Completion::Item> completionItemsForTest(const QString &prefix) const;
     CompletionPopup *completionPopup() const { return m_completionPopup; }
     bool isCompletionVisible() const;
     /// Opens it at the caret whatever the prefix is - what Ctrl+Space does.
