@@ -113,6 +113,21 @@ void ProcessorManager::processorClockedSlot(const ProcessorState &processorState
 
 void ProcessorManager::updateEditorHighlight(const std::vector<uint64_t>& programCounters)
 {
+    // Nothing has been clocked yet, so there is no stage to point at.
+    //
+    // RVSSProcessor::Run() emits processorClockedSignal(processor_state_)
+    // once more after its loop, and on a Debug Run that emit can be reached
+    // before any step has run - setProcessorState() is what fills
+    // programCounters, and it has not been called. The RVSS branch below
+    // then read programCounters[0] on a default-constructed vector, whose
+    // data() is null: an abort under libstdc++ assertions, which this
+    // toolchain has on by default, and a segmentation fault without them.
+    // It is undefined behaviour either way, not a stale read.
+    if (programCounters.empty())
+    {
+        return;
+    }
+
     std::vector<std::pair<int,std::string>> editorLines;
     std::vector<std::pair<int,std::string>> disassemblyLines;
     const auto addHighlightIfMapped = [&](const std::map<unsigned int, unsigned int> &mapping,
