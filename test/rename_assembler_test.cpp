@@ -189,6 +189,38 @@ const Sample kSamples[] = {
     {"two_labels_on_one_line", "a", "a: b:\n    j a\n    j b\n"},
     {"label_before_an_instruction", "c",
      "c: addi x1, x0, 1\n    j c\n    bnez x1, c\n"},
+
+    // ── one sample per reference FORM the assembler accepts. The forms
+    //    were enumerated by probing the real lexer and parser over every
+    //    context a label could appear in; see editor_shortcuts.md for the
+    //    table, including the forms this assembler does NOT support
+    //    (`call`, `tail`, `la` on a text label, %hi/%lo, label+offset,
+    //    a label as a .word operand, .globl/.type/.size/.equ).
+    {"form_j", "target", ".text\ntarget:\n    j target\n"},
+    {"form_jal_rd", "target", ".text\ntarget:\n    jal ra, target\n"},
+    {"form_beq", "target", ".text\ntarget:\n    beq x1, x2, target\n"},
+    {"form_bne", "target", ".text\ntarget:\n    bne x1, x2, target\n"},
+    {"form_blt", "target", ".text\ntarget:\n    blt x1, x2, target\n"},
+    {"form_bge", "target", ".text\ntarget:\n    bge x1, x2, target\n"},
+    {"form_bltu", "target", ".text\ntarget:\n    bltu x1, x2, target\n"},
+    {"form_bgeu", "target", ".text\ntarget:\n    bgeu x1, x2, target\n"},
+    {"form_beqz", "target", ".text\ntarget:\n    beqz x1, target\n"},
+    {"form_bnez", "target", ".text\ntarget:\n    bnez x1, target\n"},
+    {"form_bgez", "target", ".text\ntarget:\n    bgez x1, target\n"},
+    {"form_la_data", "target",
+     ".data\ntarget:\n    .word 1\n.text\nmain:\n    la x1, target\n"},
+    {"form_lw_data", "target",
+     ".data\ntarget:\n    .word 1\n.text\nmain:\n    lw x1, target\n"},
+    {"form_label_on_instruction_line", "target", ".text\ntarget: nop\n    j target\n"},
+    {"form_hash_comment", "target",
+     ".text\ntarget:\n    j target   # target again\n"},
+    {"form_semicolon_comment", "target",
+     ".text\ntarget:\n    j target   ; target again\n"},
+    {"form_string_mentions_it", "target",
+     ".data\nmsg:\n    .string \"target\"\n.text\ntarget:\n    j target\n"},
+    {"form_many_refs_mixed", "target",
+     ".text\ntarget:\n    j target\n    beq x1, x2, target\n"
+     "    bnez x1, target\n    jal ra, target\n    j target  ; target\n"},
 };
 } // namespace
 
@@ -251,6 +283,17 @@ TEST(RenameAssembler, TheAssemblerReadsBackEveryRename)
             EXPECT_EQ(now.symbols.at(name).line_number, data.line_number)
                 << "'" << name << "' moved";
             ++symbolsChecked;
+        }
+        // A comment or a string that happens to say the old name must be
+        // left exactly as it was. The symbol table cannot see either, so
+        // this is checked on the text.
+        for (const QString &untouched :
+             {QStringLiteral("# target again"), QStringLiteral("; target again"),
+              QStringLiteral("\"target\"")})
+        {
+            if (original.contains(untouched))
+                EXPECT_TRUE(after.contains(untouched))
+                    << "the rename rewrote " << untouched.toStdString();
         }
         ++checked;
     }
