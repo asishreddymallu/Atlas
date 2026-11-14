@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include "ui/common/gutter_column.h"
 #include "ui/theme/theme_manager.h"
 #include "main_editor.h"
@@ -50,9 +51,17 @@ protected:
 
                     painter.setBrush(dotColor);
                     painter.setPen(Qt::NoPen);
-                    const int left = (gutterWidth - dotRadius) / 2;
-                    painter.drawEllipse(left, top + (fontMetrics().height() - dotRadius) / 2,
-                                        dotRadius, dotRadius);
+                    // The dot shrinks to fit a short line rather than
+                    // overflowing it. At the configured size and above it is
+                    // the full dotRadius; it only gives way when the line is
+                    // too short to hold it, which zoom and a small font size
+                    // in Settings can both bring about. Measured: with a
+                    // fixed 9 it hung outside its line at every rendered
+                    // size below 9 px.
+                    const int dot = std::clamp(fontMetrics().height() - 2, 3, dotRadius);
+                    const int left = (gutterWidth - dot) / 2;
+                    painter.drawEllipse(left, top + (fontMetrics().height() - dot) / 2,
+                                        dot, dot);
                 }
             }
 
