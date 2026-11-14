@@ -7,6 +7,8 @@
  * answer.
  */
 #include "ui/editor_tab/editor_tab.h"
+#include "ui/editor_tab/completion_model.h"
+#include "ui/editor_tab/label_index.h"
 #include "ui/editor_tab/main_editor.h"
 
 #include <gtest/gtest.h>
@@ -375,4 +377,61 @@ TEST(LabelLinkClears, MovingOffTheLabelClearsIt)
     moveMouse(nav.editor, pointOf(nav.editor, reference - 2), Qt::ControlModifier);
     EXPECT_TRUE(nav.editor.linkedName().isEmpty())
         << "the link stayed on a label the mouse is no longer over";
+}
+
+// ══════════════ one definition of "this line defines a label" ════════════
+
+/**
+ * @brief The editor's completion scanner and the navigation index agree.
+ *
+ * They each carried their own copy of the rule until scanLineLabels() was
+ * made to delegate to LabelIndex::definitionsOnLine(). Nothing in the
+ * compiler stops them drifting apart again.
+ *
+ * This goes through the EDITOR - the Label-kind items its installed
+ * completion source offers, which is the scanner the application uses -
+ * and compares them with findLabels() over the same text. Comparing two
+ * index functions instead would pass however far the scanner drifted,
+ * which is what the first version of this case did.
+ */
+TEST(LabelScannerConsistency, TheCompletionScannerAgreesWithTheIndex)
+{
+    const QStringList documents = {
+        "main:\n    nop     # loop: not a label\n",
+        "msg:\n    .asciz \"inside: not a label\"\n",
+        "add:\n    nop\n    j add\n",
+        "loop:\nloop2:\nloop_end:\n    j loop\n",
+        "first: second: nop\n",
+        "start: addi x1, x0, 1\n",
+        "        indented:\n    nop\n",
+        "has.dot:\n    nop\n",
+        "main:\r\n    j main\r\n",
+        "main:\n    nop\nlast:",
+        "",
+        "main:\n    addi x1, x0, 4\nloop:\n    j loop\n    ret\n",
+    };
+
+    Nav nav;
+    for (const QString &text : documents)
+    {
+        nav.load(text);
+
+        // What the editor's own scanner offers, as labels.
+        QStringList fromScanner;
+        for (const Completion::Item &item : nav.editor.completionItemsForTest(QString()))
+            if (item.kind == Completion::Kind::Label)
+                fromScanner << item.label;
+        fromScanner.sort();
+
+        // What the index says is defined.
+        QStringList fromIndex;
+        for (const LabelIndex::Definition &d : LabelIndex::findLabels(text).definitions)
+            fromIndex << d.name;
+        fromIndex.removeDuplicates();
+        fromIndex.sort();
+
+        EXPECT_EQ(fromScanner, fromIndex)
+            << "the completion scanner and the index disagree on:\n"
+            << text.toStdString();
+    }
 }
