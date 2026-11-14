@@ -1,0 +1,1200 @@
+{
+  "schema": 1,
+  "about": "Documentation for every mnemonic in instructions.json. 'format' is a template, 'example' is a line that must assemble (branch/jump targets use label_t, la uses a .data label named label_d). Entries with status 'pending' are not standard RISC-V and are filled in after the assembler and processor have been read.",
+  "entries": {
+    "lui": {
+      "ext": "RV32I",
+      "category": "upper-immediate",
+      "format": "lui rd, imm",
+      "summary": "Load upper immediate: rd = imm << 12, low 12 bits zero",
+      "example": "lui x5, 1"
+    },
+    "auipc": {
+      "ext": "RV32I",
+      "category": "upper-immediate",
+      "format": "auipc rd, imm",
+      "summary": "Add upper immediate to the PC: rd = pc + (imm << 12)",
+      "example": "auipc x5, 1"
+    },
+    "jal": {
+      "ext": "RV32I",
+      "category": "jump",
+      "format": "jal rd, label",
+      "summary": "Jump and link: rd = address of the next instruction, then jump to label",
+      "example": "jal ra, label_t"
+    },
+    "jalr": {
+      "ext": "RV32I",
+      "category": "jump",
+      "format": "jalr rd, imm(rs1)",
+      "summary": "Jump and link register: rd = address of the next instruction, then jump to rs1 + imm",
+      "example": "jalr ra, 0(x5)"
+    },
+    "beq": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "beq rs1, rs2, label",
+      "summary": "Branch to label if rs1 == rs2",
+      "example": "beq x5, x6, label_t"
+    },
+    "bne": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "bne rs1, rs2, label",
+      "summary": "Branch to label if rs1 != rs2",
+      "example": "bne x5, x6, label_t"
+    },
+    "blt": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "blt rs1, rs2, label",
+      "summary": "Branch to label if rs1 < rs2, signed",
+      "example": "blt x5, x6, label_t"
+    },
+    "bge": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "bge rs1, rs2, label",
+      "summary": "Branch to label if rs1 >= rs2, signed",
+      "example": "bge x5, x6, label_t"
+    },
+    "bltu": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "bltu rs1, rs2, label",
+      "summary": "Branch to label if rs1 < rs2, unsigned",
+      "example": "bltu x5, x6, label_t"
+    },
+    "bgeu": {
+      "ext": "RV32I",
+      "category": "branch",
+      "format": "bgeu rs1, rs2, label",
+      "summary": "Branch to label if rs1 >= rs2, unsigned",
+      "example": "bgeu x5, x6, label_t"
+    },
+    "lb": {
+      "ext": "RV32I",
+      "category": "load",
+      "format": "lb rd, imm(rs1)",
+      "summary": "Load a byte from rs1 + imm, sign-extended",
+      "example": "lb x5, 0(x6)"
+    },
+    "lh": {
+      "ext": "RV32I",
+      "category": "load",
+      "format": "lh rd, imm(rs1)",
+      "summary": "Load a halfword from rs1 + imm, sign-extended",
+      "example": "lh x5, 0(x6)"
+    },
+    "lw": {
+      "ext": "RV32I",
+      "category": "load",
+      "format": "lw rd, imm(rs1)",
+      "summary": "Load a word from rs1 + imm, sign-extended to the register width",
+      "example": "lw x5, 0(x6)"
+    },
+    "lbu": {
+      "ext": "RV32I",
+      "category": "load",
+      "format": "lbu rd, imm(rs1)",
+      "summary": "Load a byte from rs1 + imm, zero-extended",
+      "example": "lbu x5, 0(x6)"
+    },
+    "lhu": {
+      "ext": "RV32I",
+      "category": "load",
+      "format": "lhu rd, imm(rs1)",
+      "summary": "Load a halfword from rs1 + imm, zero-extended",
+      "example": "lhu x5, 0(x6)"
+    },
+    "sb": {
+      "ext": "RV32I",
+      "category": "store",
+      "format": "sb rs2, imm(rs1)",
+      "summary": "Store the low byte of rs2 at rs1 + imm",
+      "example": "sb x5, 0(x6)"
+    },
+    "sh": {
+      "ext": "RV32I",
+      "category": "store",
+      "format": "sh rs2, imm(rs1)",
+      "summary": "Store the low halfword of rs2 at rs1 + imm",
+      "example": "sh x5, 0(x6)"
+    },
+    "sw": {
+      "ext": "RV32I",
+      "category": "store",
+      "format": "sw rs2, imm(rs1)",
+      "summary": "Store the low word of rs2 at rs1 + imm",
+      "example": "sw x5, 0(x6)"
+    },
+    "addi": {
+      "ext": "RV32I",
+      "category": "arithmetic",
+      "format": "addi rd, rs1, imm",
+      "summary": "rd = rs1 + imm (12-bit signed immediate)",
+      "example": "addi x5, x6, 1"
+    },
+    "slti": {
+      "ext": "RV32I",
+      "category": "compare",
+      "format": "slti rd, rs1, imm",
+      "summary": "rd = 1 if rs1 < imm (signed), else 0",
+      "example": "slti x5, x6, 1"
+    },
+    "sltiu": {
+      "ext": "RV32I",
+      "category": "compare",
+      "format": "sltiu rd, rs1, imm",
+      "summary": "rd = 1 if rs1 < imm (both unsigned; imm is sign-extended first), else 0",
+      "example": "sltiu x5, x6, 1"
+    },
+    "xori": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "xori rd, rs1, imm",
+      "summary": "rd = rs1 XOR imm (sign-extended 12-bit immediate)",
+      "example": "xori x5, x6, 1"
+    },
+    "ori": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "ori rd, rs1, imm",
+      "summary": "rd = rs1 OR imm (sign-extended 12-bit immediate)",
+      "example": "ori x5, x6, 1"
+    },
+    "andi": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "andi rd, rs1, imm",
+      "summary": "rd = rs1 AND imm (sign-extended 12-bit immediate)",
+      "example": "andi x5, x6, 1"
+    },
+    "slli": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "slli rd, rs1, shamt",
+      "summary": "Shift rs1 left by a constant, filling with zeros",
+      "example": "slli x5, x6, 3"
+    },
+    "srli": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "srli rd, rs1, shamt",
+      "summary": "Shift rs1 right by a constant, filling with zeros",
+      "example": "srli x5, x6, 3"
+    },
+    "srai": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "srai rd, rs1, shamt",
+      "summary": "Shift rs1 right by a constant, keeping the sign bit",
+      "example": "srai x5, x6, 3"
+    },
+    "add": {
+      "ext": "RV32I",
+      "category": "arithmetic",
+      "format": "add rd, rs1, rs2",
+      "summary": "rd = rs1 + rs2 (wraps on overflow)",
+      "example": "add x5, x6, x7"
+    },
+    "sub": {
+      "ext": "RV32I",
+      "category": "arithmetic",
+      "format": "sub rd, rs1, rs2",
+      "summary": "rd = rs1 - rs2 (wraps on overflow)",
+      "example": "sub x5, x6, x7"
+    },
+    "sll": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "sll rd, rs1, rs2",
+      "summary": "Shift rs1 left by the low bits of rs2 (5 bits in RV32, 6 in RV64)",
+      "example": "sll x5, x6, x7"
+    },
+    "slt": {
+      "ext": "RV32I",
+      "category": "compare",
+      "format": "slt rd, rs1, rs2",
+      "summary": "rd = 1 if rs1 < rs2 (signed), else 0",
+      "example": "slt x5, x6, x7"
+    },
+    "sltu": {
+      "ext": "RV32I",
+      "category": "compare",
+      "format": "sltu rd, rs1, rs2",
+      "summary": "rd = 1 if rs1 < rs2 (unsigned), else 0",
+      "example": "sltu x5, x6, x7"
+    },
+    "xor": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "xor rd, rs1, rs2",
+      "summary": "rd = rs1 XOR rs2",
+      "example": "xor x5, x6, x7"
+    },
+    "srl": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "srl rd, rs1, rs2",
+      "summary": "Shift rs1 right by the low bits of rs2, filling with zeros",
+      "example": "srl x5, x6, x7"
+    },
+    "sra": {
+      "ext": "RV32I",
+      "category": "shift",
+      "format": "sra rd, rs1, rs2",
+      "summary": "Shift rs1 right by the low bits of rs2, keeping the sign bit",
+      "example": "sra x5, x6, x7"
+    },
+    "or": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "or rd, rs1, rs2",
+      "summary": "rd = rs1 OR rs2",
+      "example": "or x5, x6, x7"
+    },
+    "and": {
+      "ext": "RV32I",
+      "category": "logical",
+      "format": "and rd, rs1, rs2",
+      "summary": "rd = rs1 AND rs2",
+      "example": "and x5, x6, x7"
+    },
+    "fence": {
+      "ext": "RV32I",
+      "category": "system",
+      "format": "fence",
+      "summary": "Order memory accesses before the fence against those after it",
+      "example": "fence"
+    },
+    "ecall": {
+      "ext": "RV32I",
+      "category": "system",
+      "format": "ecall",
+      "summary": "Environment call: ask the execution environment for a service (a system call)",
+      "example": "ecall"
+    },
+    "ebreak": {
+      "ext": "RV32I",
+      "category": "system",
+      "format": "ebreak",
+      "summary": "Breakpoint: hand control to the debugger",
+      "example": "ebreak"
+    },
+    "nop": {
+      "ext": "RV32I",
+      "category": "pseudo",
+      "format": "nop",
+      "summary": "Do nothing for one instruction",
+      "example": "nop",
+      "expandsTo": "addi x0, x0, 0"
+    },
+    "lwu": {
+      "ext": "RV64I",
+      "category": "load",
+      "format": "lwu rd, imm(rs1)",
+      "summary": "Load a word from rs1 + imm, zero-extended to 64 bits",
+      "example": "lwu x5, 0(x6)"
+    },
+    "ld": {
+      "ext": "RV64I",
+      "category": "load",
+      "format": "ld rd, imm(rs1)",
+      "summary": "Load a doubleword (64 bits) from rs1 + imm",
+      "example": "ld x5, 0(x6)"
+    },
+    "sd": {
+      "ext": "RV64I",
+      "category": "store",
+      "format": "sd rs2, imm(rs1)",
+      "summary": "Store the 64-bit value of rs2 at rs1 + imm",
+      "example": "sd x5, 0(x6)"
+    },
+    "addiw": {
+      "ext": "RV64I",
+      "category": "arithmetic",
+      "format": "addiw rd, rs1, imm",
+      "summary": "32-bit add of rs1 and imm, result sign-extended to 64 bits",
+      "example": "addiw x5, x6, 1"
+    },
+    "slliw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "slliw rd, rs1, shamt",
+      "summary": "32-bit shift left by a constant, result sign-extended to 64 bits",
+      "example": "slliw x5, x6, 3"
+    },
+    "srliw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "srliw rd, rs1, shamt",
+      "summary": "32-bit logical shift right by a constant, result sign-extended",
+      "example": "srliw x5, x6, 3"
+    },
+    "sraiw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "sraiw rd, rs1, shamt",
+      "summary": "32-bit arithmetic shift right by a constant, result sign-extended",
+      "example": "sraiw x5, x6, 3"
+    },
+    "addw": {
+      "ext": "RV64I",
+      "category": "arithmetic",
+      "format": "addw rd, rs1, rs2",
+      "summary": "32-bit add, result sign-extended to 64 bits",
+      "example": "addw x5, x6, x7"
+    },
+    "subw": {
+      "ext": "RV64I",
+      "category": "arithmetic",
+      "format": "subw rd, rs1, rs2",
+      "summary": "32-bit subtract, result sign-extended to 64 bits",
+      "example": "subw x5, x6, x7"
+    },
+    "sllw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "sllw rd, rs1, rs2",
+      "summary": "32-bit shift left by the low 5 bits of rs2, result sign-extended",
+      "example": "sllw x5, x6, x7"
+    },
+    "srlw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "srlw rd, rs1, rs2",
+      "summary": "32-bit logical shift right by the low 5 bits of rs2, result sign-extended",
+      "example": "srlw x5, x6, x7"
+    },
+    "sraw": {
+      "ext": "RV64I",
+      "category": "shift",
+      "format": "sraw rd, rs1, rs2",
+      "summary": "32-bit arithmetic shift right by the low 5 bits of rs2, result sign-extended",
+      "example": "sraw x5, x6, x7"
+    },
+    "mul": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "mul rd, rs1, rs2",
+      "summary": "rd = low half of rs1 x rs2",
+      "example": "mul x5, x6, x7"
+    },
+    "mulh": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "mulh rd, rs1, rs2",
+      "summary": "rd = high half of the signed x signed product",
+      "example": "mulh x5, x6, x7"
+    },
+    "mulhsu": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "mulhsu rd, rs1, rs2",
+      "summary": "rd = high half of the signed x unsigned product",
+      "example": "mulhsu x5, x6, x7"
+    },
+    "mulhu": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "mulhu rd, rs1, rs2",
+      "summary": "rd = high half of the unsigned x unsigned product",
+      "example": "mulhu x5, x6, x7"
+    },
+    "div": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "div rd, rs1, rs2",
+      "summary": "Signed division, rounded toward zero; dividing by zero gives -1",
+      "example": "div x5, x6, x7"
+    },
+    "divu": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "divu rd, rs1, rs2",
+      "summary": "Unsigned division; dividing by zero gives all ones",
+      "example": "divu x5, x6, x7"
+    },
+    "rem": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "rem rd, rs1, rs2",
+      "summary": "Signed remainder, sign follows rs1; remainder by zero gives rs1",
+      "example": "rem x5, x6, x7"
+    },
+    "remu": {
+      "ext": "M",
+      "category": "multiply-divide",
+      "format": "remu rd, rs1, rs2",
+      "summary": "Unsigned remainder; remainder by zero gives rs1",
+      "example": "remu x5, x6, x7"
+    },
+    "flw": {
+      "ext": "F",
+      "category": "float-load-store",
+      "format": "flw fd, imm(rs1)",
+      "summary": "Load a single-precision float from rs1 + imm",
+      "example": "flw f1, 0(x5)"
+    },
+    "fsw": {
+      "ext": "F",
+      "category": "float-load-store",
+      "format": "fsw fs2, imm(rs1)",
+      "summary": "Store the single-precision float in fs2 at rs1 + imm",
+      "example": "fsw f1, 0(x5)"
+    },
+    "fmadd.s": {
+      "ext": "F",
+      "category": "float-fused",
+      "format": "fmadd.s fd, fs1, fs2, fs3",
+      "summary": "fd = fs1 x fs2 + fs3 (single precision, one rounding)",
+      "example": "fmadd.s f1, f2, f3, f4"
+    },
+    "fmsub.s": {
+      "ext": "F",
+      "category": "float-fused",
+      "format": "fmsub.s fd, fs1, fs2, fs3",
+      "summary": "fd = fs1 x fs2 - fs3 (single precision, one rounding)",
+      "example": "fmsub.s f1, f2, f3, f4"
+    },
+    "fnmsub.s": {
+      "ext": "F",
+      "category": "float-fused",
+      "format": "fnmsub.s fd, fs1, fs2, fs3",
+      "summary": "fd = -(fs1 x fs2) + fs3 (single precision, one rounding)",
+      "example": "fnmsub.s f1, f2, f3, f4"
+    },
+    "fnmadd.s": {
+      "ext": "F",
+      "category": "float-fused",
+      "format": "fnmadd.s fd, fs1, fs2, fs3",
+      "summary": "fd = -(fs1 x fs2) - fs3 (single precision, one rounding)",
+      "example": "fnmadd.s f1, f2, f3, f4"
+    },
+    "fadd.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fadd.s fd, fs1, fs2",
+      "summary": "fd = fs1 + fs2 (single precision)",
+      "example": "fadd.s f1, f2, f3"
+    },
+    "fsub.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fsub.s fd, fs1, fs2",
+      "summary": "fd = fs1 - fs2 (single precision)",
+      "example": "fsub.s f1, f2, f3"
+    },
+    "fmul.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fmul.s fd, fs1, fs2",
+      "summary": "fd = fs1 x fs2 (single precision)",
+      "example": "fmul.s f1, f2, f3"
+    },
+    "fdiv.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fdiv.s fd, fs1, fs2",
+      "summary": "fd = fs1 / fs2 (single precision)",
+      "example": "fdiv.s f1, f2, f3"
+    },
+    "fsqrt.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fsqrt.s fd, fs1",
+      "summary": "fd = square root of fs1 (single precision)",
+      "example": "fsqrt.s f1, f2"
+    },
+    "sqrt.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fsqrt.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fsgnj.s": {
+      "ext": "F",
+      "category": "float-sign",
+      "format": "fsgnj.s fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with the sign of fs2",
+      "example": "fsgnj.s f1, f2, f3"
+    },
+    "fsgnjn.s": {
+      "ext": "F",
+      "category": "float-sign",
+      "format": "fsgnjn.s fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with the opposite of fs2's sign",
+      "example": "fsgnjn.s f1, f2, f3"
+    },
+    "fsgnjx.s": {
+      "ext": "F",
+      "category": "float-sign",
+      "format": "fsgnjx.s fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with sign = XOR of both signs",
+      "example": "fsgnjx.s f1, f2, f3"
+    },
+    "fmin.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fmin.s fd, fs1, fs2",
+      "summary": "fd = the smaller of fs1 and fs2",
+      "example": "fmin.s f1, f2, f3"
+    },
+    "fmax.s": {
+      "ext": "F",
+      "category": "float-arithmetic",
+      "format": "fmax.s fd, fs1, fs2",
+      "summary": "fd = the larger of fs1 and fs2",
+      "example": "fmax.s f1, f2, f3"
+    },
+    "min.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmin.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "max.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmax.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fcvt.w.s": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.w.s rd, fs1",
+      "summary": "Convert a float to a signed 32-bit integer",
+      "example": "fcvt.w.s x5, f1"
+    },
+    "fcvt.wu.s": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.wu.s rd, fs1",
+      "summary": "Convert a float to an unsigned 32-bit integer",
+      "example": "fcvt.wu.s x5, f1"
+    },
+    "fcvt.l.s": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.l.s rd, fs1",
+      "summary": "Convert a float to a signed 64-bit integer (RV64)",
+      "example": "fcvt.l.s x5, f1"
+    },
+    "fcvt.lu.s": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.lu.s rd, fs1",
+      "summary": "Convert a float to an unsigned 64-bit integer (RV64)",
+      "example": "fcvt.lu.s x5, f1"
+    },
+    "fcvt.s.w": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.s.w fd, rs1",
+      "summary": "Convert a signed 32-bit integer to a float",
+      "example": "fcvt.s.w f1, x5"
+    },
+    "fcvt.s.wu": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.s.wu fd, rs1",
+      "summary": "Convert an unsigned 32-bit integer to a float",
+      "example": "fcvt.s.wu f1, x5"
+    },
+    "fcvt.s.l": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.s.l fd, rs1",
+      "summary": "Convert a signed 64-bit integer to a float (RV64)",
+      "example": "fcvt.s.l f1, x5"
+    },
+    "fcvt.s.lu": {
+      "ext": "F",
+      "category": "float-convert",
+      "format": "fcvt.s.lu fd, rs1",
+      "summary": "Convert an unsigned 64-bit integer to a float (RV64)",
+      "example": "fcvt.s.lu f1, x5"
+    },
+    "cvt.w.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.w.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.wu.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.wu.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.l.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.l.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.lu.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.lu.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.s.w": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.s.w",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.s.wu": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.s.wu",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.s.l": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.s.l",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.s.lu": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.s.lu",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fmv.x.w": {
+      "ext": "F",
+      "category": "float-move",
+      "format": "fmv.x.w rd, fs1",
+      "summary": "Copy the raw bits of a float register into an integer register",
+      "example": "fmv.x.w x5, f1"
+    },
+    "fmv.w.x": {
+      "ext": "F",
+      "category": "float-move",
+      "format": "fmv.w.x fd, rs1",
+      "summary": "Copy the raw bits of an integer register into a float register",
+      "example": "fmv.w.x f1, x5"
+    },
+    "fmv.x.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmv.x.w",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fmv.s.x": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmv.w.x",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "mv.x.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmv.x.w",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fclass.s": {
+      "ext": "F",
+      "category": "float-classify",
+      "format": "fclass.s rd, fs1",
+      "summary": "rd = a one-hot mask saying what kind of number fs1 is (infinity, normal, subnormal, zero, NaN, and its sign)",
+      "example": "fclass.s x5, f1"
+    },
+    "class.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fclass.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "feq.s": {
+      "ext": "F",
+      "category": "float-compare",
+      "format": "feq.s rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 == fs2, else 0",
+      "example": "feq.s x5, f1, f2"
+    },
+    "flt.s": {
+      "ext": "F",
+      "category": "float-compare",
+      "format": "flt.s rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 < fs2, else 0",
+      "example": "flt.s x5, f1, f2"
+    },
+    "fle.s": {
+      "ext": "F",
+      "category": "float-compare",
+      "format": "fle.s rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 <= fs2, else 0",
+      "example": "fle.s x5, f1, f2"
+    },
+    "eq.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "feq.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "lt.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "flt.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "le.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fle.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "ne.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "ge.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "lt.u.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "ge.u.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fld": {
+      "ext": "D",
+      "category": "float-load-store",
+      "format": "fld fd, imm(rs1)",
+      "summary": "Load a double-precision float from rs1 + imm",
+      "example": "fld f1, 0(x5)"
+    },
+    "fsd": {
+      "ext": "D",
+      "category": "float-load-store",
+      "format": "fsd fs2, imm(rs1)",
+      "summary": "Store the double-precision float in fs2 at rs1 + imm",
+      "example": "fsd f1, 0(x5)"
+    },
+    "fmadd.d": {
+      "ext": "D",
+      "category": "float-fused",
+      "format": "fmadd.d fd, fs1, fs2, fs3",
+      "summary": "fd = fs1 x fs2 + fs3 (double precision, one rounding)",
+      "example": "fmadd.d f1, f2, f3, f4"
+    },
+    "fmsub.d": {
+      "ext": "D",
+      "category": "float-fused",
+      "format": "fmsub.d fd, fs1, fs2, fs3",
+      "summary": "fd = fs1 x fs2 - fs3 (double precision, one rounding)",
+      "example": "fmsub.d f1, f2, f3, f4"
+    },
+    "fnmsub.d": {
+      "ext": "D",
+      "category": "float-fused",
+      "format": "fnmsub.d fd, fs1, fs2, fs3",
+      "summary": "fd = -(fs1 x fs2) + fs3 (double precision, one rounding)",
+      "example": "fnmsub.d f1, f2, f3, f4"
+    },
+    "fnmadd.d": {
+      "ext": "D",
+      "category": "float-fused",
+      "format": "fnmadd.d fd, fs1, fs2, fs3",
+      "summary": "fd = -(fs1 x fs2) - fs3 (double precision, one rounding)",
+      "example": "fnmadd.d f1, f2, f3, f4"
+    },
+    "fadd.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fadd.d fd, fs1, fs2",
+      "summary": "fd = fs1 + fs2 (double precision)",
+      "example": "fadd.d f1, f2, f3"
+    },
+    "fsub.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fsub.d fd, fs1, fs2",
+      "summary": "fd = fs1 - fs2 (double precision)",
+      "example": "fsub.d f1, f2, f3"
+    },
+    "fmul.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fmul.d fd, fs1, fs2",
+      "summary": "fd = fs1 x fs2 (double precision)",
+      "example": "fmul.d f1, f2, f3"
+    },
+    "fdiv.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fdiv.d fd, fs1, fs2",
+      "summary": "fd = fs1 / fs2 (double precision)",
+      "example": "fdiv.d f1, f2, f3"
+    },
+    "sqrt.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fsqrt.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "fsgnj.d": {
+      "ext": "D",
+      "category": "float-sign",
+      "format": "fsgnj.d fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with the sign of fs2",
+      "example": "fsgnj.d f1, f2, f3"
+    },
+    "fsgnjn.d": {
+      "ext": "D",
+      "category": "float-sign",
+      "format": "fsgnjn.d fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with the opposite of fs2's sign",
+      "example": "fsgnjn.d f1, f2, f3"
+    },
+    "fsgnjx.d": {
+      "ext": "D",
+      "category": "float-sign",
+      "format": "fsgnjx.d fd, fs1, fs2",
+      "summary": "fd = magnitude of fs1 with sign = XOR of both signs",
+      "example": "fsgnjx.d f1, f2, f3"
+    },
+    "fsqrt.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fsqrt.d fd, fs1",
+      "summary": "fd = square root of fs1 (double precision)",
+      "example": "fsqrt.d f1, f2"
+    },
+    "fmv.x.d": {
+      "ext": "D",
+      "category": "float-move",
+      "format": "fmv.x.d rd, fs1",
+      "summary": "Copy the raw 64 bits of a float register into an integer register (RV64)",
+      "example": "fmv.x.d x5, f1"
+    },
+    "fmv.d.x": {
+      "ext": "D",
+      "category": "float-move",
+      "format": "fmv.d.x fd, rs1",
+      "summary": "Copy the raw 64 bits of an integer register into a float register (RV64)",
+      "example": "fmv.d.x f1, x5"
+    },
+    "min.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmin.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "max.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fmax.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.s.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.s.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.d.s": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.d.s",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.w.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.w.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.wu.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.wu.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.d.w": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.d.w",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "cvt.d.wu": {
+      "ext": "F",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fcvt.d.wu",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "class.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "fclass.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "eq.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "feq.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "ne.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "lt.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": "flt.d",
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "ge.d": {
+      "ext": "D",
+      "category": "unverified-alias",
+      "status": "pending",
+      "aliasOfProposed": null,
+      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+    },
+    "la": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "la rd, label",
+      "summary": "Load the address of a data label: rd = &label",
+      "example": "la x5, label_d",
+      "expandsTo": "auipc rd, hi; addi rd, rd, lo"
+    },
+    "li": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "li rd, imm",
+      "summary": "Load an immediate: rd = imm",
+      "example": "li x5, 42",
+      "expandsTo": "addi rd, x0, imm (or lui + addi for large values)"
+    },
+    "mv": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "mv rd, rs",
+      "summary": "Copy a register: rd = rs",
+      "example": "mv x5, x6",
+      "expandsTo": "addi rd, rs, 0"
+    },
+    "not": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "not rd, rs",
+      "summary": "Bitwise NOT: rd = ~rs",
+      "example": "not x5, x6",
+      "expandsTo": "xori rd, rs, -1"
+    },
+    "ret": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "ret",
+      "summary": "Return from a subroutine: jump to the address in ra",
+      "example": "ret",
+      "expandsTo": "jalr x0, 0(ra)"
+    },
+    "neg": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "neg rd, rs",
+      "summary": "Negate: rd = -rs",
+      "example": "neg x5, x6",
+      "expandsTo": "sub rd, x0, rs"
+    },
+    "negw": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "negw rd, rs",
+      "summary": "32-bit negate, result sign-extended to 64 bits",
+      "example": "negw x5, x6",
+      "expandsTo": "subw rd, x0, rs"
+    },
+    "sext.w": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "sext.w rd, rs",
+      "summary": "Sign-extend the low 32 bits of rs to 64 bits",
+      "example": "sext.w x5, x6",
+      "expandsTo": "addiw rd, rs, 0"
+    },
+    "seqz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "seqz rd, rs",
+      "summary": "rd = 1 if rs == 0, else 0",
+      "example": "seqz x5, x6",
+      "expandsTo": "sltiu rd, rs, 1"
+    },
+    "snez": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "snez rd, rs",
+      "summary": "rd = 1 if rs != 0, else 0",
+      "example": "snez x5, x6",
+      "expandsTo": "sltu rd, x0, rs"
+    },
+    "sltz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "sltz rd, rs",
+      "summary": "rd = 1 if rs < 0 (signed), else 0",
+      "example": "sltz x5, x6",
+      "expandsTo": "slt rd, rs, x0"
+    },
+    "sgtz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "sgtz rd, rs",
+      "summary": "rd = 1 if rs > 0 (signed), else 0",
+      "example": "sgtz x5, x6",
+      "expandsTo": "slt rd, x0, rs"
+    },
+    "beqz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "beqz rs, label",
+      "summary": "Branch to label if rs == 0",
+      "example": "beqz x5, label_t",
+      "expandsTo": "beq rs, x0, label"
+    },
+    "bnez": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bnez rs, label",
+      "summary": "Branch to label if rs != 0",
+      "example": "bnez x5, label_t",
+      "expandsTo": "bne rs, x0, label"
+    },
+    "blez": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "blez rs, label",
+      "summary": "Branch to label if rs <= 0 (signed)",
+      "example": "blez x5, label_t",
+      "expandsTo": "bge x0, rs, label"
+    },
+    "bgez": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bgez rs, label",
+      "summary": "Branch to label if rs >= 0 (signed)",
+      "example": "bgez x5, label_t",
+      "expandsTo": "bge rs, x0, label"
+    },
+    "bltz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bltz rs, label",
+      "summary": "Branch to label if rs < 0 (signed)",
+      "example": "bltz x5, label_t",
+      "expandsTo": "blt rs, x0, label"
+    },
+    "bgtz": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bgtz rs, label",
+      "summary": "Branch to label if rs > 0 (signed)",
+      "example": "bgtz x5, label_t",
+      "expandsTo": "blt x0, rs, label"
+    },
+    "bgt": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bgt rs, rt, label",
+      "summary": "Branch to label if rs > rt (signed)",
+      "example": "bgt x5, x6, label_t",
+      "expandsTo": "blt rt, rs, label"
+    },
+    "ble": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "ble rs, rt, label",
+      "summary": "Branch to label if rs <= rt (signed)",
+      "example": "ble x5, x6, label_t",
+      "expandsTo": "bge rt, rs, label"
+    },
+    "bgtu": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bgtu rs, rt, label",
+      "summary": "Branch to label if rs > rt (unsigned)",
+      "example": "bgtu x5, x6, label_t",
+      "expandsTo": "bltu rt, rs, label"
+    },
+    "bleu": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "bleu rs, rt, label",
+      "summary": "Branch to label if rs <= rt (unsigned)",
+      "example": "bleu x5, x6, label_t",
+      "expandsTo": "bgeu rt, rs, label"
+    },
+    "j": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "j label",
+      "summary": "Jump to label without saving a return address",
+      "example": "j label_t",
+      "expandsTo": "jal x0, label"
+    },
+    "jr": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "jr rs",
+      "summary": "Jump to the address in rs",
+      "example": "jr x5",
+      "expandsTo": "jalr x0, 0(rs)"
+    }
+  }
+}

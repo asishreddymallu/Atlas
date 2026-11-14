@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/instructions">
         <file>instructions.json</file>
+        <file>instruction_docs.json</file>
     </qresource>
 </RCC>
