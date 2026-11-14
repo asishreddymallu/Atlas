@@ -179,13 +179,9 @@ void Editor::clearBreakpoints()
     m_breakPoints.clear();
     m_breakpointAnchors.clear();
     viewport()->update();
-    // No explicit gutter repaint here, although an earlier version of this
-    // had one and a commit message claimed it was needed. Measured: both
-    // callers already cause it. Opening a file sets the document, which
-    // repaints the gutter anyway, and the gutter's own "Remove All" calls
-    // update() on itself straight after. A negative control that deleted
-    // the gutter repaint left every case passing, which is what a line no
-    // caller needs looks like.
+    // The gutter needs no repaint from here: both callers already cause one.
+    // Opening a file sets the document, and the gutter's own "Remove All"
+    // calls update() on itself. See known_issues 18.
 }
 
 std::vector<uint64_t> Editor::getBreakpoints() const

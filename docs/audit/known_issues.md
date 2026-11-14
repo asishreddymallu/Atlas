@@ -579,6 +579,19 @@ Recorded because they changed reported columns on directive lines.
   `Editor::setPlainText()`, so every other caller of `setPlainText` keeps
   the old behaviour. No *edit* ever places one outside the document.
   (`OpenClearsBreakpoints.*`)
+
+  Two things about that work are worth keeping rather than rediscovering.
+  `Editor::clearBreakpoints()` briefly carried an explicit gutter repaint,
+  with a commit message claiming the gutter would not repaint otherwise.
+  That was wrong: a negative control deleting it left every case passing,
+  because both callers already cause the repaint - opening a file sets the
+  document, and the gutter's own "Remove All" calls `update()` on itself.
+  The line was removed. And
+  `OpenClearsBreakpoints.CancellingTheDialogClearsNothing` **documents the
+  contract and is not a guard** - `QFileDialog::getOpenFileName` is static
+  and modal, so no test can drive the cancel, and no mutation of the
+  implementation makes that case fail. Cancel rests on the clear sitting
+  inside the handler's `!filename.isEmpty()` branch, plus a manual check.
 - ~~The Expanded pane receives the Input pane's line numbers verbatim.~~
   **Fixed.** `EditorTab::breakpointsForExpandedView()` reads the existing
   expanded-line → original-line mapping the other way and puts each dot on

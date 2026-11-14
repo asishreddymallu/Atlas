@@ -14,6 +14,13 @@
  * QFileDialog::getOpenFileName, which a test cannot drive. The part after
  * the dialog is `EditorTab::loadFileContent()`, which is what the lambda
  * calls and what these cases call.
+ *
+ * ONE CASE HERE IS NOT A GUARD. `CancellingTheDialogClearsNothing`
+ * documents the contract and cannot fail under any change to the
+ * implementation - no mutation of the editor or the tab makes it go red,
+ * which was checked. Cancel is covered by structure instead: the clear sits
+ * inside the handler's `!filename.isEmpty()` branch, so cancelling cannot
+ * reach it. It is not counted as a negative-control target anywhere.
  */
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/editor_tab/main_editor.h"
@@ -140,11 +147,12 @@ TEST(OpenClearsBreakpoints, TheDotStopsBeingDrawn)
 
 TEST(OpenClearsBreakpoints, CancellingTheDialogClearsNothing)
 {
-    // QFileDialog::getOpenFileName is static and modal, so the cancel path
-    // cannot be driven from a test. What CAN be checked is the guarantee it
-    // rests on: the clear lives inside loadFileContent(), which the handler
-    // only reaches when a filename came back. Not calling it - which is
-    // exactly what cancelling does - leaves everything alone.
+    // NOT A GUARD - see the file header. QFileDialog::getOpenFileName is
+    // static and modal, so the cancel path cannot be driven from a test, and
+    // nothing in the implementation can make this case fail. It writes the
+    // contract down: the clear lives inside loadFileContent(), which the
+    // handler only reaches when a filename came back, so not calling it -
+    // which is exactly what cancelling does - leaves everything alone.
     Tab bench;
     bench.editor->setPlainText("one\ntwo\nthree");
     bench.editor->toggleBreakpointAtLine(3);

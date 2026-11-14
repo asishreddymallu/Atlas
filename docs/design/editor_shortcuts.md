@@ -104,12 +104,18 @@ replacement, inside which anchors collapse, so those remap through the
 | `Ctrl+X` on a whole line | removed with the line | `BreakpointKeysLineClipboard.CutRemovesItAndAPasteAboveShiftsLinesDown` |
 | `Ctrl+V` of a line copy | lines below move down | same |
 | `Ctrl+Z` / `Ctrl+Y` | left in range; one removed with its line does not come back | `BreakpointKeysUndo.UndoAndRedoLeaveBreakpointsInRange` |
-| loading a file (`setPlainText`) | the numbers are left exactly as they were | `BreakpointKeysDocumentSwap.LoadingAFileLeavesTheNumbersWhereTheyWere` |
 | any key in a read-only pane | neither gained nor lost | `BreakpointKeysReadOnly.AReadOnlyPaneNeitherGainsNorLosesThem` |
-
 | **File > Open** | all cleared — a breakpoint is a line number in the file that was open | `OpenClearsBreakpoints.OpeningAFileDropsThem` |
-| cancelling the Open dialog | nothing cleared; the clear is inside the branch that only runs when a filename came back | `OpenClearsBreakpoints.CancellingTheDialogClearsNothing` |
-| `setPlainText` / `setRawText` on their own | numbers left alone, as always | `OpenClearsBreakpoints.SetPlainTextOnItsOwnStillLeavesThemAlone` |
+| setting the document text directly (`setPlainText`, `setRawText`) | the numbers are left exactly as they were | `BreakpointKeysDocumentSwap.LoadingAFileLeavesTheNumbersWhereTheyWere`, `OpenClearsBreakpoints.SetPlainTextOnItsOwnStillLeavesThemAlone` |
+
+Cancelling the Open dialog clears nothing, because the clear sits inside the
+`!filename.isEmpty()` branch of the handler. That is a structural guarantee,
+not a tested one: `QFileDialog::getOpenFileName` is static and modal, so no
+test can drive the cancel.
+`OpenClearsBreakpoints.CancellingTheDialogClearsNothing` **documents the
+contract and is not a guard** — no mutation of the implementation can make
+it fail, and it is not counted as one anywhere. Cancel is covered by that
+structure plus a manual check.
 
 ### In the Expanded pane
 
