@@ -139,6 +139,17 @@ private:
     /// which is what incremental typing wants; otherwise the current match
     /// is kept where it still exists.
     void runFind(bool toOrigin);
+    /**
+     * @brief Re-searches, synchronously, if the document moved underneath.
+     *
+     * The highlights are recomputed on a 150 ms debounce, which is right
+     * for repainting but wrong for acting: an edit followed immediately by
+     * Replace All, Replace or Next would otherwise use offsets from before
+     * the edit and change the wrong characters. Each of those three calls
+     * this first. The debounce is untouched - this is a separate, immediate
+     * path for the three commands that must not be late.
+     */
+    void refreshFindIfStale();
     /// Selects match `index` and scrolls to it. -1 clears the selection.
     void goToMatch(int index);
     void stepMatch(bool forward);
@@ -191,6 +202,9 @@ private:
     /// searches from here, so the selection does not crawl forward as the
     /// pattern grows.
     int                    m_findOrigin   {0};
+    /// Set on every document change while the bar is open; cleared by a
+    /// re-search. See refreshFindIfStale().
+    bool                   m_findDirty    {false};
     /// Coalesces re-searching while the document or the pattern changes.
     QTimer                *m_findDebounce {nullptr};
     QColor                 m_findMatchColor;

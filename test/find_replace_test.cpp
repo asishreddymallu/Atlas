@@ -754,3 +754,73 @@ TEST(FindShortcutSet, StillExactlySevenApplicationKeySequences)
             ++shortcutObjects;
     EXPECT_EQ(shortcutObjects, 0) << "a QShortcut was added";
 }
+
+// ═══════════════ acting on a document that changed underneath ═════════════
+
+TEST(FindStaleMatches, ReplaceAllUsesTheCurrentTextNotTheLastSearch)
+{
+    // The match list is recomputed on a 150 ms debounce. An edit followed
+    // IMMEDIATELY by Replace All - no processEvents, no timer flush - must
+    // still replace what is in the document now, not where the matches used
+    // to be.
+    Bench bench;
+    bench.place("aaa");
+    sendKey(&bench.editor, Qt::Key_H, Qt::ControlModifier);
+    bench.search("a");
+    ASSERT_EQ(bench.matchCount(), 3);
+    bench.replaceInput()->setText("Z");
+
+    // Two characters in front of everything, so every stale offset is wrong
+    // by exactly two.
+    QTextCursor cursor = bench.editor.textCursor();
+    cursor.setPosition(0);
+    cursor.insertText("XY");
+    ASSERT_EQ(bench.editor.toPlainText(), QString("XYaaa"));
+
+    sendKey(bench.replaceInput(), Qt::Key_Return, Qt::ControlModifier | Qt::AltModifier);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("XYZZZ"))
+        << "Replace All used the offsets from before the edit";
+}
+
+TEST(FindStaleMatches, ReplaceOneUsesTheCurrentTextNotTheLastSearch)
+{
+    Bench bench;
+    bench.place("aaa");
+    sendKey(&bench.editor, Qt::Key_H, Qt::ControlModifier);
+    bench.search("a");
+    ASSERT_EQ(bench.matchCount(), 3);
+    bench.replaceInput()->setText("Z");
+    bench.replaceInput()->setFocus();
+    QApplication::processEvents();
+
+    QTextCursor cursor = bench.editor.textCursor();
+    cursor.setPosition(0);
+    cursor.insertText("XY");
+    ASSERT_EQ(bench.editor.toPlainText(), QString("XYaaa"));
+
+    sendKey(bench.replaceInput(), Qt::Key_Return);
+    EXPECT_EQ(bench.editor.toPlainText(), QString("XYZaa"))
+        << "Replace One used an offset from before the edit";
+}
+
+TEST(FindStaleMatches, NextUsesTheCurrentTextNotTheLastSearch)
+{
+    Bench bench;
+    bench.place("a..a..a");
+    sendKey(&bench.editor, Qt::Key_F, Qt::ControlModifier);
+    bench.search("a");
+    ASSERT_EQ(bench.matchCount(), 3);
+
+    QTextCursor cursor = bench.editor.textCursor();
+    cursor.setPosition(0);
+    cursor.insertText("XY");          // "XYa..a..a": matches now at 2, 5, 8
+    ASSERT_EQ(bench.editor.toPlainText(), QString("XYa..a..a"));
+
+    sendKey(&bench.editor, Qt::Key_F3);
+    const QTextCursor after = bench.editor.textCursor();
+    EXPECT_EQ(after.selectedText(), QString("a")) << "Next landed on something else";
+    EXPECT_TRUE(after.selectionStart() == 2 || after.selectionStart() == 5 ||
+                after.selectionStart() == 8)
+        << "Next landed at " << after.selectionStart()
+        << ", which is not where a match is in the current text";
+}

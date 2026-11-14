@@ -481,7 +481,12 @@ void Editor::openFind(bool withReplace)
                 [this]
                 {
                     if (m_findBar && !m_findBar->isHidden())
+                    {
+                        // The flag is for the three commands that act on a
+                        // match; the timer is for the highlights.
+                        m_findDirty = true;
                         m_findDebounce->start();
+                    }
                 });
     }
 
@@ -524,6 +529,7 @@ void Editor::runFind(bool toOrigin)
 
     const QString pattern = m_findBar->pattern();
     m_findResult = FindEngine::findAll(toPlainText(), pattern, m_findBar->options());
+    m_findDirty  = false;
 
     if (!m_findResult.error.isEmpty())
     {
@@ -545,6 +551,22 @@ void Editor::runFind(bool toOrigin)
     if (toOrigin || index < 0 || index >= m_findResult.matches.size())
         index = FindEngine::nextIndex(m_findResult.matches, m_findOrigin, true, true);
     goToMatch(index);
+}
+
+void Editor::refreshFindIfStale()
+{
+    if (!m_findDirty || !m_findBar || m_findBar->isHidden())
+        return;
+
+    m_findDirty  = false;
+    m_findResult = FindEngine::findAll(toPlainText(), m_findBar->pattern(),
+                                       m_findBar->options());
+    // The old index means nothing against a new list, so the current match
+    // becomes the first one at or after the caret - which is the match the
+    // user can see.
+    const QTextCursor cursor = textCursor();
+    m_currentMatch = FindEngine::nextIndex(
+        m_findResult.matches, std::min(cursor.anchor(), cursor.position()), true, true);
 }
 
 void Editor::goToMatch(int index)
@@ -579,6 +601,9 @@ void Editor::stepMatch(bool forward)
 {
     if (!m_findBar || m_findBar->isHidden())
         return;
+
+    refreshFindIfStale();
+
     if (m_findResult.matches.isEmpty())
     {
         runFind(true);
@@ -651,6 +676,9 @@ void Editor::replaceCurrentMatch()
 {
     if (isReadOnly() || !m_findBar || m_findBar->isHidden())
         return;
+
+    // The document may have moved since the last search.
+    refreshFindIfStale();
     if (m_currentMatch < 0 || m_currentMatch >= m_findResult.matches.size())
         return;
 
@@ -680,6 +708,9 @@ void Editor::replaceEveryMatch()
 {
     if (isReadOnly() || !m_findBar || m_findBar->isHidden())
         return;
+
+    // The document may have moved since the last search.
+    refreshFindIfStale();
 
     const QList<FindEngine::ReplaceEdit> edits =
         FindEngine::replaceAllEdits(m_findResult, m_findBar->replacement(),
