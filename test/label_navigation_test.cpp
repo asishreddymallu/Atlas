@@ -615,9 +615,21 @@ TEST(LabelReferences, ItClosesTheSuggestionList)
     QApplication::processEvents();
     ASSERT_TRUE(nav.editor.isCompletionVisible());
 
-    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    // Driven DIRECTLY, not through the key. keyPressEvent() already calls
+    // closeCompletion() after any editing key, so the key path would pass
+    // even if showReferencesAtCaret() did nothing about the list - a
+    // control proved exactly that. The harness opens it this way too.
+    ASSERT_TRUE(nav.editor.showReferencesAtCaret());
     EXPECT_FALSE(nav.editor.isCompletionVisible())
         << "opening the references list left the suggestions up";
+
+    // And through the key, which is what a reader actually presses.
+    nav.editor.closeReferences();
+    nav.editor.openCompletionExplicitly();
+    QApplication::processEvents();
+    ASSERT_TRUE(nav.editor.isCompletionVisible());
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    EXPECT_FALSE(nav.editor.isCompletionVisible());
 }
 
 TEST(LabelReferences, AReadOnlyPaneOpensItToo)
