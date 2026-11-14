@@ -1,0 +1,126 @@
+#pragma once
+
+#include "ui/editor_tab/label_index.h"
+
+#include <QList>
+#include <QWidget>
+
+class QLabel;
+class QLineEdit;
+
+namespace Kites
+{
+
+/**
+ * @brief The Shift+F12 references list.
+ *
+ * A child of the editor's viewport, in no layout of its own beyond a simple
+ * column - the same conventions as FindBar and GotoLineBar, including the
+ * one-overlay-at-a-time rule and the painted background. A plain QWidget
+ * draws neither the background nor the border a stylesheet gives it, so
+ * this paints its own; FindBar shipped see-through for exactly that reason.
+ */
+class ReferencesBar : public QWidget
+{
+    Q_OBJECT
+  public:
+    explicit ReferencesBar(QWidget *parent = nullptr);
+
+    struct Row
+    {
+        int     line{0};   ///< 0-based
+        QString text;      ///< the line's text, trimmed
+        bool    isDefinition{false};
+        int     offset{0}; ///< where to jump to
+    };
+
+    /// Fills the list. An empty list is refused by the caller, not here.
+    void setRows(const QList<Row> &rows, const QString &name);
+    int  count() const { return int(m_rows.size()); }
+    int  currentRow() const { return m_current; }
+    void moveSelection(int delta);
+    /// The row the user is on, or -1.
+    const Row *selected() const;
+
+    /// Keeps it in the top-right of the viewport and inside it.
+    void reposition(const QWidget *viewport);
+    /// The editor's font, so the list follows zoom as the text does.
+    void setEditorFont(const QFont &font);
+    int  rowHeight() const;
+
+    /// True when the key was one of the bar's own.
+    bool handleKey(QKeyEvent *event);
+
+    static constexpr int maxVisibleRows = 10;
+
+  signals:
+    void picked(int offset);
+    void closeRequested();
+
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+
+  private:
+    void ensureVisible();
+
+    QList<Row> m_rows;
+    QString    m_name;
+    int        m_current{0};
+    int        m_top{0};
+};
+
+/**
+ * @brief The F2 rename overlay.
+ *
+ * A single line edit prefilled with the name, plus a reason line that only
+ * appears when the new name is refused. Enter applies, Esc cancels.
+ */
+class RenameBar : public QWidget
+{
+    Q_OBJECT
+  public:
+    explicit RenameBar(QWidget *parent = nullptr);
+
+    /// Opens it on `name`, with the text selected so typing replaces it.
+    void openOn(const QString &name);
+    QString newName() const;
+    /// Shows why a name was refused, and keeps the bar open.
+    void showReason(const QString &reason);
+    void clearReason();
+
+    void reposition(const QWidget *viewport);
+    void setEditorFont(const QFont &font);
+
+    /// The input, so a test can type into it without a focus policy fight.
+    QLineEdit *input() const { return m_input; }
+
+  signals:
+    void accepted();
+    void closeRequested();
+
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+  private:
+    QLineEdit *m_input{nullptr};
+    QLabel    *m_reason{nullptr};
+};
+
+/**
+ * @brief Checks a proposed rename, with the reason when it is refused.
+ *
+ * Pure: the rules come from the assembler (read, never modified) and from
+ * the index. Empty `reason` means the name is acceptable.
+ */
+struct RenameCheck
+{
+    bool    ok{false};
+    QString reason;
+};
+RenameCheck checkRename(const QString &oldName, const QString &newName,
+                        const LabelIndex::Index &index);
+
+} // namespace Kites
