@@ -1242,3 +1242,52 @@ was never the problem.
 The lesson is narrower than "measure more": the probe has to exercise the
 branch being attributed. A short-circuit on the line above the thing you
 are timing is enough to make the number meaningless.
+
+---
+
+## 43. `has.dot:` is no longer offered as a completion (intended, recorded)
+
+The completion scanner used to decide "this line defines a label" with the
+editor's own completion word, which accepts `.` and `$` because RISC-V has
+`fadd.s`. The assembler's rule for a *label* is narrower: `[A-Za-z0-9_]+`,
+with `.` explicitly rejected and `$` never in the scan at all.
+
+Both now go through `LabelIndex::definitionsOnLine()`, the single
+definition of the rule. The visible change is that a line reading
+`has.dot:` is no longer offered in the suggestion list.
+
+This is a **fix**, not a regression: the assembler would not have accepted
+`has.dot` as a label either, so the old behaviour offered the reader a
+completion that could not assemble. It is recorded here because it is a
+user-visible change to a shipped behaviour with no bug report behind it.
+
+`LabelScannerConsistency.TheCompletionScannerAgreesWithTheIndex` pins it,
+reading the editor's installed completion source rather than calling the
+index twice.
+
+---
+
+## 44. Two paint defects in the references list, found by reading screenshots
+
+Both only at a large font, both fixed in `37c3406`; recorded because no
+test caught either and the tests that exist still would not.
+
+- The header reserved `fm.horizontalAdvance(name) + 80` and drew
+  `"%1 - %2 found"`. At max zoom the widget was narrower than the string
+  and the header read `loop - 4`, with `found` clipped mid-word. The width
+  is now measured from the same function that draws it, and the header is
+  elided rather than clipped.
+- The `def` tag is right-aligned in its band; neither the reserved width
+  nor the row's elide allowed for it, so at max zoom it was painted **on
+  top of** the row text. Both now subtract it.
+
+A third, smaller one: the line-number column was a hard-coded `"0000"`,
+wider than the real numbers at a small font and narrower at a large one.
+
+**What this says about the tests.** The widget-level tests assert counts,
+selection, offsets and visibility — everything except what the pixels
+look like. A geometry assertion would have caught the header (the widget
+was narrower than the text it drew) but not the overdraw, which is two
+`drawText` calls landing in the same place. Reading the images is
+currently the only thing that finds this class of defect, and it has now
+found it twice (see **36** for the suggestion list's elide).

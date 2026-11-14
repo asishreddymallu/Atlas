@@ -408,6 +408,27 @@ different and slower bug.
 Everything that dismisses the list calls `Editor::closeCompletion()` and
 nothing else, so a new overlay closes it by adding one call there.
 
+### The buffer's own labels
+
+The list offers the labels defined in the open document alongside the
+static mnemonics, directives and registers. Which lines define a label is
+decided by **one** function, `LabelIndex::definitionsOnLine()`, called by
+both the completion scanner and the index; the editor carries no second
+copy of the rule.
+
+That changed the completion scanner's alphabet. It used to accept the
+editor's completion word, which includes `.` and `$` because RISC-V has
+`fadd.s`. The assembler's rule for a *label* is narrower: `[A-Za-z0-9_]`
+only, with `.` explicitly rejected and `$` never in the scan at all. So a
+line reading `has.dot:` used to be offered as a completion and is not any
+more — the assembler would not accept it as a label either.
+
+`LabelScannerConsistency.TheCompletionScannerAgreesWithTheIndex` asserts
+the two agree. It reads the editor's **installed completion source** for
+its Label-kind items, not a second call into the index: the first version
+of that test compared two functions that both lived inside the index, so a
+drift in the editor's own scanner would have passed it.
+
 ### Matching
 
 `CompletionScorer.*` and `CompletionWord.*` — thirteen table cases. The
@@ -443,3 +464,105 @@ colours.
 - **The detail column is usually empty**, for the same reason.
 - **The dim colours are lifted.** VS Code's detail text fails AA; this
   one is walked towards the text colour until it clears 4.5:1.
+
+---
+
+## Label navigation (Stage B, first half)
+
+`F12`, `Shift+F12`, `Alt+Left` and `Ctrl+click`. None of them is a
+`QAction` or a `QShortcut`: they are read in `Editor::handleEditingKey()`
+beside every other key here, so the window still owns exactly seven
+shortcuts, all of them in `main_window.cpp`. All four work in a read-only
+pane, because navigating changes nothing in the document.
+
+### Where the code lives
+
+| | |
+|---|---|
+| The index | `src/ui/editor_tab/label_index.h` / `.cpp` — pure functions over text. `findLabels()`, `nameAt()`, `definitionsOnLine()`, `isLabelChar()`. No widget, no cursor, no document |
+| The overlays | `src/ui/editor_tab/label_overlays.h` / `.cpp` — `ReferencesBar`, and `RenameBar` plus `checkRename()`, which are **not yet wired** |
+| The keys and the jump | `Editor::goToDefinitionAtCaret()`, `goBack()`, `showReferencesAtCaret()`, `updateLinkHighlight()` in `main_editor.cpp` |
+| The cache | `Editor::labelIndex()` — rebuilt only when the document revision moves |
+
+### The keys
+
+| Key | Behaviour | Test |
+|---|---|---|
+| `F12` | Jumps to the definition of the label at the caret, pushing the back stack. On a duplicated name, the **first** definition. On an undefined name, a tooltip saying so and no jump — the same fact the Problems panel reports, so the two cannot disagree. Already sitting on the only definition does nothing | `LabelNavigation.*` |
+| `Shift+F12` | Opens the references list at the top right of the viewport: the definition tagged `def`, then every reference, in document order. `Down` / `Up` move the selection and wrap; `Enter` jumps and pushes the back stack; `Esc` closes the list and nothing else. A name with no uses still lists its definition. Off a label, nothing opens | `LabelReferences.*` |
+| `Alt+Left` | Back, up to 32 positions. The stack holds `QTextCursor`s, not offsets, so an edit above a remembered position moves it with the text | `LabelNavigation.*` |
+| `Ctrl+click` | The same jump as `F12`, at the mouse rather than the caret | `LabelLink.*` |
+| `Ctrl`+hover | Underlines the label under the mouse and shows the pointing hand. Cleared by releasing `Ctrl`, by the mouse leaving the viewport, by the editor losing focus, and by the label under the mouse changing | `LabelLink.*` |
+
+### What counts as a label
+
+Taken from the assembler, read and never modified:
+
+- A name is `[A-Za-z0-9_]+`. The lexer's identifier scan also accepts `.`,
+  but a name containing one is explicitly **rejected** as a label, and `$`
+  is not in the scan at all. This is narrower than the editor's completion
+  word, which does take `.` and `$` because of `fadd.s`.
+- A definition is a name immediately followed by `:`.
+- A leading digit sends the token to `number()`, so `1:` is not a label.
+  There are no numeric local labels, and no `.equ` or `.set`.
+- An identifier in **operand position** — straight after the opcode or
+  straight after a comma, on the same line — is a reference even when its
+  text is a mnemonic. `j add` references a label called `add`.
+- A name that lexes as a register can be *defined* but never *referenced*:
+  the lexer resolves a register before it considers a label.
+
+The index agrees with the assembler's own symbol table over the 44 corpus
+files and the 8 label-heavy trap files: 0 disagreements, via the
+out-of-tree `labeldiff` harness.
+
+### The references list is built from the index, not from a text search
+
+This is the whole difference between `Shift+F12` and `Ctrl+F`. In
+
+```asm
+loop:
+    j loop
+    .asciz "loop here"
+    j loop        # loop
+```
+
+the list holds three rows — the definition and the two real references.
+The mention inside the string and the one in the comment are not
+references and are not listed. A negative control that rebuilt the rows
+with `QString::indexOf` fails
+`LabelReferences.ShiftF12OpensTheListFromTheIndex` and
+`LabelReferences.CommentsAndStringsAreNotListed` by name.
+
+The index reports a reference only for a name that is **defined**
+somewhere, which is what keeps ordinary operands — a register, an
+immediate, a bare mnemonic — out of it. The cost is that it cannot find a
+*misspelled* reference; that is the assembler's job and the Problems panel
+already reports it.
+
+### One overlay at a time, with one exception
+
+Opening the references list closes the suggestion list and the go-to-line
+bar, which take the same keys. It does **not** close the find bar: `Esc`
+has to be able to close the list alone and leave a search running, which
+is only meaningful if the search survived the opening. The two own the
+same corner, so the list is placed directly below the find bar when one is
+open — `LabelReferences.ItOpensClearOfAnOpenFindBar` asserts they do not
+overlap. Opening Find or go-to-line afterwards closes the list.
+
+**File > Open** closes it, from `clearBackStack()`, beside the
+breakpoints. The rows hold offsets into the document being closed, and a
+row picked after the swap would jump into whatever text now sits there.
+
+### Colours and geometry
+
+The list derives its five colours from tokens `ThemeManager` already
+exposes — no new token, the same derivation the suggestion list uses.
+Across the four real themes the text clears 9.63:1 on the list ground and
+5.33:1 on the selected band; the dim colour used for the line numbers and
+the `def` tag clears 4.86:1 on the list ground. Dim is never painted on
+the selected band — it measures 2.69–3.46 there — so the selected row
+draws its number and tag in the full text colour instead.
+
+At a large font the header elides rather than clips, and the `def` tag has
+width reserved for it so it is not drawn over the row text. Both were real
+defects, found by reading the screenshots rather than by a test.
