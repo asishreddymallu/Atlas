@@ -12,6 +12,7 @@
 #include <QPainter>
 #include <QStyle>
 #include <QStyleOption>
+#include <QLayout>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 #include <algorithm>
@@ -314,6 +315,8 @@ RenameBar::RenameBar(QWidget *parent) : QWidget(parent)
 
     m_reason = new QLabel(this);
     m_reason->setObjectName(QStringLiteral("renameReason"));
+    // Wraps instead of forcing the overlay wider than the viewport.
+    m_reason->setWordWrap(true);
     m_reason->hide();
     column->addWidget(m_reason);
 
@@ -344,13 +347,36 @@ void RenameBar::showReason(const QString &reason)
 {
     m_reason->setText(reason);
     m_reason->show();
+    // adjustSize() alone re-expands to the reason's full width, past the
+    // clamp reposition() applied: at max zoom the overlay grew to 411 px
+    // in a 280 px viewport and hung off the right edge. Clamp after.
+    clampInsideParent();
+}
+
+void RenameBar::clampInsideParent()
+{
     adjustSize();
+    const QWidget *host = parentWidget();
+    if (!host)
+        return;
+    const int available = std::max(0, host->width() - 2 * overlayMargin);
+    const int width     = std::min(sizeHint().width(), available);
+    // The reason label WRAPS, and sizeHint() does not know at what width -
+    // it reports the unwrapped single-line height. At max zoom that cut the
+    // second line of "'x1' is a register name" off at the frame. Ask the
+    // layout what the clamped width actually needs.
+    int height = sizeHint().height();
+    if (layout() && layout()->hasHeightForWidth())
+        height = std::max(height, layout()->heightForWidth(width));
+    resize(width, height);
+    move(std::max(overlayMargin, host->width() - width - overlayMargin), y());
 }
 
 void RenameBar::clearReason()
 {
     m_reason->clear();
     m_reason->hide();
+    clampInsideParent();
 }
 
 void RenameBar::setEditorFont(const QFont &font)
@@ -367,6 +393,12 @@ void RenameBar::reposition(const QWidget *viewport, int topOffset)
     repositionOverlay(this, viewport);
     if (topOffset > 0 && viewport)
         move(x(), overlayMargin + topOffset);
+}
+
+void RenameBar::setName(const QString &name)
+{
+    m_input->setText(name);
+    clampInsideParent();
 }
 
 bool RenameBar::eventFilter(QObject *watched, QEvent *event)

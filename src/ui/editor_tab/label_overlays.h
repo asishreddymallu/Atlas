@@ -118,6 +118,9 @@ class RenameBar : public QWidget
 
     /// The input, so a test can type into it without a focus policy fight.
     QLineEdit *input() const { return m_input; }
+    /// Sets the field and keeps the overlay inside the viewport. A long
+    /// name set straight on input() does not re-clamp; this does.
+    void setName(const QString &name);
 
   signals:
     void accepted();
@@ -128,6 +131,9 @@ class RenameBar : public QWidget
     bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
+    /// Re-measures and clips the overlay to its parent viewport.
+    void clampInsideParent();
+
     QLineEdit *m_input{nullptr};
     QLabel    *m_reason{nullptr};
 };
