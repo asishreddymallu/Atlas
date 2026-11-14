@@ -819,3 +819,67 @@ Recorded because they changed reported columns on directive lines.
 - **Not changed.** Highlighting a match on a comment makes that comment
   harder to read for as long as the find bar is open. Written down rather
   than traded away silently.
+
+---
+
+## 28. Only `( ) " '` are auto-closed
+
+- **Where**: `EditorCommands::isPairOpener()` in
+  `src/ui/editor_tab/editor_commands.cpp`.
+- **What**: `[` `]` and `{` `}` are not paired. No RISC-V addressing mode or
+  directive uses them, so closing them would put characters on the screen
+  that the assembler has no use for.
+- **Consequence**: an editor used for something other than RISC-V assembly
+  would want them. The list is one function.
+
+---
+
+## 29. Bracket matching does not cross a line
+
+- **Where**: `EditorCommands::bracketAt()`.
+- **What**: the partner is searched for only within the caret's own line. A
+  `(` whose `)` is on the next line reports as unmatched and is drawn in the
+  error colour.
+- **Why**: a parenthesis in this language is an addressing mode — `4(sp)` —
+  and cannot span lines. Searching the document on every cursor move would
+  be work spent looking for something that cannot be there.
+- **Consequence**: a multi-line expression in a future macro syntax would be
+  reported as an error when it is not.
+
+---
+
+## 30. Zoom is a session delta and is forgotten on restart
+
+- **Where**: `KitesEditor::setZoomDelta()` and `applyZoomedFont()` in
+  `src/ui/common/kites_editor.cpp`.
+- **What**: `Ctrl++` / `Ctrl+-` / `Ctrl+0` / `Ctrl+wheel` move a delta on
+  top of the font configured in Settings, clamped to `[-6, +18]` around it.
+  The setting is never written, so closing the window forgets the zoom.
+- **Deliberate**: a zoom used to read one line should not quietly become the
+  user's configured font size.
+- **Applies to the Input, Expanded and Output panes.** `zoomEnabled()` is
+  opt-in, so the profiler and compiler views are unchanged.
+- **The breakpoint dot does not scale.** It is a fixed 9 px, centred on its
+  line through the font metrics, so it stays centred at every zoom level —
+  measured — but at a large zoom it is small relative to the text.
+
+---
+
+## 31. The editor font size now comes from the per-widget stylesheet
+
+- **Where**: `KitesEditor::applyEditorTheme()`.
+- **What it fixes**: the application stylesheet carries
+  `QWidget { font-size: … }`, and a stylesheet rule beats
+  `QWidget::setFont()`. The editor therefore rendered at the **chrome's**
+  font size whatever font `FontManager` handed it, which is why zoom had no
+  visible effect until the size was written into the per-widget sheet the
+  editor already had.
+- **A side effect worth knowing, and not asked for**: the size configured
+  in Settings now reaches the editor as well. Before this change the global
+  rule overrode it, so changing the editor font size in Settings moved the
+  family but not the size. This was found while making zoom work, not
+  hunted for, and it is flagged rather than buried.
+- **Also**: `applyEditorTheme()` must not read `font()` to find the size —
+  with a stylesheet in play that returns the *resolved* font, so it would
+  read back whatever it wrote last time. It computes from the configured
+  font plus the zoom delta instead.

@@ -230,9 +230,92 @@ lines (21), the search stops at 10000 matches (22), "whole word" means
 `[A-Za-z0-9_]` (23), the Output pane has no Find (24), and the breakpoint
 rule above (25).
 
-## Not done yet (Tier 2B)
+## Auto-closing pairs, bracket matching and zoom (Tier 2B)
 
-- auto-closing `(` and `"`
-- bracket matching
-- `Ctrl+D` (add selection to next occurrence)
-- zoom
+The pair rules are pure functions beside the other commands in
+`src/ui/editor_tab/editor_commands.h`; bracket matching is `bracketAt()` in
+the same place; zoom lives in `src/ui/common/kites_editor.h` because the
+**gutters** are there and a font change has to re-measure them.
+
+Still no `QAction` and no `QShortcut`.
+
+### Pairs
+
+Only `(` `)`, `"` `"` and `'` `'`. **`[` `]` and `{` `}` are deliberately
+not paired**: no RISC-V addressing mode or directive uses them, so closing
+them would be noise. The rules are driven by the typed **text**, not
+`Qt::Key`, so a layout where `(` is not Shift+9 behaves the same.
+
+| Typing | What happens | Test |
+|---|---|---|
+| an opener where the next character is end of line, whitespace or `)` | the pair goes in, caret between | `EditorPairsOpening.AnOpenerClosesItselfOnlyWhereThereIsRoom` |
+| an opener before a word character | just the character — this is what keeps `4(sp)` from becoming `4()sp)` | same |
+| a quote after a word character | just the character, so `don't` stays one apostrophe | `EditorPairsOpening.AQuoteRefusesAfterAWordCharacterAndInAComment` |
+| anything inside a `#` comment | no pair | same |
+| `(` inside a `"…"` string | no pair | `EditorPairsOpening.ParenthesesDoNotPairInsideAString` |
+| a closer where that closer is next | steps over it | `EditorPairsClosing.TypingTheCloserStepsOverIt` |
+| an opener with a selection | wraps it, selection kept | `EditorPairsSelection.AnOpenerWrapsASelectionAndKeepsItSelected` |
+| `Backspace` between an empty pair | both go | `EditorPairsBackspace.BetweenAnEmptyPairBothGo` |
+
+`lw t0, 4(sp)`, `.asciz "a(b"` and `# it's` are typed character by character
+in `EditorPairsTyping.TypingRealAssemblyCharacterByCharacter` — the only way
+to catch a rule that is right alone and wrong in sequence.
+
+**One `Ctrl+Z` undoes a whole typed pair**, and after a **type-over** it
+undoes the pair in one step as well: the type-over inserts nothing, it only
+moves the caret, so it puts nothing of its own on the undo stack
+(`EditorPairsUndo.OneCtrlZUndoesAWholeTypedPairAndWhatATypeOverDoes`).
+
+A read-only pane types nothing (`EditorPairsReadOnly.AReadOnlyPaneTypesNothingAtAll`).
+With the completion popup open the pair keys are unaffected — the popup's
+guard covers Enter, Escape, Tab and Backtab only — so pairs apply there too.
+
+Breakpoints do not move for any single-character case; a **multi-line
+selection wrap** carries a `LineMap` like every other command
+(`EditorPairsBreakpoints.OnlyAMultiLineWrapCarriesALineMap`).
+
+### Bracket matching
+
+| | | Test |
+|---|---|---|
+| caret beside `(` or `)` | it and its partner are highlighted | `EditorBrackets.TheCaretBesideABracketFindsItsPartner` |
+| no partner | that one alone, in the editor's error colour | `EditorBrackets.AnUnmatchedBracketHasNoPartner` |
+| partner on another line | **not found, by design** | `EditorBrackets.TheSearchStopsAtTheEndOfTheLine` |
+| brackets in comments or strings | ignored, on both ends | `EditorBrackets.CommentsAndStringsAreIgnoredOnBothEnds` |
+
+Updated on `cursorPositionChanged`; when the caret is not beside a bracket
+it costs one character comparison and sets nothing. It never touches the
+undo stack. Text on the highlight measures 5.37 / 10.16 / 6.05 / 5.18 across
+the four themes.
+
+### Zoom
+
+| Key | | Test |
+|---|---|---|
+| `Ctrl++`, `Ctrl+=` | one step larger | `EditorZoom.EachKeyMovesTheFontByOneStepAndCtrlZeroReturns` |
+| `Ctrl+-` | one step smaller | same |
+| `Ctrl+0` | back to the configured size | same |
+| `Ctrl+wheel` | one step per notch | — (harness; see below) |
+
+Own handling, not Qt's: `QPlainTextEdit::zoomIn()` and `zoomOut()` work on **point**
+size and the editor font is set in **pixels**, and measured on a bare editor
+none of `Ctrl++`, `Ctrl+=`, `Ctrl+-`, `Ctrl+0` or `Ctrl+wheel` did anything
+at all. Handling it here also keeps the gutters in step, which Qt's would
+not.
+
+It is a **session delta**, clamped to `[-6, +18]` around the configured
+size. It never writes the setting and **does not survive a restart**.
+Applies to the Input, Expanded and Output panes — `zoomEnabled()` is opt-in,
+so the profiler and compiler views are untouched. It works in a read-only
+pane, because it changes nothing in the document
+(`EditorZoom.AReadOnlyPaneZoomsToo`), and leaves the document revision, the
+undo stack and the breakpoints alone
+(`EditorZoom.NeitherTheDocumentNorTheBreakpointsMove`). The gutter follows
+(`EditorZoom.TheGutterFollowsTheFont`) and both ends clamp
+(`EditorZoom.ItClampsAtBothEnds`).
+
+The find bar and the ribbon do not zoom.
+
+## Not done yet (Tier 2B remainder)
+
+- `Ctrl+D` (add selection to next occurrence) and multi-cursor
