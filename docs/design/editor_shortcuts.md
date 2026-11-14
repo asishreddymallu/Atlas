@@ -490,6 +490,7 @@ pane, because navigating changes nothing in the document.
 |---|---|---|
 | `F12` | Jumps to the definition of the label at the caret, pushing the back stack. On a duplicated name, the **first** definition. On an undefined name, a tooltip saying so and no jump — the same fact the Problems panel reports, so the two cannot disagree. Already sitting on the only definition does nothing | `LabelNavigation.*` |
 | `Shift+F12` | Opens the references list at the top right of the viewport: the definition tagged `def`, then every reference, in document order. `Down` / `Up` move the selection and wrap; `Enter` jumps and pushes the back stack; `Esc` closes the list and nothing else. A name with no uses still lists its definition. Off a label, nothing opens | `LabelReferences.*` |
+| `F2` | Renames the label at the caret everywhere it appears — see below | `LabelRename.*`, `RenameRules.*`, `RenameAssembler.*` |
 | `Alt+Left` | Back, up to 32 positions. The stack holds `QTextCursor`s, not offsets, so an edit above a remembered position moves it with the text | `LabelNavigation.*` |
 | `Ctrl+click` | The same jump as `F12`, at the mouse rather than the caret | `LabelLink.*` |
 | `Ctrl`+hover | Underlines the label under the mouse and shows the pointing hand. Cleared by releasing `Ctrl`, by the mouse leaving the viewport, by the editor losing focus, and by the label under the mouse changing | `LabelLink.*` |
@@ -552,6 +553,57 @@ overlap. Opening Find or go-to-line afterwards closes the list.
 **File > Open** closes it, from `clearBackStack()`, beside the
 breakpoints. The rows hold offsets into the document being closed, and a
 row picked after the swap would jump into whatever text now sits there.
+
+### Renaming a label (F2)
+
+The sites come from the index, so a rename of `loop` never touches
+`loop2` or `loop_end`, and a mention inside a comment or a string is not a
+site. The edits are applied **last to first** inside one
+`beginEditBlock`/`endEditBlock`: every offset came from a single scan, so
+rewriting a site moves everything after it, and going backwards means no
+site is used after it has moved. One `Ctrl+Z` puts the whole rename back;
+`Ctrl+Y` redoes it. (`known_issues` 45 records that Qt coalesces these
+edits on its own, so the explicit block cannot be shown to be what makes
+that true — it is kept because the coalescing is a heuristic, not a
+guarantee.)
+
+Renaming to the **same** name closes the overlay, changes nothing, and
+leaves no undo entry: a `Ctrl+Z` that appears to do nothing is worse than
+no rename at all.
+
+#### When it is refused, and what it says
+
+A refused name keeps the overlay open and shows the reason under the
+field. The rules are the assembler's, read and never modified.
+
+| Refused | Reason shown | Why |
+|---|---|---|
+| an empty name | *the new name is empty* | |
+| `has.dot`, `has space`, `has-dash`, `has$dollar` | *'x' cannot be in a label name* | a label name is `[A-Za-z0-9_]+`; `.` is explicitly rejected and `$` is not in the scan |
+| `1start` | *a label cannot start with a digit* | the lexer sends a leading digit to `number()`, so the name could never be read back as a label |
+| `x1`, `ra`, `sp`, `t0`, `fp`, … | *'x1' is a register name* | a register-named label can be **defined** but never **referenced** — the lexer resolves a register first — so the rename would silently break every use |
+| a name already defined | *'main' is already defined on line 1* | a duplicate label is an assembler error, not a warning |
+| a read-only pane | *this pane is read-only* | the overlay opens, says so, and disables the field |
+
+The read-only case is the one place these keys differ from `F12` and
+`Shift+F12`, which simply work in a read-only pane. Renaming is an edit, so
+it cannot; and a key that silently does nothing reads as a broken key, so
+it refuses out loud.
+
+#### Checked against the assembler, not only against the editor
+
+`RenameAssembler.TheAssemblerReadsBackEveryRename` runs the real lexer and
+parser over the result of ten renames — the eight label-heavy shapes, plus
+two labels on one line (`a: b:`) and a label followed by an instruction
+(`c: addi x1, x0, 1`). For each it requires that the new name sits on the
+line the old one did, that every other symbol is untouched, and that no new
+diagnostic appears.
+
+Its control, `RenamingOnlyTheDefinitionBreaksTheFile`, is what makes that
+meaningful: it caught that the first version of the check was vacuous. The
+parser **records** "Invalid label reference: Label reference not found"
+through `getErrors()` rather than throwing it, and the check was looking
+only at the thrown exception, so renaming just the definition looked clean.
 
 ### Colours and geometry
 

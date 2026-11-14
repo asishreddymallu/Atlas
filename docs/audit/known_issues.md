@@ -1349,3 +1349,78 @@ This is the second control in this stage that could not be made to bite,
 and the second time the right answer was to say so rather than to write a
 control that fails for a different reason. See **44** for the first class
 of thing the tests cannot see.
+
+---
+
+## 46. Shift+F12 and F2 are linear in the number of references
+
+Measured at HEAD on a 10,003-line document with 5,000 references to one
+label, through `navperf` under the hermetic wrapper, five samples each:
+
+| action | median | range |
+|---|---|---|
+| F12, index warm | 521 µs | 427 – 554 |
+| F12, index cold (after an edit) | 30,833 µs | 30,387 – 31,545 |
+| Shift+F12 open, 5,000 references | 19,104 µs | 19,023 – 19,715 |
+| F2 apply, 5,001 sites rewritten | 68,166 µs | 67,370 – 68,831 |
+| Ctrl-hover, steady state | 291 µs/move | 230 – 293 |
+
+The cold F12 is **41**, the full rescan, and nothing new.
+
+The other two are their own. `showReferencesAtCaret()` builds a `Row` for
+every reference — including a trimmed copy of its line — before the list
+draws at most ten of them, so opening on 5,000 references costs 19 ms.
+`applyRename()` rewrites every site through a `QTextCursor`, so 5,001
+sites cost 68 ms.
+
+**Not fixed, and arguably not worth fixing.** Both are deliberate
+one-off actions on a keypress, not a typing path, and 5,000 references to
+a single label is far outside what an Atlas teaching program contains —
+the whole 44-file corpus holds 18 labels. They are recorded so that the
+numbers exist if a larger document ever turns up, and so the shape is on
+record: the references list could build rows lazily, and the rename could
+batch its edits, if either ever mattered.
+
+Typing is unaffected and was measured against `bda9dde` interleaved,
+five samples each on both documents: +1.5% on the 877,043-character file
+and +4.6% on the 20,000-line file, both well inside the baseline's own
+spread (35.5 ms and 8.8 ms respectively).
+
+---
+
+## 47. Corrections to the Stage B first-half report
+
+Three statements in that report were wrong. The report itself cannot be
+edited, so they are corrected here.
+
+1. **The commit list omitted `4b88bbd`.** The first half holds five
+   commits, not four: `4b88bbd` (the `QStringView` tokeniser, and the
+   correction that became **42**), `ea7d88e` (Shift+F12 wired), `c0062a4`
+   (the suggestion-list test driven directly), `37c3406` (the references
+   list's header and tag), `d6667f5` (the docs). Entries **41** and **42**
+   were both added by `4b88bbd`, which is exactly the commit the list
+   dropped.
+
+2. **`a481e5a` was described as coming from the hermetic-verification
+   stage.** It does not. It is
+   `fix(processor): a clocked state with no program counters is not
+   subscripted`, dated 14 Nov 13:18 — the earlier **Debug Run crash fix**,
+   touching `src/processor/processor_manager.cpp` and adding
+   `test/processor_highlight_test.cpp`. No document repeats the wrong
+   version; the one mention of it, in **32**, already describes it
+   correctly.
+
+   The processor gate was also stated against the wrong base. It is now
+   `git diff bda9dde..HEAD -- src/processor`, which must be empty, and is.
+
+3. **The transcript comparison was reported as "845 differing rows"
+   before being resolved.** That was a comparison of two different things.
+   `transcript` emits 1,065 rows: 220 **role** rows, each beginning `R`,
+   and 845 **positional** rows, which dump every `QAction` the window owns
+   by index across the 21 execution steps from `00-start` to `17-final`.
+   The baseline file, `role_transcript_f6edbac_hermetic.tsv`, contains the
+   220 role rows and nothing else. The gate compares the role rows against
+   that file — the same file and the same rows — and they match byte for
+   byte: md5 `b518ba12776391c34cc520e77585d013`, 0 differing rows. The 845
+   positional rows have no counterpart in the baseline and are not a
+   behavioural difference.
