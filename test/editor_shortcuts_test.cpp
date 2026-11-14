@@ -2,19 +2,34 @@
  * @file editor_shortcuts_test.cpp
  * @brief The VS Code-style editing keys in the Editor tab's Input pane.
  *
- * The transformations live in `EditorCommands`, which knows nothing about a
- * widget, so what follows is a table of strings: document in, document out,
- * caret in, caret out. That is where the edge cases live - the first line,
- * the last line, no trailing newline, an empty document, a selection that
- * stops at column 0, blank lines inside a comment toggle.
+ * Two layers, deliberately.
  *
- * The widget that reaches for these is tested separately, once it exists.
+ * The transformations live in `EditorCommands`, which knows nothing about a
+ * widget, so most of what follows is a table of strings: document in,
+ * document out, caret in, caret out. That is where the edge cases live -
+ * the first line, the last line, no trailing newline, an empty document, a
+ * selection that stops at column 0, blank lines inside a comment toggle.
+ *
+ * The wiring is then checked against a real offscreen `Editor` driven with
+ * QKeyEvent, because a pure function that is never reached is worth nothing.
+ * Those tests also cover what only the widget can answer: that one Ctrl+Z
+ * undoes one command, that a read-only pane refuses every text-changing key,
+ * and that none of this added an application shortcut.
+ *
+ * Qt6::Test is not linked, so keys are sent with QApplication::sendEvent and
+ * signals are counted with lambdas rather than QSignalSpy.
  */
 #include "ui/editor_tab/editor_commands.h"
+#include "ui/editor_tab/main_editor.h"
 
 #include <gtest/gtest.h>
 
+#include <QAbstractItemView>
 #include <QApplication>
+#include <QClipboard>
+#include <QKeyEvent>
+#include <QMimeData>
+#include <QPlainTextEdit>
 
 using namespace Kites;
 using namespace Kites::EditorCommands;
@@ -60,6 +75,36 @@ void runTable(const QList<Case> &cases, Command command)
     }
 }
 
+void sendKey(QWidget *target, Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifier,
+             const QString &text = QString())
+{
+    QKeyEvent press(QEvent::KeyPress, key, mods, text);
+    QApplication::sendEvent(target, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, mods, text);
+    QApplication::sendEvent(target, &release);
+    QApplication::processEvents();
+}
+
+/// Puts `text` and the caret where a case wants them.
+void place(QPlainTextEdit *editor, const QString &text, int anchor, int position)
+{
+    editor->setPlainText(text);
+    QTextCursor cursor = editor->textCursor();
+    cursor.setPosition(anchor);
+    cursor.setPosition(position, QTextCursor::KeepAnchor);
+    editor->setTextCursor(cursor);
+    QApplication::processEvents();
+    // A completion popup left over from a previous key takes Enter, Tab and
+    // Backtab before the editor sees them - QCompleter filters them on the
+    // widget itself, ahead of keyPressEvent. That is the completer's
+    // contract and not what these cases are about, so the popup is closed
+    // first. Closing it directly, rather than by sending Escape, because
+    // Escape is one of the keys it intercepts.
+    for (QWidget *top : QApplication::topLevelWidgets())
+        if (top->isVisible() && qobject_cast<QAbstractItemView *>(top))
+            top->hide();
+    QApplication::processEvents();
+}
 
 struct Where
 {
@@ -67,6 +112,12 @@ struct Where
     int     anchor;
     int     position;
 };
+
+Where read(QPlainTextEdit *editor)
+{
+    const QTextCursor cursor = editor->textCursor();
+    return {editor->toPlainText(), cursor.anchor(), cursor.position()};
+}
 } // namespace
 
 // ═══════════════════ the pure commands, as tables ═════════════════════════
@@ -315,4 +366,310 @@ TEST(EditorCommandsToggleComment, CommentsAtTheLeastIndentAndUncommentsExactly)
     const QString commented = applyTo(start, on);
     EXPECT_EQ(commented, QString("    # addi t0, x0, 5"));
     EXPECT_EQ(applyTo(commented, toggleComment(commented, 0, 0)), start);
+}
+
+// ═══════════════════ the wiring: a real editor, real keys ═════════════════
+
+namespace
+{
+/// A writable offscreen Editor, shown so key events reach it the way they do
+/// in the application.
+struct Bench
+{
+    Editor editor;
+    Bench()
+    {
+        editor.resize(600, 400);
+        editor.show();
+        QApplication::processEvents();
+    }
+};
+
+/// Sends one key to a freshly placed document and reports the result.
+Where after(Editor *editor, const QString &text, int anchor, int position, Qt::Key key,
+           Qt::KeyboardModifiers mods = Qt::NoModifier, const QString &typed = QString())
+{
+    place(editor, text, anchor, position);
+    sendKey(editor, key, mods, typed);
+    return read(editor);
+}
+} // namespace
+
+TEST(EditorKeysWiring, EveryImplementedKeyReachesItsCommand)
+{
+    Bench bench;
+    Editor *editor = &bench.editor;
+
+    struct Row
+    {
+        const char           *name;
+        QString               before;
+        int                   anchor;
+        int                   position;
+        Qt::Key               key;
+        Qt::KeyboardModifiers mods;
+        QString               after;
+    };
+    const QList<Row> rows = {
+        {"smart home", "    ab", 6, 6, Qt::Key_Home, Qt::NoModifier, "    ab"},
+        {"move line up", "a\nb", 2, 2, Qt::Key_Up, Qt::AltModifier, "b\na"},
+        {"move line down", "a\nb", 0, 0, Qt::Key_Down, Qt::AltModifier, "b\na"},
+        {"copy line down", "a", 0, 0, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier, "a\na"},
+        {"copy line up", "a", 0, 0, Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier, "a\na"},
+        {"delete line", "a\nb", 0, 0, Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, "b"},
+        {"insert line below", "  a", 3, 3, Qt::Key_Return, Qt::ControlModifier, "  a\n  "},
+        {"insert line above", "  a", 3, 3, Qt::Key_Return,
+         Qt::ControlModifier | Qt::ShiftModifier, "  \n  a"},
+        {"select line", "a\nb", 0, 0, Qt::Key_L, Qt::ControlModifier, "a\nb"},
+        {"enter auto-indents", "  a", 3, 3, Qt::Key_Return, Qt::NoModifier, "  a\n  "},
+        {"indent", "a", 0, 0, Qt::Key_BracketRight, Qt::ControlModifier, "\ta"},
+        {"outdent", "\ta", 2, 2, Qt::Key_BracketLeft, Qt::ControlModifier, "a"},
+        {"backtab outdents", "\ta", 2, 2, Qt::Key_Backtab, Qt::ShiftModifier, "a"},
+        {"toggle comment on", "a", 0, 0, Qt::Key_Slash, Qt::ControlModifier, "# a"},
+        {"toggle comment off", "# a", 0, 0, Qt::Key_Slash, Qt::ControlModifier, "a"},
+        {"tab across lines indents", "a\nb", 0, 3, Qt::Key_Tab, Qt::NoModifier, "\ta\n\tb"},
+    };
+    for (const Row &row : rows)
+    {
+        const Where got = after(editor, row.before, row.anchor, row.position, row.key, row.mods);
+        EXPECT_EQ(got.text, row.after) << row.name;
+    }
+
+    // Select-line changes no text but must change the selection.
+    place(editor, "a\nb", 0, 0);
+    sendKey(editor, Qt::Key_L, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).anchor, 0);
+    EXPECT_EQ(read(editor).position, 2);
+}
+
+TEST(EditorKeysWiring, TabWithNoSelectionStillInsertsATab)
+{
+    Bench bench;
+    // The one piece of existing behaviour this work is not allowed to move.
+    const Where single = after(&bench.editor, "ab", 1, 1, Qt::Key_Tab, Qt::NoModifier, "\t");
+    EXPECT_EQ(single.text, QString("a\tb"));
+
+    // A selection inside ONE line is still the old behaviour: it replaces the
+    // selection with a tab rather than indenting the line.
+    const Where inside = after(&bench.editor, "abcd", 1, 3, Qt::Key_Tab, Qt::NoModifier, "\t");
+    EXPECT_EQ(inside.text, QString("a\td"));
+}
+
+TEST(EditorKeysUndo, OneCtrlZUndoesOneCommand)
+{
+    Bench bench;
+    Editor *editor = &bench.editor;
+
+    struct Row
+    {
+        const char           *name;
+        QString               before;
+        int                   anchor;
+        int                   position;
+        Qt::Key               key;
+        Qt::KeyboardModifiers mods;
+    };
+    const QList<Row> rows = {
+        {"move lines", "a\nb\nc", 0, 0, Qt::Key_Down, Qt::AltModifier},
+        {"copy lines", "a\nb\nc", 0, 0, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier},
+        {"delete line", "a\nb\nc", 2, 2, Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier},
+        {"insert line below", "  a\nb", 3, 3, Qt::Key_Return, Qt::ControlModifier},
+        {"insert line above", "  a\nb", 3, 3, Qt::Key_Return,
+         Qt::ControlModifier | Qt::ShiftModifier},
+        {"enter", "  a\nb", 3, 3, Qt::Key_Return, Qt::NoModifier},
+        {"indent", "a\nb", 0, 3, Qt::Key_BracketRight, Qt::ControlModifier},
+        {"outdent", "\ta\n\tb", 0, 5, Qt::Key_BracketLeft, Qt::ControlModifier},
+        {"toggle comment", "a\n\nb", 0, 4, Qt::Key_Slash, Qt::ControlModifier},
+        {"toggle comment off", "# a\n# b", 0, 7, Qt::Key_Slash, Qt::ControlModifier},
+    };
+    for (const Row &row : rows)
+    {
+        place(editor, row.before, row.anchor, row.position);
+        sendKey(editor, row.key, row.mods);
+        ASSERT_NE(read(editor).text, row.before) << row.name << " did nothing to undo";
+        sendKey(editor, Qt::Key_Z, Qt::ControlModifier);
+        EXPECT_EQ(read(editor).text, row.before) << "one Ctrl+Z did not undo " << row.name;
+    }
+}
+
+TEST(EditorKeysClipboard, CopyAndCutWithNoSelectionTakeTheWholeLine)
+{
+    Bench       bench;
+    Editor     *editor    = &bench.editor;
+    QClipboard *clipboard = QApplication::clipboard();
+
+    place(editor, "one\ntwo\nthree", 5, 5);
+    sendKey(editor, Qt::Key_C, Qt::ControlModifier);
+    EXPECT_EQ(clipboard->text(), QString("two\n"));
+    ASSERT_NE(clipboard->mimeData(), nullptr);
+    EXPECT_TRUE(clipboard->mimeData()->hasFormat(lineCopyMimeType))
+        << "the clipboard is not marked as a line copy";
+    EXPECT_EQ(read(editor).text, QString("one\ntwo\nthree")) << "copy changed the document";
+
+    // The last line has no newline of its own; the clipboard still gets one.
+    place(editor, "one\ntwo", 5, 5);
+    sendKey(editor, Qt::Key_C, Qt::ControlModifier);
+    EXPECT_EQ(clipboard->text(), QString("two\n"));
+
+    // Cut takes the line out.
+    place(editor, "one\ntwo\nthree", 5, 5);
+    sendKey(editor, Qt::Key_X, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("one\nthree"));
+    EXPECT_EQ(clipboard->text(), QString("two\n"));
+
+    // With a selection, both are the ordinary commands again.
+    place(editor, "abcd", 1, 3);
+    sendKey(editor, Qt::Key_C, Qt::ControlModifier);
+    EXPECT_EQ(clipboard->text(), QString("bc"));
+    EXPECT_FALSE(clipboard->mimeData()->hasFormat(lineCopyMimeType))
+        << "a fragment was marked as a line copy";
+}
+
+TEST(EditorKeysClipboard, PasteOfALineCopyGoesAboveAndLeavesTheCaretAlone)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    place(editor, "one\ntwo\nthree", 5, 5);
+    sendKey(editor, Qt::Key_C, Qt::ControlModifier); // line copy of "two"
+    place(editor, "one\ntwo\nthree", 10, 10);        // caret on "three"
+    sendKey(editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("one\ntwo\ntwo\nthree"));
+    // Still on "three", which is now one line further down.
+    EXPECT_EQ(read(editor).position, 14);
+
+    // An ordinary clipboard pastes the ordinary way, in the middle of a line.
+    auto *plain = new QMimeData;
+    plain->setText("XY");
+    QApplication::clipboard()->setMimeData(plain);
+    place(editor, "abc", 1, 1);
+    sendKey(editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("aXYbc"));
+}
+
+TEST(EditorKeysReadOnly, AReadOnlyPaneRefusesEveryTextChangingKey)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+    editor->setReadOnly(true);
+
+    const QString original = "  one\ntwo\nthree";
+    struct Row { Qt::Key key; Qt::KeyboardModifiers mods; const char *name; };
+    const QList<Row> rows = {
+        {Qt::Key_Up, Qt::AltModifier, "move up"},
+        {Qt::Key_Down, Qt::AltModifier, "move down"},
+        {Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier, "copy up"},
+        {Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier, "copy down"},
+        {Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, "delete line"},
+        {Qt::Key_Return, Qt::ControlModifier, "insert below"},
+        {Qt::Key_Return, Qt::ControlModifier | Qt::ShiftModifier, "insert above"},
+        {Qt::Key_Return, Qt::NoModifier, "enter"},
+        {Qt::Key_Slash, Qt::ControlModifier, "toggle comment"},
+        {Qt::Key_BracketRight, Qt::ControlModifier, "indent"},
+        {Qt::Key_BracketLeft, Qt::ControlModifier, "outdent"},
+        {Qt::Key_Backtab, Qt::ShiftModifier, "backtab"},
+        {Qt::Key_Tab, Qt::NoModifier, "tab"},
+        {Qt::Key_X, Qt::ControlModifier, "cut line"},
+        {Qt::Key_V, Qt::ControlModifier, "paste line"},
+    };
+    for (const Row &row : rows)
+    {
+        place(editor, original, 0, 9);
+        sendKey(editor, row.key, row.mods);
+        EXPECT_EQ(read(editor).text, original) << "read-only pane changed by " << row.name;
+    }
+
+    // The two that only read or move still work.
+    place(editor, original, 5, 5);
+    sendKey(editor, Qt::Key_Home);
+    EXPECT_EQ(read(editor).position, 2) << "smart home should work in a read-only pane";
+    place(editor, original, 0, 0);
+    sendKey(editor, Qt::Key_L, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).position, 6) << "select line should work in a read-only pane";
+}
+
+TEST(EditorKeysUnicode, LineOperationsPreserveMultiByteCharacters)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    // One 2-byte character (lambda) and one 4-byte one (an emoji, which is a
+    // surrogate PAIR in UTF-16 and so two QChars where it is one codepoint).
+    const QString lambda = QString::fromUtf8("  \xce\xbb x");
+    const QString emoji  = QString::fromUtf8("\xf0\x9f\x98\x80 y");
+    const QString text   = lambda + "\n" + emoji + "\nplain";
+
+    struct Row
+    {
+        const char           *name;
+        Qt::Key               key;
+        Qt::KeyboardModifiers mods;
+        QString               expected;
+    };
+    const QList<Row> rows = {
+        {"move down", Qt::Key_Down, Qt::AltModifier, emoji + "\n" + lambda + "\nplain"},
+        {"copy up", Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier,
+         lambda + "\n" + lambda + "\n" + emoji + "\nplain"},
+        {"indent", Qt::Key_BracketRight, Qt::ControlModifier,
+         "\t" + lambda + "\n" + emoji + "\nplain"},
+        {"toggle comment", Qt::Key_Slash, Qt::ControlModifier,
+         "  # " + QString::fromUtf8("\xce\xbb x") + "\n" + emoji + "\nplain"},
+        {"delete line", Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier,
+         emoji + "\nplain"},
+    };
+    for (const Row &row : rows)
+    {
+        place(editor, text, 0, 0);
+        sendKey(editor, row.key, row.mods);
+        EXPECT_EQ(read(editor).text.toUtf8(), row.expected.toUtf8()) << row.name;
+    }
+
+    // The emoji line specifically: moving it must not split the pair.
+    place(editor, text, QString(lambda + "\n").size(), QString(lambda + "\n").size());
+    sendKey(editor, Qt::Key_Up, Qt::AltModifier);
+    EXPECT_EQ(read(editor).text.toUtf8(), QString(emoji + "\n" + lambda + "\nplain").toUtf8());
+
+    // And an exact round trip through the comment toggle.
+    place(editor, emoji, 0, 0);
+    sendKey(editor, Qt::Key_Slash, Qt::ControlModifier);
+    sendKey(editor, Qt::Key_Slash, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text.toUtf8(), emoji.toUtf8());
+}
+
+TEST(EditorKeysWiring, AnOpenCompletionPopupDoesNotSwallowTheModifiedKeys)
+{
+    // The completer filters Enter, Tab, Backtab and Escape on the widget,
+    // ahead of keyPressEvent, and keeping those for the popup is right. The
+    // MODIFIED combinations mean something else entirely and the popup has
+    // no use for them, so they must still reach their command while a
+    // completion is showing.
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    place(editor, "", 0, 0);
+    // Typing is what opens the popup; whether it opens depends on what the
+    // language service knows, so the case asserts on that rather than on a
+    // popup it only hopes for.
+    for (QChar c : QString("ad"))
+        sendKey(editor, Qt::Key(c.unicode()), Qt::NoModifier, QString(c));
+
+    bool popupShown = false;
+    for (QWidget *top : QApplication::topLevelWidgets())
+        if (top->isVisible() && qobject_cast<QAbstractItemView *>(top))
+            popupShown = true;
+
+    // kites_test links kites_core but not the compiled .qrc objects, and the
+    // completion list is built from the instruction set that lives in one of
+    // them - so no popup can open here and this case would pass without
+    // exercising anything. It skips rather than lying, and the real check
+    // runs in the out-of-tree editorrecon harness, which links the
+    // resources.
+    if (!popupShown)
+        GTEST_SKIP() << "no completion popup in this build (no instruction resources)";
+
+    const QString before = read(editor).text;
+    sendKey(editor, Qt::Key_Return, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, before + "\n")
+        << "Ctrl+Enter was swallowed (completion popup "
+        << (popupShown ? "was" : "was not") << " open)";
 }

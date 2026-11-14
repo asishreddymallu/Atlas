@@ -1,4 +1,7 @@
 #include "main_editor.h"
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QMimeData>
 #include "language_service/language_service.h"
 #include <QAbstractItemView>
 #include <QKeyEvent>
@@ -207,6 +210,168 @@ void Editor::insertCompletion(const QString &completion)
     setTextCursor(cursor);
 }
 
+void Editor::applyEdit(const EditorCommands::Edit &edit)
+{
+    if (!edit.valid)
+        return;
+
+    QTextCursor cursor = textCursor();
+    cursor.beginEditBlock();
+    if (!edit.isCursorOnly() || edit.length > 0)
+    {
+        cursor.setPosition(edit.start);
+        cursor.setPosition(edit.start + edit.length, QTextCursor::KeepAnchor);
+        cursor.insertText(edit.text);
+    }
+    cursor.endEditBlock();
+
+    // Set after the block closes, so the cursor the user is left with is not
+    // itself part of what Ctrl+Z has to put back.
+    cursor.setPosition(edit.anchor);
+    cursor.setPosition(edit.position, QTextCursor::KeepAnchor);
+    setTextCursor(cursor);
+    ensureCursorVisible();
+}
+
+void Editor::putLineOnClipboard(const QString &lineText)
+{
+    auto *mime = new QMimeData;
+    mime->setText(lineText);
+    mime->setData(EditorCommands::lineCopyMimeType, QByteArrayLiteral("1"));
+    QGuiApplication::clipboard()->setMimeData(mime);
+}
+
+bool Editor::handleEditingKey(QKeyEvent *event)
+{
+    using namespace EditorCommands;
+
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    const int                   key  = event->key();
+    const QString               text = toPlainText();
+    const QTextCursor           here = textCursor();
+    const int                   anchor   = here.anchor();
+    const int                   position = here.position();
+    const bool                  writable = !isReadOnly();
+    const bool                  isReturn = key == Qt::Key_Return || key == Qt::Key_Enter;
+
+    // ── Keys that work in a read-only pane too: they only move the caret or
+    //    read the document.
+    if (key == Qt::Key_Home && (mods == Qt::NoModifier || mods == Qt::ShiftModifier))
+    {
+        applyEdit(smartHome(text, anchor, position, mods == Qt::ShiftModifier));
+        return true;
+    }
+    if (key == Qt::Key_L && mods == Qt::ControlModifier)
+    {
+        applyEdit(selectLine(text, anchor, position));
+        return true;
+    }
+    if (key == Qt::Key_C && mods == Qt::ControlModifier && !here.hasSelection())
+    {
+        putLineOnClipboard(lineClip(text, anchor, position).clipboard);
+        return true;
+    }
+
+    // ── Everything below changes text, so a read-only pane declines all of
+    //    it. The Output pane is a different class and never reaches here at
+    //    all; the Expanded view is this class and read-only, and this is
+    //    what stops it being edited.
+    if (!writable)
+        return false;
+
+    if (key == Qt::Key_X && mods == Qt::ControlModifier && !here.hasSelection())
+    {
+        putLineOnClipboard(lineClip(text, anchor, position).clipboard);
+        applyEdit(deleteLines(text, anchor, position));
+        return true;
+    }
+    if (key == Qt::Key_V && mods == Qt::ControlModifier && !here.hasSelection())
+    {
+        const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
+        if (mime && mime->hasFormat(lineCopyMimeType))
+        {
+            applyEdit(pasteLineAbove(text, anchor, position, mime->text()));
+            return true;
+        }
+        return false; // an ordinary clipboard pastes the ordinary way
+    }
+    if (key == Qt::Key_Up && mods == Qt::AltModifier)
+    {
+        applyEdit(moveLines(text, anchor, position, -1));
+        return true;
+    }
+    if (key == Qt::Key_Down && mods == Qt::AltModifier)
+    {
+        applyEdit(moveLines(text, anchor, position, 1));
+        return true;
+    }
+    if (key == Qt::Key_Up && mods == (Qt::AltModifier | Qt::ShiftModifier))
+    {
+        applyEdit(duplicateLines(text, anchor, position, true));
+        return true;
+    }
+    if (key == Qt::Key_Down && mods == (Qt::AltModifier | Qt::ShiftModifier))
+    {
+        applyEdit(duplicateLines(text, anchor, position, false));
+        return true;
+    }
+    if (key == Qt::Key_K && mods == (Qt::ControlModifier | Qt::ShiftModifier))
+    {
+        applyEdit(deleteLines(text, anchor, position));
+        return true;
+    }
+    if (isReturn && mods == Qt::ControlModifier)
+    {
+        applyEdit(insertLine(text, anchor, position, false));
+        return true;
+    }
+    if (isReturn && mods == (Qt::ControlModifier | Qt::ShiftModifier))
+    {
+        applyEdit(insertLine(text, anchor, position, true));
+        return true;
+    }
+    if (isReturn && mods == Qt::NoModifier)
+    {
+        applyEdit(newlineWithIndent(text, anchor, position));
+        return true;
+    }
+    if (key == Qt::Key_Slash && mods == Qt::ControlModifier)
+    {
+        applyEdit(toggleComment(text, anchor, position));
+        return true;
+    }
+    if (key == Qt::Key_BracketRight && mods == Qt::ControlModifier)
+    {
+        applyEdit(indentLines(text, anchor, position));
+        return true;
+    }
+    if (key == Qt::Key_BracketLeft && mods == Qt::ControlModifier)
+    {
+        applyEdit(outdentLines(text, anchor, position));
+        return true;
+    }
+    // Shift+Tab arrives as Key_Backtab. It outdents whether or not anything
+    // is selected, which is what VS Code does.
+    if (key == Qt::Key_Backtab)
+    {
+        applyEdit(outdentLines(text, anchor, position));
+        return true;
+    }
+    // Tab only takes over when the selection really spans lines. With no
+    // selection, or one inside a single line, it still inserts a tab - that
+    // behaviour is deliberately untouched.
+    if (key == Qt::Key_Tab && mods == Qt::NoModifier)
+    {
+        const LineRange touched = linesTouched(text, anchor, position);
+        if (here.hasSelection() && touched.last > touched.first)
+        {
+            applyEdit(indentLines(text, anchor, position));
+            return true;
+        }
+    }
+    return false;
+}
+
 void Editor::keyPressEvent(QKeyEvent *event)
 {
     if (m_autoCompleter && m_autoCompleter->popup()->isVisible())
@@ -214,6 +379,14 @@ void Editor::keyPressEvent(QKeyEvent *event)
         // let the completer's own popup handle these - it has an event filter
         // installed on this widget that already intercepts most of them, this
         // guard covers the rest (matches Qt's own QCompleter usage pattern)
+        //
+        // Only the UNMODIFIED keys, which are the ones the popup actually
+        // uses. Ctrl+Enter and Ctrl+Shift+Enter mean "new line below/above"
+        // and the popup has no use for them; guarding on the key alone sent
+        // them nowhere whenever a completion happened to be showing.
+        const bool bare    = event->modifiers() == Qt::NoModifier;
+        const bool backtab = event->key() == Qt::Key_Backtab &&
+                             event->modifiers() == Qt::ShiftModifier;
         switch (event->key())
         {
         case Qt::Key_Enter:
@@ -221,11 +394,23 @@ void Editor::keyPressEvent(QKeyEvent *event)
         case Qt::Key_Escape:
         case Qt::Key_Tab:
         case Qt::Key_Backtab:
-            event->ignore();
-            return;
+            if (bare || backtab)
+            {
+                event->ignore();
+                return;
+            }
+            break;
         default:
             break;
         }
+    }
+
+    if (handleEditingKey(event))
+    {
+        event->accept();
+        if (m_autoCompleter)
+            m_autoCompleter->popup()->hide();
+        return;
     }
 
     KitesEditor::keyPressEvent(event);
