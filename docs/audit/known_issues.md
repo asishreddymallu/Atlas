@@ -965,7 +965,94 @@ its idle rather than its running form. None comes from the Debug Run fix
 `a481e5a`, which only skips a highlight update when there are no program
 counters.
 
+**They are still unexplained.** An earlier version of this entry called
+them environmental. That was a guess, and it was tested and found wrong —
+see 36.
+
 A new baseline is recorded at the branch point, with the commit in the
 name, so the next comparison is against something that was true:
 `role_transcript_f76b7ed`, md5
 `b518ba12776391c34cc520e77585d013`. HEAD matches it exactly.
+
+---
+
+## 35. Tests and harnesses shared the developer's real configuration
+
+- **What it was**: `AppSettings` is `QSettings("Kites", "Kites")`, which on
+  Linux is the Kites settings file under ~/.config. Nothing redirected it, so the test
+  suite and every out-of-tree harness read and wrote the developer's own
+  preferences. `FontManager::setSize()` and `ThemeManager::setTheme()` both
+  write through immediately.
+- **The keys at risk**: editor fontSize, editor fontFamily, theme id,
+  theme editorId and compilerOutput borderStyle. `ThemeManager` also reads
+  `QStandardPaths::AppDataLocation` for its themes directory.
+
+### What it actually caused
+
+1. **A harness sweep left the editor font-size key set to 3.** A probe that set a range of
+   configured sizes did not restore the last one. The next `kites_test` run
+   read 3 and `EditorZoom.ItClampsAtBothEnds` failed — correctly, because at
+   3 pt the zoom floor really is 0. The test was reading a preferences file.
+2. **Theme rewrites on every run.** The four-theme smoke harness ends on
+   whichever theme it iterated to last and writes it. Measured against a
+   sentinel: `tokyo-night` in, `kites-dark` out.
+3. **A baseline that did not reproduce.** The stored role-transcript
+   baseline differed from a fresh build of its *own commit* in 31 rows.
+
+### What it is now
+
+- `test/test_main.cpp` makes a per-process temporary directory before
+  `QApplication`, seeds it (`fontSize=11`, the theme key set to tokyo-night), points
+  `XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_CACHE_HOME` at it and pins
+  `QSettings::setPath()` to the same place. It exits 2 rather than falling
+  back to the real file.
+- Harnesses go through the hermetic wrapper script, which does the same for a child
+  process and deletes the directory afterwards.
+
+Measured against a sentinel in a fake home, never the real file: XDG alone
+protects, `setPath` alone protects, with neither the sentinel comes back as
+`fontSize=3`. Both are kept because they cover different things — XDG also
+redirects `QStandardPaths`, `setPath` covers a platform that does not take
+the native settings path from XDG.
+
+`QStandardPaths::setTestModeEnabled()` was rejected: it appends a `qttest`
+element, moving the path away from the seeded file, so the suite would start
+empty rather than known.
+
+**Still true**: the *application* writes these keys, as it should. This
+work isolates the tests and harnesses, not the product.
+
+---
+
+## 36. The 31 transcript rows are not explained by configuration
+
+Entry 34 guessed that the stale baseline came from configuration state.
+Now that runs can be made hermetic, that guess was testable, so it was
+tested. It is wrong.
+
+`f5a0a00` was built from a `git archive` and its transcript run six times,
+each in a fresh sandbox seeded with one key changed: theme tokyo-night,
+kites-dark, tokyo-night-storm, kites-light; editor font size 9, 11, 14.
+
+**All six produced the identical md5** `ad7d7c6cb3b3c42036f35296fac2d4aa`,
+and every one differs from the stored baseline in the same 31
+non-`PROBLEMS` rows. No configuration key moves a single one of them.
+
+So what is known is only this:
+
+- `f5a0a00` built and run on this machine today gives `ad7d7c6c…`, under
+  every configuration tried.
+- The baseline file stored for `f5a0a00` says `f41286818…`.
+- Therefore the stored file was not produced by that commit on this
+  machine, and configuration is not the difference.
+
+What has **not** been ruled out: a different Qt or OS version, different
+hardware timing in the five run-state snapshots, or a change to the
+transcript harness itself since the baseline was taken. The harness lives
+outside this repository and has no history to diff, which is a gap worth
+closing separately.
+
+Calling this "environmental" would be putting a name on an unknown. It is
+recorded as unexplained, and the new baseline is taken hermetically so the
+next comparison starts from something reproducible: three consecutive runs
+of the current branch agree exactly.

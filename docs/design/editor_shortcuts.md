@@ -331,3 +331,25 @@ after (`FindBarGeometry.NothingSitsOnTopOfTheInputAtAnyWidth`,
 ## Not done yet (Tier 2B remainder)
 
 - `Ctrl+D` (add selection to next occurrence) and multi-cursor
+
+## Running the gates
+
+The suite needs nothing special — `test_main.cpp` sandboxes its own
+settings, so `ctest --test-dir build-tests` cannot touch
+the Kites settings file under ~/.config however it is launched.
+
+The out-of-tree harnesses do need a wrapper, because they drive the real
+`MainWindow` and it writes the theme and font size through to that file.
+The wrapper lives beside the harnesses, outside this repository, at
+the atlas-verify harness directory, as run_hermetic.sh:
+
+      run_hermetic.sh <command> [args...]
+
+It makes a temporary XDG home, seeds it with `fontSize=11` and
+the theme key set to tokyo-night, runs the command, prints the config the run left
+behind, and deletes the directory. `--keep` keeps it for inspection.
+
+Every harness invocation goes through it — transcript, the four-theme
+smoke, the ink check, the width sweep, findshots, the zoom and font probes
+and the find-bar fit probe. See `known_issues.md` 35 for what happened
+before it existed.
