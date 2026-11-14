@@ -562,10 +562,10 @@ site. The edits are applied **last to first** inside one
 `beginEditBlock`/`endEditBlock`: every offset came from a single scan, so
 rewriting a site moves everything after it, and going backwards means no
 site is used after it has moved. One `Ctrl+Z` puts the whole rename back;
-`Ctrl+Y` redoes it. (`known_issues` 45 records that Qt coalesces these
-edits on its own, so the explicit block cannot be shown to be what makes
-that true — it is kept because the coalescing is a heuristic, not a
-guarantee.)
+`Ctrl+Y` redoes it, and the block is what makes that true: without it the
+same three replacements push three undo commands and need three presses,
+measured both on a bare `QTextDocument` and through the editor.
+(`known_issues` 45 withdraws an earlier claim to the contrary.)
 
 Renaming to the **same** name closes the overlay, changes nothing, and
 leaves no undo entry: a `Ctrl+Z` that appears to do nothing is worse than

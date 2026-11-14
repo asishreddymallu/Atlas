@@ -1313,42 +1313,67 @@ found it twice (see **36** for the suggestion list's elide).
 
 ---
 
-## 45. The rename's `beginEditBlock` cannot be shown to do anything
+## 45. WITHDRAWN: the rename's `beginEditBlock` was never actually tested
 
-`Editor::applyRename()` wraps its edits in
-`beginEditBlock()`/`endEditBlock()` so that one Ctrl+Z puts every renamed
-site back. The negative control for that — removing both calls — **does
-not** make `LabelRename.OneCtrlZUndoesTheWholeRename` fail, and three
-different instruments say the same thing:
+**This entry previously claimed that `Editor::applyRename()`'s
+`beginEditBlock`/`endEditBlock` "cannot be shown to do anything", on the
+strength of a negative control that showed identical numbers with and
+without it. That claim is wrong, and so was the control.**
 
-| instrument | with the block | without |
-|---|---|---|
-| `Ctrl+Z` presses needed to restore | 1 | 1 |
-| `QTextDocument::availableUndoSteps()` after the rename | 7 | 7 |
-| `undoCommandAdded()` signals during the rename | 1 | 1 |
+### What actually happened
 
-Qt coalesces consecutive `insertText()` calls made on one `QTextCursor`
-into a single undo command on its own, so the explicit block changes
-nothing that can be observed here. (`availableUndoSteps()` reports 7 for a
-three-site rename either way: it counts internal operations, not the unit
-Ctrl+Z works in, and is the wrong instrument for this question.)
+The control was applied by a script that did
+`s.replace("    cursor.beginEditBlock();", ..., 1)` on
+`main_editor.cpp`. There are **five** edit blocks in that file, and the
+first one is in `replaceCurrentMatch()` at line 881. `applyRename()`'s is
+at line 1975. So the mutation removed the **find-and-replace** edit block
+and left the rename's untouched. The three instruments were measuring
+unmutated code, and of course they agreed.
 
-**The block stays.** The coalescing is a heuristic of Qt's, not a
-documented guarantee, and it would stop applying the moment anything ran
-between two sites — a `processEvents()`, a signal handler that edits, a
-future version that rewrites sites through `applyEdit()`. The block states
-the intent and does not depend on that heuristic holding.
+Identical numbers from a control are indistinguishable from a control
+that never took effect. The only thing that tells them apart is proving
+the mutation reached the binary, which was not done.
 
-**What this costs.** The test asserts the user-visible contract — exactly
-one undo command, and exactly one Ctrl+Z restores the document — and that
-contract does hold. It does **not** prove the block is what makes it hold.
-A commit message of mine claimed it did; that claim is wrong and is
-corrected here.
+### The corrected measurements
 
-This is the second control in this stage that could not be made to bite,
-and the second time the right answer was to say so rather than to write a
-control that fails for a different reason. See **44** for the first class
-of thing the tests cannot see.
+On a **bare** `QTextDocument` and `QTextCursor` — no `Editor`, no
+highlighter, nothing of Atlas's — doing three replacements at three
+discontiguous positions, last to first, which is the shape
+`applyRename()` has (`atlas-verify/harness/undoprobe`):
+
+| variant | `undoCommandAdded` | `document->undo()` calls to restore | restored |
+|---|---|---|---|
+| no edit block | **3** | **3** | yes |
+| inside `beginEditBlock` | **1** | **1** | yes |
+
+Qt does **not** coalesce these edits on its own. The block is what groups
+them.
+
+With the control applied to the right lines — mutation shown as a diff
+inside `applyRename()`, ninja shown rebuilding `main_editor.cpp.o` and
+relinking `kites_test` — `LabelRename.OneCtrlZUndoesTheWholeRename`
+**fails by name**, reporting 3 undo commands and 3 Ctrl+Z presses where
+it requires 1 and 1.
+
+### What is corrected
+
+- `0203ac7`'s message says "One block, so one Ctrl+Z puts every site back
+  at once". That is **correct**; the earlier version of this entry wrongly
+  called it a wrong attribution.
+- `aabad96`'s message says the control "cannot bite" and that Qt coalesces
+  the edits by itself. **Both are wrong.** The control bites; Qt does not
+  coalesce.
+- The test did not need fixing. Counting undo commands and Ctrl+Z presses
+  was already the right instrument — it simply had nothing to detect while
+  the mutation was landing in another function.
+
+### The lesson, which is not "be careful"
+
+A negative control that comes back green has two explanations — the test
+is blind, or the mutation never arrived — and reporting the first without
+ruling out the second is how a passing control becomes evidence for a
+false claim. Every control from here on shows the diff of what it changed
+and the build output proving it was recompiled, which is what found this.
 
 ---
 
