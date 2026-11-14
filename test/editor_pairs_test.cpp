@@ -231,3 +231,66 @@ TEST(EditorPairsBreakpoints, OnlyAMultiLineWrapCarriesALineMap)
     for (int line = 0; line < 3; ++line)
         EXPECT_EQ(back.lines.mapped(line), line);
 }
+
+// ═══════════════════════════ bracket matching ═════════════════════════════
+
+namespace
+{
+QPair<int, int> bracketOf(const QString &text, int position)
+{
+    const BracketPair pair = bracketAt(text, position);
+    return {pair.offset, pair.partner};
+}
+} // namespace
+
+TEST(EditorBrackets, TheCaretBesideABracketFindsItsPartner)
+{
+    //                            0123456789...
+    const QString load = "lw t0, 4(sp)";
+    EXPECT_EQ(bracketOf(load, 8), qMakePair(8, 11)) << "caret before the (";
+    EXPECT_EQ(bracketOf(load, 9), qMakePair(8, 11)) << "caret after the (";
+    EXPECT_EQ(bracketOf(load, 11), qMakePair(11, 8)) << "caret before the )";
+    EXPECT_EQ(bracketOf(load, 12), qMakePair(11, 8)) << "caret after the )";
+
+    // Not beside one at all: nothing, which is the common case.
+    EXPECT_EQ(bracketOf(load, 0), qMakePair(-1, -1));
+    EXPECT_EQ(bracketOf(load, 5), qMakePair(-1, -1));
+
+    // Nested.
+    const QString nested = "((a))";
+    EXPECT_EQ(bracketOf(nested, 0), qMakePair(0, 4));
+    EXPECT_EQ(bracketOf(nested, 1), qMakePair(1, 3));
+}
+
+TEST(EditorBrackets, AnUnmatchedBracketHasNoPartner)
+{
+    EXPECT_EQ(bracketOf("lw t0, 4(sp", 8), qMakePair(8, -1));
+    EXPECT_EQ(bracketOf("a)b", 1), qMakePair(1, -1));
+    EXPECT_EQ(bracketOf("(", 0), qMakePair(0, -1));
+}
+
+TEST(EditorBrackets, TheSearchStopsAtTheEndOfTheLine)
+{
+    // A RISC-V parenthesis is an addressing mode and never spans lines, so
+    // the partner on another line is deliberately NOT found.
+    const QString twoLines = "foo(\nbar)";
+    EXPECT_EQ(bracketOf(twoLines, 3), qMakePair(3, -1))
+        << "the search crossed a line break";
+    EXPECT_EQ(bracketOf(twoLines, 8), qMakePair(8, -1));
+
+    // On one line it is found.
+    EXPECT_EQ(bracketOf("foo(bar)", 3), qMakePair(3, 7));
+}
+
+TEST(EditorBrackets, CommentsAndStringsAreIgnoredOnBothEnds)
+{
+    // A bracket in a comment is not a bracket.
+    EXPECT_EQ(bracketOf("# a (b", 4), qMakePair(-1, -1));
+    // Nor one in a string.
+    EXPECT_EQ(bracketOf(".asciz \"a(b\"", 9), qMakePair(-1, -1));
+    // And a real bracket is not matched to one inside a string.
+    EXPECT_EQ(bracketOf("f( \")\" )", 1), qMakePair(1, 7))
+        << "the ) inside the string was taken as the partner";
+    // Nor to one inside a comment.
+    EXPECT_EQ(bracketOf("f( # )", 1), qMakePair(1, -1));
+}

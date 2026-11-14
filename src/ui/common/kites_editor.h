@@ -40,6 +40,11 @@ public:
     void setFindSelections(const QList<QTextEdit::ExtraSelection> &selections);
     void clearFindSelections();
 
+    /// The bracket highlight, between the find matches and the diagnostics:
+    /// a match highlight should not hide the bracket, and a squiggle should
+    /// not be hidden by it.
+    void setBracketSelections(const QList<QTextEdit::ExtraSelection> &selections);
+
     /**
      * @brief Session zoom, as a delta on the configured font size.
      *
@@ -48,11 +53,13 @@ public:
      * dot, and updateViewPortMargins() is what does that.
      *
      * A delta, never a new size, so the font chosen in Settings is untouched
-     * and a zoom is forgotten when the window closes. Clamped to [-6, +18]:
-     * the base is 14 px, so the usable range is 8 px - below which the line
-     * numbers stop being legible and the 9 px breakpoint dot no longer fits
-     * its line - to 32 px, above which an 849 px window shows almost
-     * nothing.
+     * and a zoom is forgotten when the window closes.
+     *
+     * Clamped to [-6, +18] AROUND whatever the configured size is, rather
+     * than to absolute sizes, because the configured size is the user's.
+     * Six steps down is where the line numbers stop being legible and the
+     * 9 px breakpoint dot stops fitting its line; eighteen up is where an
+     * 849 px window shows almost nothing. Measured at both ends.
      */
     static constexpr int minZoomDelta = -6;
     static constexpr int maxZoomDelta = 18;
@@ -102,6 +109,7 @@ private:
     std::vector<GutterColumn*> m_leftGutterColumns{};
     QList<QTextEdit::ExtraSelection> m_currentLineSelections{};
     QList<QTextEdit::ExtraSelection> m_findSelections{};
+    QList<QTextEdit::ExtraSelection> m_bracketSelections{};
     QList<QTextEdit::ExtraSelection> m_diagnosticSelections{};
 };
 } // namespace Kites

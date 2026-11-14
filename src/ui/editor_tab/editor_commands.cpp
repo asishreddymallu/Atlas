@@ -698,6 +698,57 @@ Edit pairBackspace(const QString &text, int anchor, int position)
     return edit;
 }
 
+namespace
+{
+/// True when the character at `offset` is code rather than a comment or a
+/// string, judged by the same one-line scanner the pair rules use.
+bool isCode(const QString &text, int offset)
+{
+    const LineContext context = contextAt(text, offset);
+    return !context.inComment && !context.inString;
+}
+} // namespace
+
+BracketPair bracketAt(const QString &text, int position)
+{
+    auto isBracket = [](QChar c)
+    { return c == QLatin1Char('(') || c == QLatin1Char(')'); };
+
+    // After the caret first, then before it - which is what every editor
+    // does, and means the caret inside "()" reports the closer.
+    int at = -1;
+    if (position < text.size() && isBracket(text.at(position)) && isCode(text, position))
+        at = position;
+    else if (position > 0 && isBracket(text.at(position - 1)) && isCode(text, position - 1))
+        at = position - 1;
+
+    if (at < 0)
+        return {};
+
+    BracketPair found;
+    found.offset = at;
+
+    const int  line    = lineOf(text, at);
+    const int  from    = lineStart(text, line);
+    const int  to      = lineEnd(text, line);
+    const bool forward = text.at(at) == QLatin1Char('(');
+    int        depth   = 0;
+
+    for (int i = at; forward ? i < to : i >= from; forward ? ++i : --i)
+    {
+        const QChar c = text.at(i);
+        if (!isBracket(c) || !isCode(text, i))
+            continue;
+        depth += (c == QLatin1Char('(')) ? 1 : -1;
+        if (depth == 0)
+        {
+            found.partner = i;
+            break;
+        }
+    }
+    return found;
+}
+
 Edit toggleComment(const QString &text, int anchor, int position)
 {
     const LineRange   range = linesTouched(text, anchor, position);

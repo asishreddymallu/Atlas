@@ -55,6 +55,9 @@ Editor::Editor(QWidget *parent )
     connect(m_autoCompleter, QOverload<const QString &>::of(&QCompleter::activated), this,
             &Editor::insertCompletion);
 
+    connect(this, &QPlainTextEdit::cursorPositionChanged, this,
+            [this] { updateBracketHighlight(); });
+
     m_lastBlockCount = document()->blockCount();
     connect(document(), &QTextDocument::contentsChange, this,
             [this](int from, int charsRemoved, int charsAdded)
@@ -393,6 +396,51 @@ void Editor::refreshFindColors()
     m_findMatchColor       = blended(background, accentish, 0.25);
     m_findCurrentColor     = accentish;
     m_findCurrentTextColor = background;
+}
+
+void Editor::updateBracketHighlight()
+{
+    const QTextCursor cursor = textCursor();
+    const EditorCommands::BracketPair pair =
+        EditorCommands::bracketAt(toPlainText(), cursor.position());
+
+    if (pair.offset < 0)
+    {
+        setBracketSelections({});
+        return;
+    }
+
+    const ThemeManager &theme = ThemeManager::getInstance();
+    QTextCharFormat matched;
+    // The same wash family as a find match, so a bracket reads as a
+    // highlight rather than as a second kind of selection. No new token.
+    matched.setBackground(blended(theme.getEditorBackgroundColor(),
+                                  theme.getEditorForegroundColor(), 0.25));
+    QTextCharFormat unmatched;
+    unmatched.setForeground(theme.getEditorErrorColor());
+    unmatched.setFontUnderline(true);
+
+    QList<QTextEdit::ExtraSelection> selections;
+    auto add = [&](int offset, const QTextCharFormat &format)
+    {
+        QTextEdit::ExtraSelection selection;
+        selection.cursor = QTextCursor(document());
+        selection.cursor.setPosition(offset);
+        selection.cursor.setPosition(offset + 1, QTextCursor::KeepAnchor);
+        selection.format = format;
+        selections.append(selection);
+    };
+
+    if (pair.partner < 0)
+    {
+        add(pair.offset, unmatched);
+    }
+    else
+    {
+        add(pair.offset, matched);
+        add(pair.partner, matched);
+    }
+    setBracketSelections(selections);
 }
 
 void Editor::repositionFindBar()

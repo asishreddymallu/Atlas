@@ -235,6 +235,28 @@ Edit autoPair(const QString &text, int anchor, int position, const QString &type
 Edit pairBackspace(const QString &text, int anchor, int position);
 
 /**
+ * @brief The bracket next to `position`, and its partner.
+ *
+ * `offset` is the bracket the caret is beside - the one just after it, or
+ * failing that the one just before - and `partner` is its match, or -1.
+ * Both are -1 when the caret is not beside a bracket at all, which is the
+ * common case and costs one character comparison.
+ *
+ * SAME LINE ONLY. A RISC-V assembly parenthesis is an addressing mode -
+ * `4(sp)` - and never spans lines; searching the whole document would be
+ * work done on every cursor move to find something that cannot be there.
+ *
+ * Brackets inside a `#` comment or a string are ignored, on both ends: a
+ * `(` in a comment has no partner, and a real `(` is not matched to one.
+ */
+struct BracketPair
+{
+    int offset  {-1};
+    int partner {-1};
+};
+BracketPair bracketAt(const QString &text, int position);
+
+/**
  * @brief Toggles a '#' comment on the touched lines.
  *
  * Blank lines are skipped, and do not count towards the decision. If every

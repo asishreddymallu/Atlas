@@ -170,6 +170,15 @@ private:
      * foreground text stays as readable on it as it is on the page.
      */
     void refreshFindColors();
+    /**
+     * @brief Highlights the bracket beside the caret and its partner.
+     *
+     * Runs on every cursor move, and costs one character comparison when
+     * the caret is not beside a bracket - which is almost always. An
+     * unmatched bracket is shown on its own in the editor's error colour,
+     * the same one the diagnostics use; no new theme token.
+     */
+    void updateBracketHighlight();
     void replaceCurrentMatch();
     void replaceEveryMatch();
     void repositionOverlays();

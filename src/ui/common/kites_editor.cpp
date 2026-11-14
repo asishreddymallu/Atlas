@@ -118,6 +118,14 @@ void KitesEditor::setFindSelections(const QList<QTextEdit::ExtraSelection> &sele
     refreshExtraSelections();
 }
 
+void KitesEditor::setBracketSelections(const QList<QTextEdit::ExtraSelection> &selections)
+{
+    if (m_bracketSelections.isEmpty() && selections.isEmpty())
+        return; // the common case: no bracket before, none now
+    m_bracketSelections = selections;
+    refreshExtraSelections();
+}
+
 void KitesEditor::clearFindSelections()
 {
     if (m_findSelections.isEmpty())
@@ -128,13 +136,15 @@ void KitesEditor::clearFindSelections()
 
 void KitesEditor::refreshExtraSelections()
 {
-    // current line first, then find highlights, then diagnostics: where
+    // current line, find highlights, the bracket pair, then diagnostics:
+    // where
     // entries overlap Qt lets the later one win on conflicting format
     // properties, so the wave underline is never masked by the current-line
     // background OR by a match highlight, and a match highlight still covers
     // the current-line fill.
     QList<QTextEdit::ExtraSelection> merged = m_currentLineSelections;
     merged.append(m_findSelections);
+    merged.append(m_bracketSelections);
     merged.append(m_diagnosticSelections);
     setExtraSelections(merged);
 }
@@ -214,6 +224,10 @@ void KitesEditor::applyZoomedFont()
 
     // A tab is a number of SPACES wide, so it has to be re-measured, and the
     // gutters re-measured with it.
+    // Rewrites the per-widget sheet with the new size, for the editor and
+    // the gutters, which is what actually changes what is drawn.
+    applyEditorTheme();
+
     setTabStopDistance(editorTabWidth * fontMetrics().horizontalAdvance(' '));
     updateViewPortMargins();
     for (GutterColumn *column : findChildren<GutterColumn *>())
@@ -271,9 +285,32 @@ void KitesEditor::applyEditorTheme()
     // global UI (Zed-style editor/UI theme split); a per-widget palette is
     // ignored while an application stylesheet is active
     const ThemeManager &themeManager = ThemeManager::getInstance();
-    setStyleSheet(QString("QPlainTextEdit { background-color: %1; color: %2; }")
+    // The font SIZE has to be in this per-widget sheet. The application
+    // stylesheet carries `QWidget { font-size: ... }`, and a stylesheet
+    // rule beats QWidget::setFont() - so without this the editor renders at
+    // the chrome's size whatever font it was given, and zoom does nothing
+    // at all. Measured: the font read 14 px at every zoom level until this
+    // was added.
+    // From the CONFIGURED font plus the zoom delta, never from font(): with
+    // a stylesheet in play QWidget::font() returns the RESOLVED font, so
+    // reading it here would read back the size this function wrote last
+    // time and the editor would never move off it.
+    const QFont configured = FontManager::getInstance().currentFont();
+    const bool  inPixels = configured.pixelSize() > 0;
+    const int   base = inPixels ? configured.pixelSize() : configured.pointSize();
+    const int   size = std::max(1, base + m_zoomDelta);
+    const QString unit = inPixels ? QStringLiteral("px") : QStringLiteral("pt");
+    setStyleSheet(QString("QPlainTextEdit { background-color: %1; color: %2; "
+                          "font-size: %3%4; }")
                       .arg(themeManager.getEditorBackgroundColor().name(),
-                           themeManager.getEditorForegroundColor().name()));
+                           themeManager.getEditorForegroundColor().name())
+                      .arg(size)
+                      .arg(unit));
+
+    // The gutters are plain QWidgets, so the same application rule applies
+    // to them and they need the same treatment to stay in step.
+    for (GutterColumn *column : findChildren<GutterColumn *>())
+        column->setStyleSheet(QString("font-size: %1%2;").arg(size).arg(unit));
 
     // keep palette roles in sync for code that reads palette().color(QPalette::Base)
     QPalette editorPalette = palette();
