@@ -56,4 +56,8 @@ class GotoLineBar : public QWidget
 /// Puts `bar` in the top-right of `viewport`, never wider than it minus a
 /// margin on each side. Shared so the two overlays cannot drift apart.
 void repositionOverlay(QWidget *bar, const QWidget *viewport);
+/// The gap the overlays keep from the viewport edge. Named here because
+/// both bars position against it and FindBar::fitToWidth() has to know
+/// the same number the positioning uses.
+inline constexpr int overlayMargin = 8;
 } // namespace Kites

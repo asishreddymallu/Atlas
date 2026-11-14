@@ -10,7 +10,6 @@ namespace Kites
 {
 namespace
 {
-constexpr int overlayMargin = 8;
 } // namespace
 
 void repositionOverlay(QWidget *bar, const QWidget *viewport)

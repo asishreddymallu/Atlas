@@ -307,7 +307,11 @@ QToolTip {
     background-color: {{background}};
     color: {{foreground}};
     border: 1px solid {{border}};
-    min-width: 140px;
+    /* 140px was wider than the Input pane can give when the editor is
+       split with the Expanded pane, and the layout honoured it by pushing
+       the toggles over the input. 60px still fits a short pattern and lets
+       the row shrink; FindBar::fitToWidth() drops buttons below that. */
+    min-width: 60px;
 }
 #findBar QLineEdit:focus, #gotoLineBar QLineEdit:focus {
     border-color: {{accent}};
