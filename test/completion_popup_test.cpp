@@ -607,4 +607,10 @@ TEST(CompletionTrigger, ADocumentSwapClosesAnOpenList)
     bench.editor.setPlainText("sub x0,x0,x0\n");
     QApplication::processEvents();
     EXPECT_FALSE(bench.open()) << "a document swap left the suggestion list up";
+
+    // NOTE for whoever mutates this next: no single line owns this. The swap
+    // resets the caret, the caret-move handler sees the prefix is empty, and
+    // closeCompletion() runs from there. An explicit "charsRemoved > 1 closes
+    // it" check was written, measured to change nothing, and removed rather
+    // than kept as a second mechanism nobody would know was redundant.
 }
