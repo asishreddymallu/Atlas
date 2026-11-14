@@ -80,6 +80,8 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     /// Keeps the find overlay in the top-right of the viewport.
     void resizeEvent(QResizeEvent *event) override;
+    /// The Input and Expanded panes zoom; see KitesEditor::zoomEnabled().
+    bool zoomEnabled() const override { return true; }
 
 private slots:
     void insertCompletion(const QString &completion);

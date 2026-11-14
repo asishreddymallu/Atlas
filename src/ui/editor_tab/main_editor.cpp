@@ -833,6 +833,13 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     const bool                  writable = !isReadOnly();
     const bool                  isReturn = key == Qt::Key_Return || key == Qt::Key_Enter;
 
+    // ── Zoom. Shared with the Output pane through KitesEditor, and
+    //    deliberately not a QAction or a QShortcut, like every other key
+    //    here. Works in a read-only pane: it changes nothing in the
+    //    document.
+    if (handleZoomKey(event))
+        return true;
+
     // ── Find, replace and go to line. All of them work in a read-only pane
     //    except the replace commands, which the bar itself refuses.
     if (key == Qt::Key_F && mods == Qt::ControlModifier)
@@ -909,6 +916,29 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     //    what stops it being edited.
     if (!writable)
         return false;
+
+    // ── Auto-closing pairs. Decided on the typed TEXT, so a layout where
+    //    ( is not Shift+9 behaves the same, and only for an unmodified or
+    //    shifted keystroke - Ctrl and Alt combinations carry text too and
+    //    are not typing.
+    if ((mods == Qt::NoModifier || mods == Qt::ShiftModifier) && !event->text().isEmpty())
+    {
+        const Edit pair = autoPair(text, anchor, position, event->text());
+        if (pair.valid)
+        {
+            applyEdit(pair);
+            return true;
+        }
+    }
+    if (key == Qt::Key_Backspace && mods == Qt::NoModifier)
+    {
+        const Edit both = pairBackspace(text, anchor, position);
+        if (both.valid)
+        {
+            applyEdit(both);
+            return true;
+        }
+    }
 
     if (key == Qt::Key_X && mods == Qt::ControlModifier && !here.hasSelection())
     {

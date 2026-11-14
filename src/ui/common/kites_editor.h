@@ -1,4 +1,7 @@
 #pragma once
+class QKeyEvent;
+class QWheelEvent;
+
 #include <QPlainTextEdit>
 #include <QTextEdit>
 namespace Kites
@@ -36,7 +39,44 @@ public:
      */
     void setFindSelections(const QList<QTextEdit::ExtraSelection> &selections);
     void clearFindSelections();
+
+    /**
+     * @brief Session zoom, as a delta on the configured font size.
+     *
+     * Here, in src/ui/common, because the GUTTERS are here: a font change
+     * has to re-measure the line-number column and re-centre the breakpoint
+     * dot, and updateViewPortMargins() is what does that.
+     *
+     * A delta, never a new size, so the font chosen in Settings is untouched
+     * and a zoom is forgotten when the window closes. Clamped to [-6, +18]:
+     * the base is 14 px, so the usable range is 8 px - below which the line
+     * numbers stop being legible and the 9 px breakpoint dot no longer fits
+     * its line - to 32 px, above which an 849 px window shows almost
+     * nothing.
+     */
+    static constexpr int minZoomDelta = -6;
+    static constexpr int maxZoomDelta = 18;
+
+    int  zoomDelta() const;
+    /// Clamps, applies and re-measures. Returns what it landed on, which is
+    /// not `delta` at the ends.
+    int  setZoomDelta(int delta);
+    int  zoomBy(int steps);
+    int  resetZoom();
+
 protected:
+    /**
+     * @brief Whether this pane answers the zoom keys and Ctrl+wheel.
+     *
+     * False by default. The Input, Expanded and Output panes say yes; the
+     * profiler and compiler views are left exactly as they were, which is
+     * why this is opt-in rather than a blanket change to every editor.
+     */
+    virtual bool zoomEnabled() const { return false; }
+    /// True when the event was a zoom key and has been dealt with.
+    bool handleZoomKey(QKeyEvent *event);
+    void wheelEvent(QWheelEvent *event) override;
+
     void updateViewPortMargins();
     void updateGutterColumns(const QRect &rect, int dy);
     void highlightCurrentLine();
@@ -52,6 +92,10 @@ private slots:
     void themeChangedSlot(const QString &themeId);
 private:
     void applyEditorTheme();
+    /// Re-reads the configured font, applies the delta, re-measures.
+    void applyZoomedFont();
+
+    int m_zoomDelta {0};
     // the single place that calls QPlainTextEdit::setExtraSelections()
     void refreshExtraSelections();
     std::vector<GutterColumn*> m_rightGutterColumns{};

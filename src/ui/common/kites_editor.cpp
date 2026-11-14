@@ -1,5 +1,9 @@
 #include "kites_editor.h"
+
 #include "gutter_column.h"
+#include <QKeyEvent>
+#include <QWheelEvent>
+#include <algorithm>
 #include "ui/theme/font_manager.h"
 #include "ui/theme/theme_manager.h"
 #include <QPainter>
@@ -20,7 +24,11 @@ KitesEditor::KitesEditor(QWidget *parent)
     connect(this, &KitesEditor::blockCountChanged, this, &KitesEditor::updateViewPortMargins);
     connect(this, &KitesEditor::updateRequest, this, &KitesEditor::updateGutterColumns);
     connect(this, &KitesEditor::cursorPositionChanged, this, &KitesEditor::highlightCurrentLine);
-    connect(&FontManager::getInstance(), &FontManager::fontChangedSignal, this, &QWidget::setFont);
+    // Through applyZoomedFont(), not straight to setFont(): a font changed
+    // in Settings has to come back through the same path so the session
+    // zoom delta is re-applied on top of it and the gutters are re-measured.
+    connect(&FontManager::getInstance(), &FontManager::fontChangedSignal, this,
+            [this](const QFont &) { applyZoomedFont(); });
     connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,
             &KitesEditor::themeChangedSlot);
 
@@ -156,6 +164,105 @@ void KitesEditor::themeChangedSlot([[maybe_unused]] const QString &themeId)
 {
     applyEditorTheme();
     highlightCurrentLine();
+}
+
+int KitesEditor::zoomDelta() const
+{
+    return m_zoomDelta;
+}
+
+int KitesEditor::setZoomDelta(int delta)
+{
+    const int clamped = std::clamp(delta, minZoomDelta, maxZoomDelta);
+    if (clamped != m_zoomDelta)
+    {
+        m_zoomDelta = clamped;
+        applyZoomedFont();
+    }
+    return m_zoomDelta;
+}
+
+int KitesEditor::zoomBy(int steps)
+{
+    return setZoomDelta(m_zoomDelta + steps);
+}
+
+int KitesEditor::resetZoom()
+{
+    return setZoomDelta(0);
+}
+
+void KitesEditor::applyZoomedFont()
+{
+    // Always from the CONFIGURED font, so repeated zooms do not compound and
+    // the setting itself is never written to.
+    QFont zoomed = FontManager::getInstance().currentFont();
+    const int base = zoomed.pixelSize() > 0 ? zoomed.pixelSize() : zoomed.pointSize();
+    if (zoomed.pixelSize() > 0)
+        zoomed.setPixelSize(std::max(1, base + m_zoomDelta));
+    else
+        zoomed.setPointSize(std::max(1, base + m_zoomDelta));
+    setFont(zoomed);
+
+    // The gutters get it explicitly. Qt propagates a font to children that
+    // have none of their own, but the line-number column's sizeHint() is
+    // read by updateViewPortMargins() in the next statement, and measured
+    // it was still returning the old width - so the width is pushed rather
+    // than waited for.
+    for (GutterColumn *column : findChildren<GutterColumn *>())
+        column->setFont(zoomed);
+
+    // A tab is a number of SPACES wide, so it has to be re-measured, and the
+    // gutters re-measured with it.
+    setTabStopDistance(editorTabWidth * fontMetrics().horizontalAdvance(' '));
+    updateViewPortMargins();
+    for (GutterColumn *column : findChildren<GutterColumn *>())
+        column->update();
+    viewport()->update();
+}
+
+bool KitesEditor::handleZoomKey(QKeyEvent *event)
+{
+    if (!zoomEnabled())
+        return false;
+
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    // Ctrl, with or without Shift - a keyboard where + needs Shift must not
+    // behave differently from one where it does not.
+    if (mods != Qt::ControlModifier && mods != (Qt::ControlModifier | Qt::ShiftModifier))
+        return false;
+
+    switch (event->key())
+    {
+    case Qt::Key_Plus:
+    case Qt::Key_Equal:
+        zoomBy(1);
+        return true;
+    case Qt::Key_Minus:
+    case Qt::Key_Underscore:
+        zoomBy(-1);
+        return true;
+    case Qt::Key_0:
+        resetZoom();
+        return true;
+    default:
+        return false;
+    }
+}
+
+void KitesEditor::wheelEvent(QWheelEvent *event)
+{
+    // Qt's own Ctrl+wheel zoom works on POINT size and this font is set in
+    // pixels, so it does nothing here - measured on a bare editor. Handled
+    // instead, which also means the gutters are re-measured with the text.
+    if (zoomEnabled() && event->modifiers() == Qt::ControlModifier)
+    {
+        const int steps = event->angleDelta().y() > 0 ? 1 : -1;
+        zoomBy(steps);
+        event->accept();
+        return;
+    }
+    QPlainTextEdit::wheelEvent(event);
 }
 
 void KitesEditor::applyEditorTheme()

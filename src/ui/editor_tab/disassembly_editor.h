@@ -3,6 +3,7 @@
 #include "ui/common/line_number_gutter_column.h"
 #include "ui/theme/theme_manager.h"
 #include <set>
+#include <QKeyEvent>
 #include <QPainter>
 namespace Kites
 {
@@ -33,6 +34,18 @@ public:
         viewport()->update(); 
     }
 protected:
+    /// The Output pane zooms too: it shares the font, and the only cost is
+    /// routing the keys, since the mechanism lives in KitesEditor.
+    bool zoomEnabled() const override { return true; }
+    void keyPressEvent(QKeyEvent *event) override
+    {
+        if (handleZoomKey(event))
+        {
+            event->accept();
+            return;
+        }
+        KitesEditor::keyPressEvent(event);
+    }
     void paintEvent(QPaintEvent *event) override
     {
         std::set<int> drawnLines;
