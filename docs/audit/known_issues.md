@@ -1182,3 +1182,63 @@ Both were found only because the out-of-tree harness runs the real window.
   reads. It is written down so that anyone who later tries to make the
   stored copy authoritative — for a bigger document, say — knows there is
   something here to find first.
+
+---
+
+## 41. The label rescan after a structural edit costs 67 ms on a large file
+
+- **Where**: `Editor::documentLabels()` in `src/ui/editor_tab/main_editor.cpp`.
+- **Measured**, in the real window through the hermetic wrapper, with
+  `processEvents()` between the edit and the query as real typing has:
+
+  | document | after Enter | after a typed colon | first Ctrl-move onto a label |
+  |---|---|---|---|
+  | 877,043 characters | 66,885 µs | 52,054 µs | 54,889 µs |
+  | 20,000 lines | 36,461 µs | 29,539 µs | 36,797 µs |
+
+  The same query with the cache clean costs **1–2 µs**. So the whole figure
+  is the rescan, and the first Ctrl-hover after an edit is simply the thing
+  that happens to pay for it.
+
+- **Where the time goes**: `documentLabels()` walks every block and calls
+  `QTextBlock::text()`, which materialises a `QString` per block — 16,548
+  of them on the large file. Making the tokeniser allocation-free (it
+  returns token positions now, not copies) took it from 78 ms to 67 ms, so
+  the token copies were real but minor; the per-block text is the rest.
+
+- **Why it rescans at all**: because of **40**. Each block already caches
+  its own labels, but that stored copy is measurably stale after a
+  `setPlainText`, so `documentLabels()` recomputes everything rather than
+  trust it. Fixing 40 is what removes this; micro-optimising the scan is
+  not.
+
+- **Consequence**: the first completion query or Ctrl-hover after Enter, or
+  after typing a `:`, stalls for ~67 ms on a 877,000 character file.
+  Ordinary typing is unaffected — it does not dirty the cache — and the
+  steady-state hover is ~480 µs and does not scale with document size.
+
+- **Reproduction**: `atlas-verify/harness/hoverprobe`, run through the
+  hermetic wrapper. It prints the dirty and clean query costs side by side.
+
+---
+
+## 42. A correction: the 82 ms first Ctrl-hover was the rescan, not the repaint
+
+Commit `aac80a9` states that the 82 ms first-Ctrl-move-after-an-edit was
+"drawing the underline: the first `setExtraSelections()` after an edit
+forces the pending re-layout". **That is wrong**, and the commit message
+cannot be amended, so it is corrected here.
+
+The measurement that led to it compared three moves, one of which landed
+on the left margin — a **non-label**. `updateLinkHighlight()` tests
+`name.isEmpty() || !documentLabels().contains(name)`, and `||`
+short-circuits, so that probe **never called `documentLabels()`**. It
+measured a path with no rescan in it and I read the 793 µs as "the rescan
+is cheap".
+
+Timing `documentLabels()` directly (see **41**) gives 67 ms. The repaint
+was never the problem.
+
+The lesson is narrower than "measure more": the probe has to exercise the
+branch being attributed. A short-circuit on the line above the thing you
+are timing is enough to make the number meaningless.
