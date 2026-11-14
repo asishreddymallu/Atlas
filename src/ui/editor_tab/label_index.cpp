@@ -47,14 +47,25 @@ struct Token
 /// else sends it to skipLine(), which discards the rest of the line.
 bool isLexerCharacter(QChar c)
 {
-    return c.isLetterOrNumber() || c == QLatin1Char('_') || c == QLatin1Char(',') ||
-           c == QLatin1Char('"') || c == QLatin1Char('(') || c == QLatin1Char(')') ||
-           c == QLatin1Char('.') || c == QLatin1Char('#') || c == QLatin1Char(';') ||
-           c == QLatin1Char('-') || c.isSpace() ||
-           // ':' never reaches the dispatch: identifier() consumes it as
-           // part of the label it has just read. It is listed here because
-           // this predicate is asked about every character of the line.
-           c == QLatin1Char(':');
+    // ASCII ONLY. The lexer tests BYTES with std::isalpha / isdigit /
+    // isspace, so a UTF-8 'e-acute', a Chinese character, a no-break
+    // space and an emoji are all non-letters to it and send it to
+    // skipLine(). QChar::isLetterOrNumber() and QChar::isSpace() say the
+    // opposite, which is what this used to ask.
+    const ushort u = c.unicode();
+    if (u > 127)
+        return false;
+    const bool asciiAlnum = (u >= 'a' && u <= 'z') || (u >= 'A' && u <= 'Z') ||
+                            (u >= '0' && u <= '9');
+    const bool asciiSpace = u == ' ' || u == '\t' || u == '\r' || u == '\n' ||
+                            u == '\f' || u == '\v';
+    return asciiAlnum || asciiSpace || c == QLatin1Char('_') ||
+           c == QLatin1Char(',') || c == QLatin1Char('"') || c == QLatin1Char('(') ||
+           c == QLatin1Char(')') || c == QLatin1Char('.') || c == QLatin1Char('#') ||
+           c == QLatin1Char(';') || c == QLatin1Char('-');
+    // ':' is deliberately NOT here. identifier() consumes an ATTACHED
+    // colon itself, so the dispatch only ever sees a bare one - and has
+    // no branch for it. The caller allows ':' when a token is open.
 }
 
 QList<Token> tokenise(const QString &line)
@@ -121,7 +132,11 @@ QList<Token> tokenise(const QString &line)
         // carry on past the character. `'`, `%`, `@`, `+`, `[` all land
         // here, so `    ' j loop` holds no reference as far as the
         // assembler is concerned, and the index must say the same.
-        if (!isLexerCharacter(c))
+        // A ':' is known only while a token is open - that is the
+        // attached colon identifier() swallows. A bare one reaches the
+        // dispatch, which has no branch for it, and the line is dropped.
+        const bool known = isLexerCharacter(c) || (c == QLatin1Char(':') && start >= 0);
+        if (!known)
         {
             flush(i, QChar());
             break;

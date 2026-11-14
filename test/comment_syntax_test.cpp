@@ -266,3 +266,70 @@ TEST(CommentSyntaxIndex, ADefinitionAfterSuchACharacterIsNotALabel)
         << "a name the lexer never reaches was taken as a definition";
     EXPECT_TRUE(index.isDefined(QStringLiteral("main")));
 }
+
+// ═════════════ the alphabet, measured against the real lexer ════════════
+//
+// atlas-verify/harness/alphabetprobe asks the real lexer, for all 95
+// printable ASCII codes plus \t \r \f \v and five non-ASCII, whether it
+// carries on past the character or abandons the line, and compares that
+// with what the index believes. It found no character where the index
+// abandons and the lexer carries on - no missed reference, so no rename
+// defect - and four where the index carries on and the lexer abandons.
+
+TEST(CommentSyntaxAlphabet, ABareColonEndsTheLine)
+{
+    // ':' reaches getNextToken()'s dispatch only when it is NOT attached
+    // to an identifier - identifier() swallows the attached case itself -
+    // and the dispatch has no branch for it, so it goes to skipLine().
+    // isLexerCharacter() allowed ':' unconditionally.
+    const QString text = "loop:\n    : j loop\n";
+    const LabelIndex::Index index = LabelIndex::findLabels(text);
+    EXPECT_TRUE(index.references.isEmpty())
+        << "a reference was reported after a bare ':', which the lexer never reaches";
+}
+
+TEST(CommentSyntaxAlphabet, AColonAttachedToANameStillDefinesALabel)
+{
+    // The other half: the attached ':' must keep working, or every label
+    // definition disappears.
+    const QString text = "loop:\n    j loop\nsecond:\n    j second\n";
+    const LabelIndex::Index index = LabelIndex::findLabels(text);
+    EXPECT_TRUE(index.isDefined(QStringLiteral("loop")));
+    EXPECT_TRUE(index.isDefined(QStringLiteral("second")));
+    EXPECT_EQ(index.references.size(), 2);
+}
+
+TEST(CommentSyntaxAlphabet, NonAsciiLettersEndTheLine)
+{
+    // The lexer tests bytes with std::isalpha. A UTF-8 'e-acute' is two
+    // bytes, neither of which is an ASCII letter, so the dispatch falls
+    // through to skipLine(). QChar::isLetterOrNumber() says otherwise,
+    // which is what the index was using.
+    for (const QString &c : {QString(QChar(0x00E9)),   // e with an acute
+                             QString(QChar(0x4E2D)),   // a Chinese character
+                             QString(QChar(0x00A0))})  // no-break space
+    {
+        const QString text = QStringLiteral("loop:\n    %1 j loop\n").arg(c);
+        const LabelIndex::Index index = LabelIndex::findLabels(text);
+        EXPECT_TRUE(index.references.isEmpty())
+            << "U+" << QString::number(c.at(0).unicode(), 16).toStdString()
+            << " did not end the line for the index";
+    }
+}
+
+TEST(CommentSyntaxAlphabet, AnEmojiEndsTheLineToo)
+{
+    const QString emoji = QString::fromUcs4(U"\U0001F600");
+    const QString text  = QStringLiteral("loop:\n    %1 j loop\n").arg(emoji);
+    EXPECT_TRUE(LabelIndex::findLabels(text).references.isEmpty());
+}
+
+TEST(CommentSyntaxAlphabet, AsciiLettersAndDigitsStillScan)
+{
+    // The guard against over-correcting: restricting to ASCII must not
+    // stop the ordinary alphabet working.
+    const QString text = "loop_9:\n    j loop_9\n    beq x1, x2, loop_9\n";
+    const LabelIndex::Index index = LabelIndex::findLabels(text);
+    EXPECT_TRUE(index.isDefined(QStringLiteral("loop_9")));
+    EXPECT_EQ(index.references.size(), 2);
+}
