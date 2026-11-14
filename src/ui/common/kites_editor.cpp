@@ -104,12 +104,29 @@ void KitesEditor::clearDiagnosticSelections()
     refreshExtraSelections();
 }
 
+void KitesEditor::setFindSelections(const QList<QTextEdit::ExtraSelection> &selections)
+{
+    m_findSelections = selections;
+    refreshExtraSelections();
+}
+
+void KitesEditor::clearFindSelections()
+{
+    if (m_findSelections.isEmpty())
+        return;
+    m_findSelections.clear();
+    refreshExtraSelections();
+}
+
 void KitesEditor::refreshExtraSelections()
 {
-    // current line first, diagnostics second: where the two overlap Qt lets the
-    // later entry win on conflicting format properties, so the wave underline is
-    // never masked by the current-line background
+    // current line first, then find highlights, then diagnostics: where
+    // entries overlap Qt lets the later one win on conflicting format
+    // properties, so the wave underline is never masked by the current-line
+    // background OR by a match highlight, and a match highlight still covers
+    // the current-line fill.
     QList<QTextEdit::ExtraSelection> merged = m_currentLineSelections;
+    merged.append(m_findSelections);
     merged.append(m_diagnosticSelections);
     setExtraSelections(merged);
 }

@@ -2,7 +2,10 @@
 #include "ui/common/syntax_highlighter.h"
 #include "ui/common/kites_editor.h"
 #include "ui/editor_tab/editor_commands.h"
+#include "ui/editor_tab/find_engine.h"
 #include <QCompleter>
+#include <QColor>
+#include <QTimer>
 #include <QEvent>
 #include <QPlainTextEdit>
 #include <QTextCursor>
@@ -11,6 +14,9 @@
 
 namespace Kites
 {
+class FindBar;
+class GotoLineBar;
+
 class Editor : public KitesEditor
 {
     friend class BreakPointGutterColumn;
@@ -41,6 +47,26 @@ public:
     /// The gutter's three operations. They go through here rather than at
     /// the vector directly, so the anchors that do the following stay in
     /// step and the invariants are enforced in one place.
+    /**
+     * @brief The find overlay, created the first time it is opened.
+     *
+     * Exposed so tests and the out-of-tree harness can drive it without
+     * sending a key event for every assertion. Null until Ctrl+F or Ctrl+H
+     * has been pressed once.
+     */
+    FindBar     *findBar() const;
+    GotoLineBar *gotoLineBar() const;
+    /// Opens the go-to-line overlay, closing the find bar if it is open.
+    void openGotoLine();
+    void closeGotoLine();
+    /// Open, with the replace row shown or not. Safe to call when open.
+    void openFind(bool withReplace);
+    void closeFind();
+    /// Matches of the current pattern, for the tests and the status line.
+    const FindEngine::FindResult &findResult() const;
+    /// Index into findResult().matches, or -1 when nothing is current.
+    int currentMatchIndex() const;
+
     bool hasBreakpointAtLine(int line) const;
     void toggleBreakpointAtLine(int line);
     void clearBreakpoints();
@@ -52,7 +78,8 @@ protected:
     bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
-    // void resizeEvent(QResizeEvent *event) override;
+    /// Keeps the find overlay in the top-right of the viewport.
+    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     void insertCompletion(const QString &completion);
@@ -107,6 +134,33 @@ private:
      * A line that does not exist (possible only through setBreakpoints or a
      * document swap) gets a null anchor and keeps its number.
      */
+    /// Re-runs the search and repaints the highlights. `toOrigin` selects
+    /// the first match at or after where the caret was when the bar opened,
+    /// which is what incremental typing wants; otherwise the current match
+    /// is kept where it still exists.
+    void runFind(bool toOrigin);
+    /// Selects match `index` and scrolls to it. -1 clears the selection.
+    void goToMatch(int index);
+    void stepMatch(bool forward);
+    /// Rebuilds the find highlight list and hands it to the one composed
+    /// extra-selections function.
+    void updateFindHighlights();
+    void repositionFindBar();
+    /**
+     * @brief The two match colours, derived from existing theme colours.
+     *
+     * No new theme token. The current match is filled with the theme's
+     * `info` colour and its text is set to the editor BACKGROUND - info was
+     * chosen to sit at 4.5:1 or better against the background, so inverting
+     * it gives that same ratio by construction. Every other match gets a
+     * weak wash of the same colour over the editor background, so ordinary
+     * foreground text stays as readable on it as it is on the page.
+     */
+    void refreshFindColors();
+    void replaceCurrentMatch();
+    void replaceEveryMatch();
+    void repositionOverlays();
+
     QTextCursor anchorForLine(int line) const;
     void        reanchorBreakpoints();
     void        refreshBreakpointsFromAnchors();
@@ -129,6 +183,20 @@ private:
     // Set while applyEdit() is making its own change, because that one is
     // remapped through the command's LineMap rather than read from anchors.
     bool m_remappingBreakpoints {false};
+
+    FindBar               *m_findBar      {nullptr};
+    FindEngine::FindResult m_findResult;
+    int                    m_currentMatch {-1};
+    /// Where the caret was when the bar was opened. Incremental typing
+    /// searches from here, so the selection does not crawl forward as the
+    /// pattern grows.
+    int                    m_findOrigin   {0};
+    /// Coalesces re-searching while the document or the pattern changes.
+    QTimer                *m_findDebounce {nullptr};
+    QColor                 m_findMatchColor;
+    QColor                 m_findCurrentColor;
+    QColor                 m_findCurrentTextColor;
+    GotoLineBar           *m_gotoBar {nullptr};
     // QSet<int> m_breakPointsSet; // for quick lookup
     // int m_gutterWidth = 30;
     bool m_isTextEditor; // to differentiate between text editor and disassembly viewer

@@ -23,6 +23,19 @@ public:
     // them. Both lists are merged by refreshExtraSelections().
     void setDiagnosticSelections(const QList<QTextEdit::ExtraSelection> &selections);
     void clearDiagnosticSelections();
+
+    /**
+     * @brief The find bar's highlights, kept in their own list.
+     *
+     * Third list, same reason as the second: refreshExtraSelections() is the
+     * only place that calls QPlainTextEdit::setExtraSelections(), so a
+     * caller that set the selections itself would silently wipe the other
+     * two. Find highlights go UNDER the diagnostics in the merged list, so a
+     * squiggle is never masked by a match highlight, and over the
+     * current-line fill.
+     */
+    void setFindSelections(const QList<QTextEdit::ExtraSelection> &selections);
+    void clearFindSelections();
 protected:
     void updateViewPortMargins();
     void updateGutterColumns(const QRect &rect, int dy);
@@ -44,6 +57,7 @@ private:
     std::vector<GutterColumn*> m_rightGutterColumns{};
     std::vector<GutterColumn*> m_leftGutterColumns{};
     QList<QTextEdit::ExtraSelection> m_currentLineSelections{};
+    QList<QTextEdit::ExtraSelection> m_findSelections{};
     QList<QTextEdit::ExtraSelection> m_diagnosticSelections{};
 };
 } // namespace Kites
