@@ -4,6 +4,7 @@
 #include "ribbon_page.h"
 
 #include <QAction>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QMenu>
 #include <QResizeEvent>
@@ -14,6 +15,58 @@
 
 namespace Kites
 {
+/**
+ * @brief The band below the tab strip, carrying a hairline at each edge.
+ *
+ * The rules are two 1 px QFrames held OUTSIDE the layout and raised above
+ * everything else in the panel. Three simpler things were tried first and
+ * each was measured to draw nothing:
+ *
+ *  - `#ribbonPanel { border-bottom }`, which had been in template.qss since
+ *    the panel was built. Qt's stylesheet style fills a plain QWidget's
+ *    background through PE_Widget but does not draw its border, so the
+ *    background half of that rule worked and the border half never did.
+ *  - a line painted in RibbonBar::paintEvent - overpainted, because the bar
+ *    is completely covered by the strip and this panel.
+ *  - a line painted in this widget's own paintEvent - overpainted in turn by
+ *    the persistent area and the page stack, which fill it edge to edge.
+ *
+ * A raised child cannot be overpainted by a sibling, takes its colour from
+ * the same `{{border}}` token as `ribbonGroupDivider`, and costs no height:
+ * it is positioned by hand on row 0 and row height()-1, so the panel stays
+ * 92 px and the chrome stays 158.
+ */
+class RibbonPanel : public QWidget
+{
+  public:
+    explicit RibbonPanel(QWidget *parent) : QWidget(parent)
+    {
+        for (QFrame **rule : {&m_topRule, &m_bottomRule})
+        {
+            *rule = new QFrame(this);
+            (*rule)->setObjectName("ribbonRule");
+            (*rule)->setFrameShape(QFrame::NoFrame);
+        }
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QWidget::resizeEvent(event);
+        m_topRule->setGeometry(0, 0, width(), 1);
+        m_bottomRule->setGeometry(0, height() - 1, width(), 1);
+        // After every resize, because the page stack and the persistent area
+        // are added to the layout after these are made and would otherwise
+        // sit above them.
+        m_topRule->raise();
+        m_bottomRule->raise();
+    }
+
+  private:
+    QFrame *m_topRule    {nullptr};
+    QFrame *m_bottomRule {nullptr};
+};
+
 RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
 {
     auto *column = new QVBoxLayout(this);
@@ -33,8 +86,9 @@ RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
     // from there. Ribbon buttons stay out of the tab chain (see RibbonGroup).
     m_tabBar->setFocusPolicy(Qt::TabFocus);
 
-    auto *panel = new QWidget(this);
+    auto *panel = new RibbonPanel(this);
     panel->setObjectName("ribbonPanel");
+    m_panel = panel;
     auto *panelRow = new QHBoxLayout(panel);
     panelRow->setContentsMargins(0, 0, 0, 0);
     panelRow->setSpacing(0);

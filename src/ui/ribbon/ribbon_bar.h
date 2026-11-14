@@ -16,6 +16,7 @@ namespace Kites
 {
 class RibbonGroup;
 class RibbonPage;
+class RibbonPanel;
 
 /**
  * @brief The horizontal tab strip and the ribbon panel below it.
@@ -37,7 +38,6 @@ class RibbonPage;
 class RibbonBar : public QWidget
 {
     Q_OBJECT
-
   public:
     explicit RibbonBar(QWidget *parent = nullptr);
 
@@ -110,6 +110,9 @@ class RibbonBar : public QWidget
     RibbonLayoutInput layoutInput() const;
 
     QTabBar        *m_tabBar     {nullptr};
+    // The band below the strip. It draws the two hairlines itself, on its
+    // own first and last pixel rows.
+    RibbonPanel    *m_panel      {nullptr};
     QStackedWidget *m_pages      {nullptr};
     QWidget        *m_persistent {nullptr};
     QToolButton    *m_chevron    {nullptr};

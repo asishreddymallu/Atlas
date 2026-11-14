@@ -293,11 +293,26 @@ QToolTip {
  * The panel is FLAT. A vertical lift from surface to background was the
  * other option and was tried: on a band this shallow it reads as a bevel and
  * argues with the buttons, which have just had their boxes taken away. What
- * the panel does need is an edge, so one hairline along the bottom separates
- * chrome from content - the same job the old toolbar's border did. */
+ * the panel does need is an edge: one hairline where the tab strip ends and
+ * one where the content begins, so the band reads as its own surface.
+ *
+ * Those two lines are PAINTED by RibbonBar, not drawn by this rule. A
+ * `border-bottom` here drew nothing for three stages, because #ribbonPanel
+ * is a bare QWidget and a bare QWidget paints neither the background nor the
+ * border a stylesheet gives it; and a real border would have eaten into the
+ * panel's content box and pushed the chrome from 158 px to 160, because
+ * neither the bar nor the panel has a pixel of slack. The colour still comes
+ * from here, through a property the bar exposes, so the rules follow the
+ * theme like every other divider and no colour is written down in C++. */
 #ribbonPanel {
     background-color: {{background}};
-    border-bottom: 1px solid {{border}};
+}
+/* The two hairlines, same token and same 1 px as the group dividers beside
+ * them. They are raised QFrames rather than a border on #ribbonPanel: that
+ * border was here for three stages and drew nothing, because Qt's stylesheet
+ * style fills a plain QWidget's background but does not draw its border. */
+QFrame#ribbonRule {
+    background-color: {{border}};
 }
 
 /* Captions name their group and should never compete with it: muted, and
