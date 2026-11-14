@@ -590,6 +590,52 @@ The read-only case is the one place these keys differ from `F12` and
 it cannot; and a key that silently does nothing reads as a broken key, so
 it refuses out loud.
 
+#### Every form a label can be referenced in
+
+Enumerated by reading `src/assembler` and then **probing** each candidate
+through the real lexer and parser (`atlas-verify/harness/formprobe`, 37
+forms). The lexer only produces a `LABEL_REF` when the previous token on
+the same line is a `COMMA` or an `OPCODE` (`lexer.cpp`, `identifier()`),
+which is exactly the index's operand-position rule — so everything the
+assembler accepts, the index already counts.
+
+| Form | Example | Assembler | Index counts it |
+|---|---|---|---|
+| unconditional jump | `j target` | accepts | yes |
+| jump and link | `jal ra, target` | accepts | yes |
+| branch, two registers | `beq x1, x2, target` (`bne`, `blt`, `bge`, `bltu`, `bgeu`) | accepts | yes |
+| branch, zero compare | `beqz x1, target` (`bnez`, `blez`, `bgez`, `bltz`, `bgtz`) | accepts | yes |
+| load address, data label | `la x1, target` where `target` is in `.data` | accepts | yes |
+| load word, data label | `lw x1, target` where `target` is in `.data` | accepts | yes |
+| label on an instruction line | `target: nop` | accepts | yes (definition) |
+| two labels on one line | `a: b:` | accepts | yes (two definitions) |
+| `#` comment mentioning it | `j target  # target` | accepts | **no — correct** |
+| `;` comment mentioning it | `j target  ; target` | accepts | **no — correct, since `2d25482`** |
+| string mentioning it | `.string "target"` | accepts | **no — correct** |
+
+**Not supported by this assembler**, so there is nothing for the index to
+find. Each was probed and rejected, with the parser's own message:
+
+| Form | Why it is rejected |
+|---|---|
+| `jal target` (one operand) | *Expected: jal \<gp-reg\>, \<imm\> or jal \<gp-reg\>, \<text-label\>* |
+| `call target`, `tail target` | *Expected: call \<text label\>* — the pseudo-instruction is not implemented |
+| `jalr x1, target` | *Expected: jalr \<gp-reg\>, \<gp-imm\>(\<gp-reg\>)* |
+| `la x1, target` on a **text** label | *Invalid label reference* — `la` wants a data label |
+| `li x1, target` | *Expected: li \<reg\>, \<imm\>* |
+| `sw x1, target, x2` | *Expected: sw \<gp-reg\>, \<gp-imm\>(\<gp-reg\>)* |
+| `%hi(target)` / `%lo(target)` | no `%` in `Lexer::getNextToken()`'s dispatch at all |
+| `target+4` | no `+` either; the line is skipped and the instruction fails to parse |
+| `.word target`, `.dword`, `.halfword`, `.byte` | *Invalid directive* — the data directives take numbers, not labels |
+| `.globl` / `.global` | *Invalid token: Expected .data, .text, or \<opcode\> or \<label\>* — not a directive this assembler knows |
+| `.type`, `.size`, `.equ` | the same; none is implemented |
+
+So the index misses **none** of the supported forms. It did **over**-count
+one: `;` also starts a comment (`current_char == '#' || current_char ==
+';'`), which the index did not know, so a mention after a `;` was read as
+code — both as a reference and, for `; ghost:`, as a definition. Fixed in
+`2d25482`, with four table tests and a control.
+
 #### Checked against the assembler, not only against the editor
 
 `RenameAssembler.TheAssemblerReadsBackEveryRename` runs the real lexer and
@@ -604,6 +650,14 @@ meaningful: it caught that the first version of the check was vacuous. The
 parser **records** "Invalid label reference: Label reference not found"
 through `getErrors()` rather than throwing it, and the check was looking
 only at the thrown exception, so renaming just the definition looked clean.
+
+`RenameRealFiles.EveryLabelInEveryShippedFileSurvivesARename` goes wider:
+it renames **every label of every shipped assembly file** — `examples/`
+recursively, plus the eight trap files in `test/data/labelcorpus` — one
+at a time, each starting from the original text. 52 files, 14 of which
+define labels, 35 renames, 0 failures. Its control renames only the
+definition: of the 11 real files with references to leave dangling, the
+assembler complains about 11.
 
 ### Colours and geometry
 
