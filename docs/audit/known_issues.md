@@ -1213,9 +1213,28 @@ Both were found only because the out-of-tree harness runs the real window.
   not.
 
 - **Consequence**: the first completion query or Ctrl-hover after Enter, or
-  after typing a `:`, stalls for ~67 ms on a 877,000 character file.
-  Ordinary typing is unaffected — it does not dirty the cache — and the
-  steady-state hover is ~480 µs and does not scale with document size.
+  after typing a `:`, stalls for the length of a full rescan. Ordinary
+  typing is unaffected — it does not dirty the cache — and the steady-state
+  hover does not scale with document size.
+
+- **What it costs at realistic sizes.** The two documents the entry was
+  opened on are pathological; these are what a teaching file actually
+  looks like. Measured through `hoverprobe` under the hermetic wrapper:
+
+  | document | rescan after `Enter` | after a typed `:` | first Ctrl-move | steady hover |
+  |---|---|---|---|---|
+  | 200 lines | 529 µs | 496 µs | 613 µs | 8 µs/move |
+  | 1,000 lines | 2,552 µs | 2,506 µs | 2,546 µs | 32 µs/move |
+  | 5,000 lines | 13,596 µs | 12,640 µs | 13,620 µs | 155 µs/move |
+  | 20,000 lines | 34,988 µs | 30,615 µs | 30,177 µs | 431 µs/move |
+  | 877,043 chars | 71,300 µs | 71,304 µs | 75,661 µs | 602 µs/move |
+
+  It is linear in the document. **At 200 lines it is 0.5 ms and nobody can
+  feel it**; at 1,000 lines it is 2.5 ms, still under a frame. It becomes
+  visible around 5,000 lines (13.6 ms, about one frame at 60 Hz) and is a
+  clear stall at 20,000. Most Atlas programs are well under 200 lines, so
+  this is a correctness-of-design problem rather than a hazard in daily
+  use — which is why it is recorded rather than rushed.
 
 - **Reproduction**: `atlas-verify/harness/hoverprobe`, run through the
   hermetic wrapper. It prints the dirty and clean query costs side by side.

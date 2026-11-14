@@ -659,10 +659,26 @@ TEST(LabelReferences, ShiftF12OffALabelDoesNothing)
 {
     Nav nav;
     nav.load(kRefs);
+
+    // On a real WORD that is not a label - a mnemonic, then a register.
+    // The first version of this put the caret in the leading whitespace,
+    // where nameAt() returns empty and nothing could open whatever the
+    // code did; it passed against the unwired stub for that reason. A word
+    // is what a control can actually break.
+    for (const char *word : {"addi", "x1", "ret"})
+    {
+        nav.caretTo(kRefs.indexOf(word) + 1);
+        key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+        EXPECT_FALSE(nav.editor.referencesBar()->isVisible())
+            << "it opened on '" << word << "', which is not a label of this file";
+        nav.editor.closeReferences();
+    }
+
+    // And in the whitespace, where there is no word at all.
     nav.caretTo(kRefs.indexOf("    addi") + 2);
     key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
-    EXPECT_FALSE(nav.editor.referencesBar() && nav.editor.referencesBar()->isVisible())
-        << "it opened for something that is not a label";
+    EXPECT_FALSE(nav.editor.referencesBar()->isVisible())
+        << "it opened with the caret on whitespace";
 }
 
 TEST(LabelReferences, FileOpenClosesIt)
