@@ -3,6 +3,7 @@
 #include "ui/common/kites_editor.h"
 #include "ui/editor_tab/editor_commands.h"
 #include "ui/editor_tab/completion_model.h"
+#include "ui/editor_tab/label_index.h"
 #include "ui/editor_tab/find_engine.h"
 #include <QColor>
 #include <QTimer>
@@ -94,6 +95,29 @@ public:
      * than by remembering to call hide() from its own code.
      */
     void closeCompletion();
+
+    /**
+     * @brief The document's labels, cached against its revision.
+     *
+     * Rebuilt only when the revision moves, so repeated queries on an
+     * unchanged document cost a hash lookup. Invalidated by the revision
+     * number, never by a timer - a timer would let a jump be computed from
+     * a document that has already changed under it.
+     *
+     * Unlike the completion label cache this is NOT on a per-keystroke
+     * path: it is asked only by F12, Shift+F12, F2 and the Ctrl-hover,
+     * which is why keying on the revision alone is the right trade here.
+     */
+    const LabelIndex::Index &labelIndex() const;
+
+    /// F12 / Ctrl+click. Returns true when it jumped.
+    bool goToDefinitionAtCaret();
+    /// Alt+Left. Returns true when it moved.
+    bool goBack();
+    /// How many positions the back stack holds, for the tests.
+    int  backStackDepth() const { return int(m_backStack.size()); }
+    /// Cleared on File > Open, like the breakpoints.
+    void clearBackStack();
 
     bool hasBreakpointAtLine(int line) const;
     void toggleBreakpointAtLine(int line);
@@ -275,6 +299,19 @@ private:
     mutable QStringList m_labelCache;
     mutable bool        m_labelsDirty {true};
     QStringList         documentLabels() const;
+
+    /// Pushes where the caret is now, for Alt+Left. Held as a QTextCursor
+    /// so an edit above it carries it along with the text.
+    void pushBackPosition();
+    /// Moves the caret to `offset` and reveals it, centring when it was off
+    /// screen. Does not touch the back stack.
+    void revealOffset(int offset);
+
+    mutable LabelIndex::Index m_labelIndex;
+    mutable int               m_labelIndexRevision {-1};
+    /// At most 32, oldest dropped first.
+    QList<QTextCursor>        m_backStack;
+    static constexpr int      maxBackStack = 32;
 
     std::map<int, QString> m_errorMessages;
     SyntaxHighlighter *m_syntaxHighlighter;

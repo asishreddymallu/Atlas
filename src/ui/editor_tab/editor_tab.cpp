@@ -446,6 +446,10 @@ int EditorTab::sourceLineCount() const
 void EditorTab::loadFileContent(const QString &content)
 {
     m_editor->clearBreakpoints();
+    // The back stack points into the OLD document; a new file makes every
+    // stored position meaningless. Cleared here for the same reason and in
+    // the same place as the breakpoints.
+    m_editor->clearBackStack();
     setRawText(content);
 }
 

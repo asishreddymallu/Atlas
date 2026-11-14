@@ -1,5 +1,6 @@
 #include "main_editor.h"
 #include "completion_popup.h"
+#include "ui/editor_tab/label_index.h"
 #include "find_bar.h"
 #include "goto_line_bar.h"
 #include "ui/theme/theme_manager.h"
@@ -1040,6 +1041,22 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     const bool                  writable = !isReadOnly();
     const bool                  isReturn = key == Qt::Key_Return || key == Qt::Key_Enter;
 
+    // ── Label navigation. Ordinary editor keys, like every other one
+    //    here: no QAction, no QShortcut, so the window still owns seven.
+    //    They work in a read-only pane too - navigating changes nothing.
+    if (key == Qt::Key_F12 && mods == Qt::NoModifier)
+    {
+        closeCompletion();
+        goToDefinitionAtCaret();
+        return true;
+    }
+    if (key == Qt::Key_Left && mods == Qt::AltModifier)
+    {
+        closeCompletion();
+        goBack();
+        return true;
+    }
+
     // ── Zoom. Shared with the Output pane through KitesEditor, and
     //    deliberately not a QAction or a QShortcut, like every other key
     //    here. Works in a read-only pane: it changes nothing in the
@@ -1589,6 +1606,91 @@ QStringList Editor::documentLabels() const
     m_labelCache  = labels;
     m_labelsDirty = false;
     return m_labelCache;
+}
+
+// ═══════════════════════ label navigation ═══════════════════════════════
+
+const LabelIndex::Index &Editor::labelIndex() const
+{
+    const int revision = int(document()->revision());
+    if (revision != m_labelIndexRevision)
+    {
+        m_labelIndex         = LabelIndex::findLabels(toPlainText());
+        m_labelIndexRevision = revision;
+    }
+    return m_labelIndex;
+}
+
+void Editor::clearBackStack()
+{
+    m_backStack.clear();
+}
+
+void Editor::pushBackPosition()
+{
+    // A QTextCursor, not an offset: an edit above this point moves it with
+    // the text, so Alt+Left still lands where the reader was looking.
+    m_backStack.append(textCursor());
+    while (m_backStack.size() > maxBackStack)
+        m_backStack.removeFirst();
+}
+
+void Editor::revealOffset(int offset)
+{
+    QTextCursor cursor(document());
+    cursor.setPosition(std::clamp(offset, 0, document()->characterCount() - 1));
+    setTextCursor(cursor);
+    // Centre it when it was not already on screen, so a jump across the
+    // file does not leave the target glued to the top or bottom edge.
+    const QRect caret = cursorRect();
+    if (caret.top() < 0 || caret.bottom() > viewport()->height())
+        centerCursor();
+    else
+        ensureCursorVisible();
+}
+
+bool Editor::goToDefinitionAtCaret()
+{
+    const QString text = toPlainText();
+    const QString name = LabelIndex::nameAt(text, textCursor().position());
+    if (name.isEmpty())
+        return false;
+
+    const LabelIndex::Index  &index = labelIndex();
+    const QList<LabelIndex::Definition> found = index.definitionsOf(name);
+    if (found.isEmpty())
+    {
+        // Undefined. The Problems panel already says "Label reference not
+        // found" for this, from the assembler; this is the same fact at the
+        // caret, so the two cannot disagree.
+        QToolTip::showText(mapToGlobal(cursorRect().bottomLeft()),
+                           tr("'%1' is not defined in this file").arg(name), this);
+        return false;
+    }
+
+    // Already sitting on the one definition: nothing to jump to.
+    const int caret = textCursor().position();
+    if (found.size() == 1 && caret >= found.first().offset &&
+        caret <= found.first().offset + name.size())
+        return false;
+
+    pushBackPosition();
+    revealOffset(found.first().offset); // duplicates: the FIRST one
+    return true;
+}
+
+bool Editor::goBack()
+{
+    if (m_backStack.isEmpty())
+        return false;
+    const QTextCursor where = m_backStack.takeLast();
+    setTextCursor(where);
+    const QRect caret = cursorRect();
+    if (caret.top() < 0 || caret.bottom() > viewport()->height())
+        centerCursor();
+    else
+        ensureCursorVisible();
+    return true;
 }
 
 } // namespace Kites
