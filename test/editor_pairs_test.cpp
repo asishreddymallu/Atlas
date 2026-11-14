@@ -313,3 +313,52 @@ TEST(EditorBrackets, CommentsAndStringsAreIgnoredOnBothEnds)
     // Nor to one inside a comment.
     EXPECT_EQ(bracketOf("f( # )", 1), qMakePair(1, -1));
 }
+
+/**
+ * @brief Block-relative and whole-document calls must agree.
+ *
+ * updateBracketHighlight() hands bracketAt() the caret's BLOCK and adds the
+ * block's offset back on, because the function never looks past the end of
+ * a line anyway. That is only safe if the two calls give the same answer,
+ * which is what this asserts - over a table of lines chosen for the cases
+ * where "the line" and "the document" differ: the first line, the last line
+ * with no trailing newline, an empty line, a line whose brackets are inside
+ * a comment or a string, and a bracket whose partner is on another line.
+ */
+TEST(EditorBrackets, ABlockRelativeCallAgreesWithAWholeDocumentOne)
+{
+    const QStringList lines = {
+        "lw t0, 4(sp)",        // 0: a plain pair
+        "",                    // 1: empty
+        "addi t1, t1, 1",      // 2: no brackets
+        "sw t2, (",            // 3: an opener whose partner is on no line
+        ")  # )",              // 4: a closer, and one in a comment
+        "  .asciz \"a(b\"",    // 5: a bracket inside a string
+        "jal ra, f(x)(y)",     // 6: two pairs on one line
+        "lb t3, 0(t4)"         // 7: last line, no trailing newline
+    };
+    const QString document = lines.join('\n');
+
+    // Every caret position of every line, both ways.
+    int base = 0;
+    for (int line = 0; line < lines.size(); ++line)
+    {
+        const QString &text = lines.at(line);
+        for (int offset = 0; offset <= text.size(); ++offset)
+        {
+            const BracketPair fromBlock = bracketAt(text, offset);
+            const BracketPair fromWhole = bracketAt(document, base + offset);
+
+            const int blockOffset  = fromBlock.offset < 0 ? -1 : fromBlock.offset + base;
+            const int blockPartner = fromBlock.partner < 0 ? -1 : fromBlock.partner + base;
+
+            EXPECT_EQ(blockOffset, fromWhole.offset)
+                << "line " << line << " offset " << offset << " (\""
+                << text.toStdString() << "\")";
+            EXPECT_EQ(blockPartner, fromWhole.partner)
+                << "line " << line << " offset " << offset << " (\""
+                << text.toStdString() << "\")";
+        }
+        base += text.size() + 1;
+    }
+}

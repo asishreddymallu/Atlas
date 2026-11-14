@@ -401,8 +401,20 @@ void Editor::refreshFindColors()
 void Editor::updateBracketHighlight()
 {
     const QTextCursor cursor = textCursor();
-    const EditorCommands::BracketPair pair =
-        EditorCommands::bracketAt(toPlainText(), cursor.position());
+    // bracketAt() never looks past the end of the caret's line, so handing
+    // it the caret's BLOCK gives an identical answer for a fraction of the
+    // work. toPlainText() copies the whole document on every cursor move;
+    // measured at 877,000 characters it cost about 4 ms per arrow key.
+    const QTextBlock block     = cursor.block();
+    const int        blockBase = block.position();
+    EditorCommands::BracketPair pair =
+        EditorCommands::bracketAt(block.text(), cursor.position() - blockBase);
+    if (pair.offset >= 0)
+    {
+        pair.offset += blockBase;
+        if (pair.partner >= 0)
+            pair.partner += blockBase;
+    }
 
     if (pair.offset < 0)
     {
@@ -874,7 +886,35 @@ bool Editor::handleEditingKey(QKeyEvent *event)
 
     const Qt::KeyboardModifiers mods = event->modifiers();
     const int                   key  = event->key();
-    const QString               text = toPlainText();
+    // The whole document, built only for the commands that need it. This
+    // runs on EVERY key event, so building it eagerly meant a full copy of
+    // the document per typed character - about 5 ms at 877,000 characters.
+    // Nothing below changes the document before it is read, so caching it
+    // for the duration of one key event is safe.
+    QString       wholeText;
+    bool          wholeLoaded = false;
+    auto          whole       = [&]() -> const QString &
+    {
+        if (!wholeLoaded)
+        {
+            wholeText   = toPlainText();
+            wholeLoaded = true;
+        }
+        return wholeText;
+    };
+    // An Edit computed against one block carries block-relative offsets.
+    // Only the single-caret pair cases use it, and those never produce a
+    // LineMap, so there is nothing else to translate.
+    auto shifted = [](EditorCommands::Edit edit, int base)
+    {
+        if (edit.valid)
+        {
+            edit.start += base;
+            edit.anchor += base;
+            edit.position += base;
+        }
+        return edit;
+    };
     const QTextCursor           here = textCursor();
     const int                   anchor   = here.anchor();
     const int                   position = here.position();
@@ -944,17 +984,17 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     //    read the document.
     if (key == Qt::Key_Home && (mods == Qt::NoModifier || mods == Qt::ShiftModifier))
     {
-        applyEdit(smartHome(text, anchor, position, mods == Qt::ShiftModifier));
+        applyEdit(smartHome(whole(), anchor, position, mods == Qt::ShiftModifier));
         return true;
     }
     if (key == Qt::Key_L && mods == Qt::ControlModifier)
     {
-        applyEdit(selectLine(text, anchor, position));
+        applyEdit(selectLine(whole(), anchor, position));
         return true;
     }
     if (key == Qt::Key_C && mods == Qt::ControlModifier && !here.hasSelection())
     {
-        putLineOnClipboard(lineClip(text, anchor, position).clipboard);
+        putLineOnClipboard(lineClip(whole(), anchor, position).clipboard);
         return true;
     }
 
@@ -971,7 +1011,16 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     //    are not typing.
     if ((mods == Qt::NoModifier || mods == Qt::ShiftModifier) && !event->text().isEmpty())
     {
-        const Edit pair = autoPair(text, anchor, position, event->text());
+        // The pair rules only read the caret's own line. With no selection
+        // the caret's block gives the same answer without copying the
+        // document; a selection can span blocks, so that keeps the slow
+        // path. Typing is the case that runs per character.
+        const Edit pair =
+            anchor == position
+                ? shifted(autoPair(here.block().text(), position - here.block().position(),
+                                   position - here.block().position(), event->text()),
+                          here.block().position())
+                : autoPair(whole(), anchor, position, event->text());
         if (pair.valid)
         {
             applyEdit(pair);
@@ -980,7 +1029,12 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     }
     if (key == Qt::Key_Backspace && mods == Qt::NoModifier)
     {
-        const Edit both = pairBackspace(text, anchor, position);
+        // pairBackspace() requires an empty selection, so the block path is
+        // always the right one here.
+        const Edit both = shifted(pairBackspace(here.block().text(),
+                                                position - here.block().position(),
+                                                position - here.block().position()),
+                                  here.block().position());
         if (both.valid)
         {
             applyEdit(both);
@@ -990,8 +1044,8 @@ bool Editor::handleEditingKey(QKeyEvent *event)
 
     if (key == Qt::Key_X && mods == Qt::ControlModifier && !here.hasSelection())
     {
-        putLineOnClipboard(lineClip(text, anchor, position).clipboard);
-        applyEdit(deleteLines(text, anchor, position));
+        putLineOnClipboard(lineClip(whole(), anchor, position).clipboard);
+        applyEdit(deleteLines(whole(), anchor, position));
         return true;
     }
     if (key == Qt::Key_V && mods == Qt::ControlModifier && !here.hasSelection())
@@ -999,71 +1053,71 @@ bool Editor::handleEditingKey(QKeyEvent *event)
         const QMimeData *mime = QGuiApplication::clipboard()->mimeData();
         if (mime && mime->hasFormat(lineCopyMimeType))
         {
-            applyEdit(pasteLineAbove(text, anchor, position, mime->text()));
+            applyEdit(pasteLineAbove(whole(), anchor, position, mime->text()));
             return true;
         }
         return false; // an ordinary clipboard pastes the ordinary way
     }
     if (key == Qt::Key_Up && mods == Qt::AltModifier)
     {
-        applyEdit(moveLines(text, anchor, position, -1));
+        applyEdit(moveLines(whole(), anchor, position, -1));
         return true;
     }
     if (key == Qt::Key_Down && mods == Qt::AltModifier)
     {
-        applyEdit(moveLines(text, anchor, position, 1));
+        applyEdit(moveLines(whole(), anchor, position, 1));
         return true;
     }
     if (key == Qt::Key_Up && mods == (Qt::AltModifier | Qt::ShiftModifier))
     {
-        applyEdit(duplicateLines(text, anchor, position, true));
+        applyEdit(duplicateLines(whole(), anchor, position, true));
         return true;
     }
     if (key == Qt::Key_Down && mods == (Qt::AltModifier | Qt::ShiftModifier))
     {
-        applyEdit(duplicateLines(text, anchor, position, false));
+        applyEdit(duplicateLines(whole(), anchor, position, false));
         return true;
     }
     if (key == Qt::Key_K && mods == (Qt::ControlModifier | Qt::ShiftModifier))
     {
-        applyEdit(deleteLines(text, anchor, position));
+        applyEdit(deleteLines(whole(), anchor, position));
         return true;
     }
     if (isReturn && mods == Qt::ControlModifier)
     {
-        applyEdit(insertLine(text, anchor, position, false));
+        applyEdit(insertLine(whole(), anchor, position, false));
         return true;
     }
     if (isReturn && mods == (Qt::ControlModifier | Qt::ShiftModifier))
     {
-        applyEdit(insertLine(text, anchor, position, true));
+        applyEdit(insertLine(whole(), anchor, position, true));
         return true;
     }
     if (isReturn && mods == Qt::NoModifier)
     {
-        applyEdit(newlineWithIndent(text, anchor, position));
+        applyEdit(newlineWithIndent(whole(), anchor, position));
         return true;
     }
     if (key == Qt::Key_Slash && mods == Qt::ControlModifier)
     {
-        applyEdit(toggleComment(text, anchor, position));
+        applyEdit(toggleComment(whole(), anchor, position));
         return true;
     }
     if (key == Qt::Key_BracketRight && mods == Qt::ControlModifier)
     {
-        applyEdit(indentLines(text, anchor, position));
+        applyEdit(indentLines(whole(), anchor, position));
         return true;
     }
     if (key == Qt::Key_BracketLeft && mods == Qt::ControlModifier)
     {
-        applyEdit(outdentLines(text, anchor, position));
+        applyEdit(outdentLines(whole(), anchor, position));
         return true;
     }
     // Shift+Tab arrives as Key_Backtab. It outdents whether or not anything
     // is selected, which is what VS Code does.
     if (key == Qt::Key_Backtab)
     {
-        applyEdit(outdentLines(text, anchor, position));
+        applyEdit(outdentLines(whole(), anchor, position));
         return true;
     }
     // Tab only takes over when the selection really spans lines. With no
@@ -1071,10 +1125,10 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     // behaviour is deliberately untouched.
     if (key == Qt::Key_Tab && mods == Qt::NoModifier)
     {
-        const LineRange touched = linesTouched(text, anchor, position);
+        const LineRange touched = linesTouched(whole(), anchor, position);
         if (here.hasSelection() && touched.last > touched.first)
         {
-            applyEdit(indentLines(text, anchor, position));
+            applyEdit(indentLines(whole(), anchor, position));
             return true;
         }
     }

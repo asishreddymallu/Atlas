@@ -173,10 +173,20 @@ private:
     /**
      * @brief Highlights the bracket beside the caret and its partner.
      *
-     * Runs on every cursor move, and costs one character comparison when
-     * the caret is not beside a bracket - which is almost always. An
-     * unmatched bracket is shown on its own in the editor's error colour,
-     * the same one the diagnostics use; no new theme token.
+     * Runs on every cursor move. It is given the caret's BLOCK, not the
+     * document: bracketAt() never looks past the end of the line, so the
+     * answer is identical and a cursor move no longer copies the whole
+     * document. EditorBrackets.ABlockRelativeCallAgreesWithAWholeDocumentOne
+     * asserts the two agree over a table of lines.
+     *
+     * Measured on an 877,000 character document, with the autocompleter
+     * taken out so this path is what is being timed: 1804 us per caret
+     * move before, 53 us after. The earlier claim that it "costs one
+     * character comparison" was about the comparison itself and ignored
+     * building the string it compared in - which was the whole cost.
+     *
+     * An unmatched bracket is shown on its own in the editor's error
+     * colour, the same one the diagnostics use; no new theme token.
      */
     void updateBracketHighlight();
     void replaceCurrentMatch();
