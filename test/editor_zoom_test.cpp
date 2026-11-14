@@ -181,9 +181,23 @@ TEST(EditorZoom, EachKeyMovesTheFontByOneStepAndCtrlZeroReturns)
 
 TEST(EditorZoom, ItClampsAtBothEnds)
 {
+    // The floor is the HIGHER of minZoomDelta steps and whatever delta
+    // reaches minRenderedSize, so what it clamps to depends on the
+    // configured size. Pin it: at 11 pt the floor is the step limit, which
+    // is the case this test is about. Without pinning, the expectation
+    // changes with whatever the settings file happens to hold - and since
+    // FontManager writes through to that file, "whatever it happens to
+    // hold" can be left behind by something else entirely.
+    FontManager &fonts = FontManager::getInstance();
+    const int    restore = fonts.currentFont().pointSize();
+    fonts.setSize(11);
+    QApplication::processEvents();
+
     Bench bench;
     bench.place("one", 0, 0);
     const int base = fontSizeOf(bench.editor);
+    ASSERT_GE(base + Editor::minZoomDelta, Editor::minRenderedSize)
+        << "the pinned size no longer makes the step limit the binding one";
 
     for (int i = 0; i < 40; ++i)
         sendKey(&bench.editor, Qt::Key_Plus, Qt::ControlModifier, "+");
@@ -195,6 +209,37 @@ TEST(EditorZoom, ItClampsAtBothEnds)
     EXPECT_EQ(bench.editor.zoomDelta(), Editor::minZoomDelta) << "zoom out did not clamp";
     EXPECT_EQ(fontSizeOf(bench.editor), base + Editor::minZoomDelta);
     EXPECT_GT(fontSizeOf(bench.editor), 0) << "the font went to nothing";
+
+    fonts.setSize(restore);
+    QApplication::processEvents();
+}
+
+/**
+ * @brief The floor rises when the configured size is small.
+ *
+ * The other half of the clamp, and the half that was wrong: six steps
+ * down from 8 pt is 2 pt. Whatever the steps say, nothing may render
+ * below minRenderedSize.
+ */
+TEST(EditorZoom, TheFloorRisesWithASmallConfiguredSize)
+{
+    FontManager &fonts = FontManager::getInstance();
+    const int    restore = fonts.currentFont().pointSize();
+
+    Bench bench;
+    bench.place("one", 0, 0);
+    for (int configured : {6, 8, 11})
+    {
+        fonts.setSize(configured);
+        QApplication::processEvents();
+        for (int i = 0; i < 40; ++i)
+            sendKey(&bench.editor, Qt::Key_Minus, Qt::ControlModifier, "-");
+        EXPECT_GE(fontSizeOf(bench.editor), Editor::minRenderedSize)
+            << "a configured " << configured << " pt rendered below the floor";
+        sendKey(&bench.editor, Qt::Key_0, Qt::ControlModifier, "0");
+    }
+    fonts.setSize(restore);
+    QApplication::processEvents();
 }
 
 TEST(EditorZoom, TheGutterFollowsTheFont)
