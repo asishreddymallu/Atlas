@@ -647,3 +647,49 @@ TEST(BreakpointKeysReadOnly, AReadOnlyPaneNeitherGainsNorLosesThem)
             << "breakpoints changed by " << row.name;
     }
 }
+
+TEST(BreakpointKeysInvariants, ALineNumberPastTheEndIsDroppedWhenItArrives)
+{
+    // normaliseBreakpoints() clamps to the document, and this is the input
+    // that reaches that clamp: toggleBreakpointAtLine() is public and
+    // pushes whatever number it is handed before normalising. The gutter
+    // only ever passes a line it drew, but nothing in the signature says so.
+    Bench bench;
+    bench.place("one\ntwo\nthree", 0, 0, {});
+
+    bench.editor.toggleBreakpointAtLine(99);
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{}))
+        << "a line past the end of the document was kept";
+
+    bench.editor.toggleBreakpointAtLine(0);
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{})) << "line 0 was kept";
+
+    bench.editor.toggleBreakpointAtLine(3);
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{3})) << "a line that exists was dropped";
+}
+
+TEST(BreakpointKeysDocumentSwap, AnOutOfRangeNumberGoesOnTheFirstEditAfterTheLoad)
+{
+    // The other way to reach the clamp. setBreakpoints() deliberately keeps
+    // the numbers it is given, in range or not - that is what loading a
+    // shorter file has always done. The first EDIT then recomputes from the
+    // anchors, and a number with no line to anchor to goes.
+    Bench bench;
+    bench.place("one\ntwo\nthree\nfour", 0, 0, {});
+    bench.editor.setBreakpoints({2, 9});
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 9}))
+        << "setBreakpoints should keep what it is given";
+
+    bench.editor.setPlainText("a\nb");
+    QApplication::processEvents();
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2, 9}))
+        << "loading a file should still leave the numbers alone";
+
+    // Now a real edit.
+    QTextCursor cursor = bench.editor.textCursor();
+    cursor.setPosition(0);
+    bench.editor.setTextCursor(cursor);
+    sendKey(&bench.editor, Qt::Key_X, Qt::NoModifier, "X");
+    EXPECT_EQ(bench.breakpoints(), (QList<int>{2}))
+        << "the out-of-range number survived an edit";
+}
