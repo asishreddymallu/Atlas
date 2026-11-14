@@ -21,10 +21,12 @@
  */
 #include "ui/editor_tab/editor_commands.h"
 #include "ui/editor_tab/main_editor.h"
+#include "ui/main_window/main_window.h"
 
 #include <gtest/gtest.h>
 
 #include <QAbstractItemView>
+#include <QAction>
 #include <QApplication>
 #include <QClipboard>
 #include <QKeyEvent>
@@ -672,4 +674,219 @@ TEST(EditorKeysWiring, AnOpenCompletionPopupDoesNotSwallowTheModifiedKeys)
     EXPECT_EQ(read(editor).text, before + "\n")
         << "Ctrl+Enter was swallowed (completion popup "
         << (popupShown ? "was" : "was not") << " open)";
+}
+
+// ═══════════════════ the Output pane, and the shortcut set ════════════════
+
+namespace
+{
+QPlainTextEdit *paneNamed(MainWindow &window, const char *objectName)
+{
+    for (QPlainTextEdit *pane : window.findChildren<QPlainTextEdit *>())
+        if (pane->objectName() == QLatin1String(objectName))
+            return pane;
+    return nullptr;
+}
+} // namespace
+
+TEST(EditorOutputPane, NoTextChangingKeyReachesIt)
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    QApplication::processEvents();
+
+    QPlainTextEdit *output = paneNamed(window, "disassemblyTextEdit");
+    ASSERT_NE(output, nullptr);
+    EXPECT_TRUE(output->isReadOnly()) << "the Output pane is supposed to be read-only";
+
+    const QString original = "  addi t0, x0, 5\n  add t1, t0, t0\n  sub t2, t1, t0";
+    struct Row { Qt::Key key; Qt::KeyboardModifiers mods; const char *name; };
+    const QList<Row> rows = {
+        {Qt::Key_Up, Qt::AltModifier, "move up"},
+        {Qt::Key_Down, Qt::AltModifier, "move down"},
+        {Qt::Key_Up, Qt::AltModifier | Qt::ShiftModifier, "copy up"},
+        {Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier, "copy down"},
+        {Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier, "delete line"},
+        {Qt::Key_Return, Qt::NoModifier, "enter"},
+        {Qt::Key_Return, Qt::ControlModifier, "insert below"},
+        {Qt::Key_Return, Qt::ControlModifier | Qt::ShiftModifier, "insert above"},
+        {Qt::Key_Slash, Qt::ControlModifier, "toggle comment"},
+        {Qt::Key_BracketRight, Qt::ControlModifier, "indent"},
+        {Qt::Key_BracketLeft, Qt::ControlModifier, "outdent"},
+        {Qt::Key_Backtab, Qt::ShiftModifier, "backtab"},
+        {Qt::Key_Tab, Qt::NoModifier, "tab"},
+        {Qt::Key_X, Qt::ControlModifier, "cut line"},
+        {Qt::Key_V, Qt::ControlModifier, "paste"},
+    };
+    for (const Row &row : rows)
+    {
+        place(output, original, 0, 0);
+        sendKey(output, row.key, row.mods);
+        EXPECT_EQ(read(output).text, original) << "the Output pane was changed by " << row.name;
+    }
+
+    // Ctrl+A and Ctrl+C still have to work there.
+    place(output, original, 0, 0);
+    sendKey(output, Qt::Key_A, Qt::ControlModifier);
+    EXPECT_EQ(output->textCursor().selectedText().size(), original.size())
+        << "Ctrl+A no longer selects all in the Output pane";
+    sendKey(output, Qt::Key_C, Qt::ControlModifier);
+    EXPECT_FALSE(QApplication::clipboard()->text().isEmpty())
+        << "Ctrl+C no longer copies from the Output pane";
+    EXPECT_EQ(read(output).text, original);
+}
+
+TEST(EditorShortcutSet, NothingNewBecameAnApplicationShortcut)
+{
+    MainWindow window;
+
+    // The editing keys are handled in Editor::keyPressEvent on purpose. A
+    // QAction would make this eight; a QShortcut would be invisible to the
+    // count below while still being able to swallow a key before the editor
+    // saw it. Both are asserted against.
+    QStringList sequences;
+    for (QAction *action : window.findChildren<QAction *>())
+        if (!action->shortcut().isEmpty())
+            sequences << action->shortcut().toString();
+    EXPECT_EQ(sequences.size(), 7) << "the application-level shortcut count moved";
+    QStringList distinct = sequences;
+    distinct.removeDuplicates();
+    EXPECT_EQ(distinct.size(), sequences.size()) << "two actions share a key sequence";
+
+    int shortcutObjects = 0;
+    for (QObject *child : window.findChildren<QObject *>())
+        if (QLatin1String(child->metaObject()->className()) == QLatin1String("QShortcut"))
+            ++shortcutObjects;
+    EXPECT_EQ(shortcutObjects, 0) << "a QShortcut was added";
+
+    // And none of the editing keys is owned by an action, which is what lets
+    // the editor see them without any ShortcutOverride handling.
+    const QList<QKeySequence> mine = {
+        QKeySequence(Qt::CTRL | Qt::Key_Slash),        QKeySequence(Qt::CTRL | Qt::Key_L),
+        QKeySequence(Qt::CTRL | Qt::Key_BracketRight), QKeySequence(Qt::CTRL | Qt::Key_BracketLeft),
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_K), QKeySequence(Qt::ALT | Qt::Key_Up),
+        QKeySequence(Qt::ALT | Qt::Key_Down),          QKeySequence(Qt::CTRL | Qt::Key_Return),
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Return)};
+    for (const QKeySequence &sequence : mine)
+        for (QAction *action : window.findChildren<QAction *>())
+            EXPECT_NE(action->shortcut(), sequence)
+                << "'" << action->text().toStdString() << "' took "
+                << sequence.toString().toStdString();
+}
+
+// ═══════════════════ the keys Qt already gets right ═══════════════════════
+//
+// Pinned, not re-implemented. If Qt's behaviour ever moves, these say so
+// before a user does.
+
+TEST(EditorNativeKeys, UndoRedoAndTheRedoAlternative)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    place(editor, "ab", 2, 2);
+    for (QChar c : QString("XY"))
+        sendKey(editor, Qt::Key(c.unicode()), Qt::NoModifier, QString(c));
+    EXPECT_EQ(read(editor).text, QString("abXY"));
+
+    sendKey(editor, Qt::Key_Z, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("ab")) << "Ctrl+Z";
+    sendKey(editor, Qt::Key_Y, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("abXY")) << "Ctrl+Y";
+    sendKey(editor, Qt::Key_Z, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("ab"));
+    sendKey(editor, Qt::Key_Z, Qt::ControlModifier | Qt::ShiftModifier);
+    EXPECT_EQ(read(editor).text, QString("abXY")) << "Ctrl+Shift+Z";
+}
+
+TEST(EditorNativeKeys, SelectionCopyCutAndPaste)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    place(editor, "abcd", 0, 0);
+    sendKey(editor, Qt::Key_A, Qt::ControlModifier);
+    EXPECT_EQ(editor->textCursor().selectedText(), QString("abcd")) << "Ctrl+A";
+
+    place(editor, "abcd", 1, 3);
+    sendKey(editor, Qt::Key_C, Qt::ControlModifier);
+    EXPECT_EQ(QApplication::clipboard()->text(), QString("bc")) << "Ctrl+C";
+
+    place(editor, "abcd", 1, 3);
+    sendKey(editor, Qt::Key_X, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("ad")) << "Ctrl+X";
+
+    // Set explicitly, so the case does not depend on what the cut above
+    // happened to leave behind.
+    auto *mime = new QMimeData;
+    mime->setText("XY");
+    QApplication::clipboard()->setMimeData(mime);
+    place(editor, "abcd", 1, 1);
+    sendKey(editor, Qt::Key_V, Qt::ControlModifier);
+    EXPECT_EQ(read(editor).text, QString("aXYbcd")) << "Ctrl+V";
+}
+
+TEST(EditorNativeKeys, MovementAndWordDeletion)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    struct Row
+    {
+        const char           *name;
+        QString               before;
+        int                   anchor;
+        int                   position;
+        Qt::Key               key;
+        Qt::KeyboardModifiers mods;
+        QString               after;
+        int                   newAnchor;
+        int                   newPosition;
+    };
+    const QList<Row> rows = {
+        {"End", "    abc", 0, 0, Qt::Key_End, Qt::NoModifier, "    abc", 7, 7},
+        {"Ctrl+Home", "ab\ncd", 5, 5, Qt::Key_Home, Qt::ControlModifier, "ab\ncd", 0, 0},
+        {"Ctrl+End", "ab\ncd", 0, 0, Qt::Key_End, Qt::ControlModifier, "ab\ncd", 5, 5},
+        {"Ctrl+Left", "foo bar", 7, 7, Qt::Key_Left, Qt::ControlModifier, "foo bar", 4, 4},
+        {"Ctrl+Right", "foo bar", 0, 0, Qt::Key_Right, Qt::ControlModifier, "foo bar", 4, 4},
+        {"Ctrl+Shift+Left", "foo bar", 7, 7, Qt::Key_Left,
+         Qt::ControlModifier | Qt::ShiftModifier, "foo bar", 7, 4},
+        {"Ctrl+Shift+Right", "foo bar", 0, 0, Qt::Key_Right,
+         Qt::ControlModifier | Qt::ShiftModifier, "foo bar", 0, 4},
+        {"Shift+Right", "ab", 0, 0, Qt::Key_Right, Qt::ShiftModifier, "ab", 0, 1},
+        {"Shift+Down", "ab\ncd", 0, 0, Qt::Key_Down, Qt::ShiftModifier, "ab\ncd", 0, 3},
+        {"Ctrl+Backspace", "foo bar", 7, 7, Qt::Key_Backspace, Qt::ControlModifier, "foo ", 4, 4},
+        {"Ctrl+Delete", "foo bar", 0, 0, Qt::Key_Delete, Qt::ControlModifier, "bar", 0, 0},
+    };
+    for (const Row &row : rows)
+    {
+        place(editor, row.before, row.anchor, row.position);
+        sendKey(editor, row.key, row.mods);
+        const Where got = read(editor);
+        EXPECT_EQ(got.text, row.after) << row.name;
+        EXPECT_EQ(got.anchor, row.newAnchor) << row.name << " anchor";
+        EXPECT_EQ(got.position, row.newPosition) << row.name << " position";
+    }
+}
+
+TEST(EditorNativeKeys, PageUpAndPageDownMoveTheCaret)
+{
+    Bench   bench;
+    Editor *editor = &bench.editor;
+
+    QStringList many;
+    for (int i = 0; i < 200; ++i)
+        many << QString("line %1").arg(i);
+    const QString text = many.join('\n');
+
+    place(editor, text, 0, 0);
+    sendKey(editor, Qt::Key_PageDown);
+    const int afterDown = read(editor).position;
+    EXPECT_GT(afterDown, 0) << "PageDown did not move the caret";
+    EXPECT_EQ(read(editor).text, text) << "PageDown changed the document";
+
+    sendKey(editor, Qt::Key_PageUp);
+    EXPECT_LT(read(editor).position, afterDown) << "PageUp did not move the caret back";
+    EXPECT_EQ(read(editor).text, text) << "PageUp changed the document";
 }
