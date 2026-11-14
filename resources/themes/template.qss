@@ -373,6 +373,15 @@ QFrame#ribbonInnerSeparator {
 #ribbonPanel QToolButton#ribbonOverflowButton:focus {
     border: 1px solid {{accent}};
 }
+/* One chevron, not two. The button sets Qt::DownArrow AND InstantPopup, and
+ * the style draws BOTH - the arrow type in the button's icon area and a menu
+ * indicator in its own corner - so it came out as a pair of small triangles
+ * offset diagonally. The arrow type is the one that is centred and sized
+ * with the button, so the indicator is the one that goes. */
+#ribbonPanel QToolButton#ribbonOverflowButton::menu-indicator {
+    image: none;
+    width: 0px;
+}
 
 /* Small ribbon buttons stack in columns, so their height has to come down to
  * the icon plus a hairline: the generic button rule's 5 px of vertical

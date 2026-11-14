@@ -52,6 +52,13 @@ RibbonBar::RibbonBar(QWidget *parent) : QWidget(parent)
     // the icon set has a picture for.
     m_chevron = new QToolButton(panel);
     m_chevron->setObjectName("ribbonOverflowButton");
+    //
+    // The arrow type and InstantPopup together make the style draw TWO
+    // arrows - the arrow type where the icon would go, and a menu indicator
+    // in the button's own corner - so the stylesheet suppresses the
+    // indicator (`#ribbonOverflowButton::menu-indicator`). The arrow type is
+    // the one that is centred and scaled with the button, so it is the one
+    // that stays.
     m_chevron->setArrowType(Qt::DownArrow);
     m_chevron->setPopupMode(QToolButton::InstantPopup);
     m_chevron->setAutoRaise(true);
