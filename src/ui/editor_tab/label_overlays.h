@@ -2,6 +2,7 @@
 
 #include "ui/editor_tab/label_index.h"
 
+#include <QColor>
 #include <QList>
 #include <QWidget>
 
@@ -60,6 +61,16 @@ class ReferencesBar : public QWidget
     bool handleKey(QKeyEvent *event);
 
     static constexpr int maxVisibleRows = 10;
+
+    /// The five colours the list draws with, for the contrast test. Derived
+    /// from existing theme colours; no new token. Exposed for the same
+    /// reason CompletionPopup::colours() is: the harness must measure what
+    /// is painted, not a second copy of the derivation.
+    struct Colours
+    {
+        QColor page, border, text, dim, selected;
+    };
+    static Colours colours();
 
   signals:
     void picked(int offset);

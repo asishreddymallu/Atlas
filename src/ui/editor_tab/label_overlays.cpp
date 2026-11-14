@@ -3,6 +3,7 @@
 #include "ui/editor_tab/goto_line_bar.h" // repositionOverlay, overlayMargin
 #include "ui/theme/theme_manager.h"
 
+#include <QCoreApplication>
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QLabel>
@@ -22,6 +23,25 @@ namespace
 constexpr int framePad = 1;
 constexpr int rowPadY  = 3;
 constexpr int rowPadX  = 6;
+
+/// The header's full text. One definition, so the width that is reserved
+/// for it and the text that is drawn can never be different strings - they
+/// were, and at max zoom the header read "loop - 4" with `found` clipped.
+QString headerText(const QString &name, int count)
+{
+    return QCoreApplication::translate("Kites::ReferencesBar", "%1 - %2 found")
+        .arg(name)
+        .arg(count);
+}
+
+/// Width of the line-number gutter inside the list, at `fm`.
+int numberColumn(const QFontMetrics &fm, const QList<int> &lines)
+{
+    int widest = 0;
+    for (int line : lines)
+        widest = std::max(widest, fm.horizontalAdvance(QString::number(line + 1)));
+    return widest + 8;
+}
 
 QColor blend(const QColor &base, const QColor &tint, double amount)
 {
@@ -56,6 +76,12 @@ ReferencesBar::ReferencesBar(QWidget *parent) : QWidget(parent)
     setObjectName(QStringLiteral("referencesBar"));
     setFocusPolicy(Qt::NoFocus); // the editor keeps the caret
     hide();
+}
+
+ReferencesBar::Colours ReferencesBar::colours()
+{
+    const Palette p = paletteNow();
+    return {p.page, p.border, p.text, p.dim, p.selected};
 }
 
 void ReferencesBar::setRows(const QList<Row> &rows, const QString &name)
@@ -127,11 +153,21 @@ void ReferencesBar::reposition(const QWidget *viewport, int topOffset)
     if (!viewport || m_rows.isEmpty())
         return;
     const QFontMetrics fm(font());
-    int widest = fm.horizontalAdvance(m_name) + 80;
+    QList<int>         lines;
     for (const Row &row : m_rows)
-        widest = std::max(widest, fm.horizontalAdvance(QStringLiteral("%1  %2")
-                                                           .arg(row.line + 1)
-                                                           .arg(row.text)));
+        lines << row.line;
+    // The header is measured, not guessed at with a constant: at max zoom a
+    // guess of +80 clipped `found` off the end of it.
+    int widest = fm.horizontalAdvance(headerText(m_name, int(m_rows.size())));
+    const int numbers = numberColumn(fm, lines);
+    const int tag     = fm.horizontalAdvance(tr("def")) + rowPadX;
+    for (const Row &row : m_rows)
+    {
+        // Room for the `def` tag as well, or it is painted over the text -
+        // which it was, at max zoom.
+        widest = std::max(widest, numbers + fm.horizontalAdvance(row.text) +
+                                      (row.isDefinition ? tag : 0));
+    }
     const int available = viewport->width() - 2 * overlayMargin;
     const int width     = std::clamp(widest + 2 * (rowPadX + framePad), 120, available);
     const int visible   = std::min(int(m_rows.size()), maxVisibleRows);
@@ -182,11 +218,17 @@ void ReferencesBar::paintEvent(QPaintEvent *)
 
     const QFontMetrics fm(font());
     const int          rh = rowHeight();
+    QList<int>         lines;
+    for (const Row &row : m_rows)
+        lines << row.line;
 
-    // Header: what is being listed and how many.
+    // Header: what is being listed and how many. Elided rather than
+    // clipped, for the case where the viewport is too narrow to hold it.
     painter.setPen(palette.dim);
     painter.drawText(framePad + rowPadX, framePad + rowPadY + fm.ascent(),
-                     tr("%1 - %2 found").arg(m_name).arg(m_rows.size()));
+                     fm.elidedText(headerText(m_name, int(m_rows.size())),
+                                   Qt::ElideRight,
+                                   std::max(0, width() - 2 * (framePad + rowPadX))));
 
     const int visible =
         std::min(int(m_rows.size()), std::max(0, (height() - 2 * framePad) / rh - 1));
@@ -200,20 +242,33 @@ void ReferencesBar::paintEvent(QPaintEvent *)
         if (index == m_current)
             painter.fillRect(band, palette.selected);
 
+        // The dim colour is for the UNSELECTED rows only. Measured against
+        // the selected band it is 2.69-3.46 across the four themes, under
+        // AA; the selected row uses the full text colour, which is 5.33 at
+        // worst. So dim is never painted on that ground.
+        const QColor secondary = index == m_current ? palette.text : palette.dim;
+
         const QString number = QString::number(row.line + 1);
-        painter.setPen(palette.dim);
+        painter.setPen(secondary);
         painter.drawText(band.left() + rowPadX, band.top() + rowPadY + fm.ascent(), number);
 
-        const int textLeft = band.left() + rowPadX + fm.horizontalAdvance(QStringLiteral("0000")) + 8;
+        // The same column width reposition() reserved, from the same
+        // function - a hard-coded "0000" was wider than the numbers at a
+        // small font and narrower than them at a large one.
+        const int textLeft = band.left() + rowPadX + numberColumn(fm, lines);
+        const QString tag      = tr("def");
+        const int     tagWidth = row.isDefinition
+                                     ? fm.horizontalAdvance(tag) + rowPadX
+                                     : 0;
         painter.setPen(palette.text);
-        const QString shown = fm.elidedText(row.text, Qt::ElideRight,
-                                            std::max(0, band.right() - rowPadX - textLeft));
+        const QString shown =
+            fm.elidedText(row.text, Qt::ElideRight,
+                          std::max(0, band.right() - rowPadX - tagWidth - textLeft));
         painter.drawText(textLeft, band.top() + rowPadY + fm.ascent(), shown);
 
         if (row.isDefinition)
         {
-            painter.setPen(palette.dim);
-            const QString tag = tr("def");
+            painter.setPen(secondary);
             painter.drawText(band.right() - rowPadX - fm.horizontalAdvance(tag),
                              band.top() + rowPadY + fm.ascent(), tag);
         }
