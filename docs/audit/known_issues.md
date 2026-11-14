@@ -1510,3 +1510,38 @@ out uncoloured.
 
 This is the same constraint as the contrast and zoom work — see the note
 in AGENTS.md — reached from a different direction.
+
+---
+
+## 50. The index and the lexer disagree about which token is the reference on a malformed line
+
+`alphabetprobe` found two lines where the two agree about how far to scan
+but not about **which** token is the label reference:
+
+| Line | Lexer | Index |
+|---|---|---|
+| `    , j loop` | `j` is the reference — an identifier straight after a `COMMA` is one, so `loop` follows a `LABEL_REF` and is not | `loop` is the reference |
+| `    j j loop` | the second `j` is the reference, for the same reason after an `OPCODE` | `loop` is the reference |
+
+Both come from the same rule, which is the one the whole index is built
+on: an identifier in operand position — straight after an opcode or a
+comma — is a label reference. The lexer applies it to the *immediately*
+preceding token and then stops; the index keeps `afterCommaOrOpcode` set
+for the rest of the line, so every later identifier is still "in operand
+position".
+
+**Not changed.** Both lines are malformed: a leading comma is a syntax
+error, and `j j loop` passes a mnemonic where an operand belongs. Making
+the index drop the flag after the first operand would change how it reads
+`beq x1, x2, loop` — three operands, the last of which is the reference —
+which is the single most common real form. The gain is agreement on lines
+that do not assemble; the risk is the main path.
+
+**What it costs.** On such a line the index may report `loop` as a
+reference where the assembler reports `j`. A rename of `loop` would then
+rewrite a line the assembler rejects anyway.
+
+Recorded because the probe found it and because it is the only known
+place where the two disagree at all; `alphabetprobe` prints it on every
+run as `[reference differs on the plain line: ...]` so it cannot quietly
+grow.

@@ -397,6 +397,63 @@ A `;` line therefore does not round-trip: `Ctrl+/` twice turns
 `; j loop` into `# j loop`. That is deliberate — `#` is what the corpus
 uses — and it is written down here rather than left to be discovered.
 
+### The alphabet, measured character by character
+
+`Lexer::getNextToken()` ends in `else { skipLine(); return INVALID; }`, so
+**any** character it has no branch for makes it abandon the rest of the
+line. `LabelIndex::tokenise()` has to agree, and the list was arrived at
+by asking the real lexer rather than by reading the dispatch:
+`atlas-verify/harness/alphabetprobe` runs it over all 95 printable ASCII
+codes, `\t` `\r` `\f` `\v`, and five non-ASCII, twice each — once with
+the character in front of the instruction and once on a well-formed line
+with a label definition after it, which is what separates "abandons the
+line" from "is itself a token".
+
+**The lexer carries on past 73 of the 104 probed characters:**
+
+| | |
+|---|---|
+| letters | `A`–`Z`, `a`–`z` (ASCII only) |
+| digits | `0`–`9` |
+| whitespace | space, `\t`, `\r`, `\f`, `\v` |
+| punctuation it has a branch for | `_` `,` `"` `(` `)` `.` `-` |
+
+**It abandons the line on the other 31:**
+
+```
+!  "  #  $  %  &  '  *  +  /  :  ;  <  =  >  ?  @  [  \  ]  ^  `  {  |  }  ~
+U+00E9 (é)   U+4E2D (中)   U+00A0 (NBSP)   U+FEFF (BOM)   U+1F600 (emoji)
+```
+
+(`"`, `#` and `;` are on that list because they end the line in their own
+way — a string and a comment — rather than by `skipLine()`.)
+
+**Disagreements with the index: 0.** In particular there is **no**
+character where the lexer carries on and the index abandons, which is the
+direction that would matter: that would be a *missed reference*, and a
+rename would then leave that use pointing at a name that no longer
+exists.
+
+Getting there took two fixes, both in the harmless direction (the index
+reporting a reference the assembler never sees):
+
+- **`:`** — `identifier()` swallows a colon **attached** to a name, so the
+  only colon that reaches the dispatch is a bare one, and there is no
+  branch for it. The predicate allowed `:` unconditionally; it is now
+  allowed only while a token is open, which is exactly the attached case.
+- **non-ASCII** — the lexer tests *bytes* with `std::isalpha` /
+  `isdigit` / `isspace`, so `é`, `中`, a no-break space, a BOM and an
+  emoji are all non-letters to it. `QChar::isLetterOrNumber()` and
+  `QChar::isSpace()` say the opposite. The predicate is now ASCII-only.
+
+Two differences remain that are **not** about abandoning the line, and
+are left alone: on `    , j loop` the lexer makes `j` the reference,
+because an identifier straight after a comma is one, and `loop` is then
+not; the index calls `loop` the reference. `    j j loop` is the same
+shape. Both lines are malformed, and the operand-position rule that
+produces the difference is the one the whole index is built on. See
+`known_issues` 50.
+
 ### Strings, and the things the lexer gives up on
 
 Two more places the editor disagreed with the lexer, both found while
