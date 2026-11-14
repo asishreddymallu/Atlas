@@ -1,5 +1,4 @@
 #include "main_editor.h"
-#include "ui/common/gutter_column.h"
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QMimeData>
@@ -179,11 +178,14 @@ void Editor::clearBreakpoints()
 {
     m_breakPoints.clear();
     m_breakpointAnchors.clear();
-    // The dots live on a gutter column, which is a sibling widget of the
-    // viewport and does not repaint just because the editor does.
-    for (GutterColumn *column : findChildren<GutterColumn *>())
-        column->update();
     viewport()->update();
+    // No explicit gutter repaint here, although an earlier version of this
+    // had one and a commit message claimed it was needed. Measured: both
+    // callers already cause it. Opening a file sets the document, which
+    // repaints the gutter anyway, and the gutter's own "Remove All" calls
+    // update() on itself straight after. A negative control that deleted
+    // the gutter repaint left every case passing, which is what a line no
+    // caller needs looks like.
 }
 
 std::vector<uint64_t> Editor::getBreakpoints() const

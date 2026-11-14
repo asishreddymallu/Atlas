@@ -23,6 +23,7 @@
 
 #include <QApplication>
 #include <QPlainTextEdit>
+#include <QEvent>
 #include <QWidget>
 
 using namespace Kites;
@@ -112,9 +113,26 @@ TEST(OpenClearsBreakpoints, TheDotStopsBeingDrawn)
     ASSERT_GT(withDot, 0) << "the gutter drew no dot for a breakpoint, so this case "
                              "could not tell a repaint from a blank gutter";
 
+    // Count the paint events the gutter is actually sent. grab() repaints
+    // on demand, so the pixels alone cannot tell "it was asked to repaint"
+    // from "it was repainted because something looked at it".
+    struct PaintCounter : QObject
+    {
+        int count {0};
+        bool eventFilter(QObject *, QEvent *event) override
+        {
+            if (event->type() == QEvent::Paint)
+                ++count;
+            return false;
+        }
+    } counter;
+    gutter->installEventFilter(&counter);
+
     bench.tab->loadFileContent("x\ny\n");
     QApplication::processEvents();
+    gutter->removeEventFilter(&counter);
 
+    EXPECT_GT(counter.count, 0) << "the gutter was never repainted";
     EXPECT_EQ(inkPixels(), 0)
         << "the gutter still draws a dot after the breakpoints went (was " << withDot
         << " pixels)";
