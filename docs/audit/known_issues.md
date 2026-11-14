@@ -751,3 +751,71 @@ Recorded because they changed reported columns on directive lines.
   the count never grows.
 - **Not "fixed"**, because there is no obviously right answer for which of
   several new lines a breakpoint belongs to. It is written down instead.
+
+---
+
+## 26. A new `Q_OBJECT` header can end up with no moc
+
+- **Where**: the build, not the code. `CMakeLists.txt` globs sources; Qt's
+  AUTOMOC generates `moc_<name>.cpp` for headers carrying `Q_OBJECT`.
+- **What**: adding a new header with `Q_OBJECT` can leave AUTOMOC listing it
+  in `AutogenInfo.json` while generating no moc for it. The build then fails
+  at link time with `undefined reference to Kites::X::staticMetaObject` and
+  to each of the class's signals — an error that names the missing *symbol*,
+  not the missing *file*, which is what makes it cost an hour.
+- **The cure**: delete the build directory's autogen folder and reconfigure.
+
+  ```
+  rm -rf build/kites_core_autogen build/CMakeFiles/kites_core_autogen.dir
+  cmake -S . -B build -G Ninja
+  ```
+
+  That is what `src/ui/editor_tab/find_bar.h` needed.
+- **`CONFIGURE_DEPENDS` alone does not cure it**, and this was measured
+  rather than assumed. With it on the globs, a throwaway header and source
+  under the editor-tab directory carrying a `Q_OBJECT` class were picked up
+  and **compiled** by a plain `cmake --build` with no reconfigure — ninja
+  listed the new source as added — but **no moc was generated for the
+  header**, by that build or by an explicit `cmake -S . -B build`
+  afterwards, although AUTOMOC listed the header in its own info file. The
+  build only passed because nothing outside that translation unit
+  referenced the class, so the static library's object was never pulled in
+  and the missing symbol never reached a link. The probe was then deleted.
+- **So `CONFIGURE_DEPENDS` is still worth having** — a new `.cpp` or `.h`
+  compiles without a reconfigure — it just does not help AUTOMOC.
+
+---
+
+## 27. The find match wash lowers the contrast of muted syntax colours
+
+- **Where**: `Editor::refreshFindColors()` in
+  `src/ui/editor_tab/main_editor.cpp` — the all-matches highlight is the
+  editor background with 25% of the theme's `info` mixed in.
+- **What**: ordinary foreground text on that wash stays at 5.32:1 or better
+  in every theme, which is the gate the feature was held to. **Syntax
+  colours that are deliberately muted do not.** Measured, contrast on the
+  wash / on the plain page / and how visible the wash itself is:
+
+  | wash | theme | Comment | Label | NumberLiteral | wash vs page |
+  |---|---|---|---|---|---|
+  | 0.15 | kites-dark | 3.46 / 4.59 | 6.16 / 8.17 | 6.80 / 9.01 | 1.33 |
+  | | kites-light | 4.10 / 5.14 | 4.13 / 5.18 | 5.17 / 6.48 | 1.25 |
+  | | tokyo-night | 3.78 / 5.20 | 7.85 / 10.80 | 6.43 / 8.84 | 1.38 |
+  | | tokyo-night-storm | 3.45 / 4.86 | 6.63 / 9.34 | 5.43 / 7.65 | 1.41 |
+  | 0.20 | kites-dark | 3.12 / 4.59 | 5.56 / 8.17 | 6.13 / 9.01 | 1.47 |
+  | | kites-light | 3.78 / 5.14 | 3.81 / 5.18 | 4.77 / 6.48 | 1.36 |
+  | | tokyo-night | 3.32 / 5.20 | 6.90 / 10.80 | 5.65 / 8.84 | 1.57 |
+  | | tokyo-night-storm | 3.04 / 4.86 | 5.85 / 9.34 | 4.79 / 7.65 | 1.60 |
+  | **0.25** (shipped) | kites-dark | **2.81** / 4.59 | 5.00 / 8.17 | 5.51 / 9.01 | 1.63 |
+  | | kites-light | 3.49 / 5.14 | 3.52 / 5.18 | 4.40 / 6.48 | 1.47 |
+  | | tokyo-night | **2.90** / 5.20 | 6.03 / 10.80 | 4.94 / 8.84 | 1.79 |
+  | | tokyo-night-storm | **2.68** / 4.86 | 5.15 / 9.34 | 4.22 / 7.65 | 1.81 |
+
+- **No amount fixes it.** `Comment` is below 4.5 on the wash at every amount
+  tried, and it is already only 4.59 on the plain page in kites-dark — the
+  wash cannot rescue a colour that starts near the line. Lowering the wash
+  trades comment legibility for match visibility: at 0.15 the wash is only
+  1.25–1.41 against the page, which is close to invisible.
+- **Not changed.** Highlighting a match on a comment makes that comment
+  harder to read for as long as the find bar is open. Written down rather
+  than traded away silently.

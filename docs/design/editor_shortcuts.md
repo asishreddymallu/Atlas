@@ -206,6 +206,22 @@ because in the editor `Alt`+letter types that letter — measured on a bare
 - **Esc with the completion popup open** goes to the popup, not the bar.
   `kites_test` links no `.qrc` and cannot open a popup, so that one is
   measured in the out-of-tree `findshots` harness.
+- **Replace, Replace All and Next act on the current text**, not on the last
+  search. The highlights are recomputed on a 150 ms debounce, which is right
+  for repainting and wrong for acting: an edit followed immediately by any
+  of the three would otherwise use offsets from before it. A dirty flag is
+  set on every document change while the bar is open and those three
+  re-search synchronously first; the debounce is untouched
+  (`FindStaleMatches.ReplaceAllUsesTheCurrentTextNotTheLastSearch`,
+  `FindStaleMatches.ReplaceOneUsesTheCurrentTextNotTheLastSearch`,
+  `FindStaleMatches.NextUsesTheCurrentTextNotTheLastSearch`).
+- **The match colours follow a theme change** while the bar is open. An
+  extra selection keeps the format it was given, so the colours are rebuilt
+  and the highlights repainted on both `themeChangedSignal` and
+  `editorThemeChangedSignal`. **There is no in-tree test**: `kites_test`
+  links no `.qrc` and so has no themes to switch between. It is a harness
+  check — `findshots` reports the pixels of the new theme's wash on a
+  non-current match before and after the switch.
 
 ### Limitations
 
