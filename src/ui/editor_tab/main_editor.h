@@ -18,6 +18,7 @@ namespace Kites
 class CompletionPopup;
 class FindBar;
 class ReferencesBar;
+class RenameBar;
 class GotoLineBar;
 
 class Editor : public KitesEditor
@@ -124,10 +125,25 @@ public:
     bool showReferencesAtCaret();
     void closeReferences();
 
+    /**
+     * @brief The F2 rename overlay. Created with the editor, like the
+     * references list, so a test can ask whether it is up without having
+     * opened it once.
+     */
+    RenameBar *renameBar() const { return m_rename; }
+    /// F2. Returns true when the overlay opened.
+    bool openRenameAtCaret();
+    void closeRename();
+    /// Applies what the overlay holds. Returns true when the document
+    /// changed; a refused or no-op name returns false.
+    bool applyRename();
+
     /// F12 / Ctrl+click. Returns true when it jumped.
     bool goToDefinitionAtCaret();
     /// Alt+Left. Returns true when it moved.
     bool goBack();
+    /// Where an overlay must start so an open find bar is not covered.
+    int overlayTopOffset() const;
     /// One line's text, trimmed, for a references row.
     QString lineTextFor(int line) const;
     /// How many positions the back stack holds, for the tests.
@@ -382,6 +398,9 @@ private:
     QColor                 m_findCurrentTextColor;
     GotoLineBar           *m_gotoBar {nullptr};
     ReferencesBar         *m_references {nullptr};
+    RenameBar             *m_rename     {nullptr};
+    /// The name the overlay was opened on.
+    QString                m_renameFrom;
     // QSet<int> m_breakPointsSet; // for quick lookup
     // int m_gutterWidth = 30;
     bool m_isTextEditor; // to differentiate between text editor and disassembly viewer

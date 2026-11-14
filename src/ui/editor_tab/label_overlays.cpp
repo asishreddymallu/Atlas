@@ -335,6 +335,11 @@ QString RenameBar::newName() const
     return m_input->text();
 }
 
+QString RenameBar::reasonText() const
+{
+    return m_reason->isVisible() ? m_reason->text() : QString();
+}
+
 void RenameBar::showReason(const QString &reason)
 {
     m_reason->setText(reason);
@@ -357,9 +362,11 @@ void RenameBar::setEditorFont(const QFont &font)
     setStyleSheet(QStringLiteral("font-size: %1%2;").arg(size).arg(unit));
 }
 
-void RenameBar::reposition(const QWidget *viewport)
+void RenameBar::reposition(const QWidget *viewport, int topOffset)
 {
     repositionOverlay(this, viewport);
+    if (topOffset > 0 && viewport)
+        move(x(), overlayMargin + topOffset);
 }
 
 bool RenameBar::eventFilter(QObject *watched, QEvent *event)

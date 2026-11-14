@@ -20,6 +20,7 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QTextBlock>
+#include <QLineEdit>
 #include <QTextDocument>
 
 using namespace Kites;
@@ -706,4 +707,384 @@ TEST(LabelReferences, FileOpenClosesIt)
     QApplication::processEvents();
     EXPECT_FALSE(editor->referencesBar()->isVisible())
         << "the list still points into the document that was closed";
+}
+
+// ═══════════════════════════ F2: rename ══════════════════════════════════
+
+namespace
+{
+/// `loop` is defined on line 1 and used on lines 2 and 6. `loop2` and `loop_end` are
+/// separate labels that a careless substring rewrite would damage; the
+/// comment and the string each say "loop" and must not be touched.
+const QString kRen =
+    "main:\n"                          // 0
+    "loop:\n"                          // 1
+    "    j loop\n"                     // 2
+    "loop2:\n"                         // 3
+    "    j loop2\n"                    // 4
+    "    .asciz \"loop forever\"\n"    // 5
+    "    j loop         # loop here\n" // 6
+    "loop_end:\n"                      // 7
+    "    j loop_end\n"                 // 8
+    "    ret\n";                       // 9
+
+void typeInto(QLineEdit *input, const QString &text)
+{
+    input->setText(text);
+    QApplication::processEvents();
+}
+
+/// Opens the rename overlay on the label at `offset` and returns the bar.
+RenameBar *openRename(Nav &nav, int offset)
+{
+    nav.caretTo(offset);
+    key(&nav.editor, Qt::Key_F2);
+    return nav.editor.renameBar();
+}
+} // namespace
+
+TEST(LabelRename, F2OpensOnTheLabelAtTheCaret)
+{
+    Nav nav;
+    nav.load(kRen);
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_NE(bar, nullptr);
+    ASSERT_TRUE(bar->isVisible()) << "F2 did not open the rename overlay";
+    EXPECT_EQ(bar->newName(), QStringLiteral("loop"))
+        << "it did not prefill with the name being renamed";
+}
+
+TEST(LabelRename, F2OffALabelDoesNothing)
+{
+    Nav nav;
+    nav.load(kRen);
+    for (const char *word : {"addi", "ret", "asciz"})
+    {
+        const int at = kRen.indexOf(word);
+        if (at < 0)
+            continue;
+        nav.caretTo(at + 1);
+        key(&nav.editor, Qt::Key_F2);
+        EXPECT_FALSE(nav.editor.renameBar()->isVisible())
+            << "it opened on '" << word << "', which is not a label";
+        nav.editor.closeRename();
+    }
+}
+
+TEST(LabelRename, ItRewritesEverySiteAndNothingElse)
+{
+    Nav nav;
+    nav.load(kRen);
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(bar->isVisible());
+    typeInto(bar->input(), QStringLiteral("spin"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    const QString after = nav.editor.toPlainText();
+    EXPECT_FALSE(bar->isVisible()) << "it stayed open after a legal rename";
+
+    // The definition and both references moved.
+    EXPECT_TRUE(after.contains(QStringLiteral("spin:\n"))) << after.toStdString();
+    EXPECT_EQ(after.count(QStringLiteral("j spin")), 2) << after.toStdString();
+    // The neighbours did NOT.
+    EXPECT_TRUE(after.contains(QStringLiteral("loop2:"))) << "loop2 was damaged";
+    EXPECT_TRUE(after.contains(QStringLiteral("j loop2"))) << "a loop2 use was damaged";
+    EXPECT_TRUE(after.contains(QStringLiteral("loop_end:"))) << "loop_end was damaged";
+    EXPECT_TRUE(after.contains(QStringLiteral("j loop_end"))) << "a loop_end use was damaged";
+    // The comment and the string did NOT.
+    EXPECT_TRUE(after.contains(QStringLiteral("\"loop forever\"")))
+        << "it rewrote inside a string";
+    EXPECT_TRUE(after.contains(QStringLiteral("# loop here")))
+        << "it rewrote inside a comment";
+}
+
+TEST(LabelRename, OneCtrlZUndoesTheWholeRename)
+{
+    Nav nav;
+    nav.load(kRen);
+    const QString before = nav.editor.toPlainText();
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    typeInto(bar->input(), QStringLiteral("spin"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+    ASSERT_NE(nav.editor.toPlainText(), before);
+
+    key(&nav.editor, Qt::Key_Z, Qt::ControlModifier);
+    EXPECT_EQ(nav.editor.toPlainText(), before)
+        << "one Ctrl+Z did not put every site back";
+
+    key(&nav.editor, Qt::Key_Y, Qt::ControlModifier);
+    EXPECT_TRUE(nav.editor.toPlainText().contains(QStringLiteral("spin:")))
+        << "Ctrl+Y did not redo the rename";
+    EXPECT_EQ(nav.editor.toPlainText().count(QStringLiteral("j spin")), 2);
+}
+
+TEST(LabelRename, TheSameNameIsANoOpAndLeavesNoUndoEntry)
+{
+    Nav nav;
+    nav.load(kRen);
+    const QString before = nav.editor.toPlainText();
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    typeInto(bar->input(), QStringLiteral("loop"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    EXPECT_FALSE(bar->isVisible()) << "renaming to the same name left it open";
+    EXPECT_EQ(nav.editor.toPlainText(), before);
+    EXPECT_FALSE(nav.editor.document()->isUndoAvailable())
+        << "a no-op rename pushed an undo entry";
+}
+
+TEST(LabelRename, ARefusedNameStaysOpenAndSaysWhy)
+{
+    struct Case { const char *name; const char *mentions; };
+    const Case cases[] = {
+        {"", "empty"},
+        {"has.dot", "cannot be in a label"},
+        {"has space", "cannot be in a label"},
+        {"1start", "digit"},
+        {"x1", "register"},
+        {"loop2", "defined"},
+    };
+    for (const Case &c : cases)
+    {
+        Nav nav;
+        nav.load(kRen);
+        const QString before = nav.editor.toPlainText();
+        RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+        ASSERT_TRUE(bar->isVisible());
+        typeInto(bar->input(), QString::fromLatin1(c.name));
+        key(bar->input(), Qt::Key_Return);
+        QApplication::processEvents();
+
+        EXPECT_TRUE(bar->isVisible())
+            << "'" << c.name << "' was refused but the overlay closed";
+        EXPECT_FALSE(bar->reasonText().isEmpty())
+            << "'" << c.name << "' was refused with no visible reason";
+        EXPECT_TRUE(bar->reasonText().contains(QString::fromLatin1(c.mentions)))
+            << "'" << c.name << "' reason did not mention '" << c.mentions
+            << "': " << bar->reasonText().toStdString();
+        EXPECT_EQ(nav.editor.toPlainText(), before)
+            << "'" << c.name << "' was refused but the document changed";
+        nav.editor.closeRename();
+    }
+}
+
+TEST(LabelRename, AReadOnlyPaneRefusesWithAVisibleReason)
+{
+    Nav nav;
+    nav.load(kRen);
+    const QString before = nav.editor.toPlainText();
+    nav.editor.setReadOnly(true);
+    nav.caretTo(kRen.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F2);
+
+    RenameBar *bar = nav.editor.renameBar();
+    ASSERT_NE(bar, nullptr);
+    // Unlike F12 and Shift+F12, renaming IS an edit. It must say why it
+    // cannot happen rather than appearing to do nothing - a key that
+    // silently does nothing reads as a broken key.
+    ASSERT_TRUE(bar->isVisible())
+        << "F2 in a read-only pane did nothing at all, with no reason shown";
+    EXPECT_TRUE(bar->reasonText().contains(QStringLiteral("read-only")))
+        << bar->reasonText().toStdString();
+    EXPECT_FALSE(bar->input()->isEnabled())
+        << "it offered a field that cannot do anything";
+
+    typeInto(bar->input(), QStringLiteral("spin"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+    EXPECT_EQ(nav.editor.toPlainText(), before)
+        << "a read-only pane was edited anyway";
+    nav.editor.closeRename();
+    nav.editor.setReadOnly(false);
+}
+
+TEST(LabelRename, EscClosesOnlyIt)
+{
+    Nav nav;
+    nav.load(kRen);
+    nav.editor.openFind(false);
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.findBar()->isHidden());
+
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(bar->isVisible());
+    const QString before = nav.editor.toPlainText();
+
+    key(bar->input(), Qt::Key_Escape);
+    QApplication::processEvents();
+    EXPECT_FALSE(bar->isVisible()) << "Esc did not close the rename overlay";
+    EXPECT_EQ(nav.editor.toPlainText(), before) << "Esc applied the rename";
+    EXPECT_FALSE(nav.editor.findBar()->isHidden())
+        << "Esc closed the find bar as well";
+}
+
+TEST(LabelRename, ItOpensClearOfAnOpenFindBar)
+{
+    Nav nav;
+    nav.load(kRen);
+    nav.editor.openFind(false);
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.findBar()->isHidden());
+
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(bar->isVisible());
+    EXPECT_FALSE(nav.editor.findBar()->isHidden())
+        << "opening rename closed the search the reader was in the middle of";
+    EXPECT_GE(bar->geometry().top(), nav.editor.findBar()->geometry().bottom())
+        << "the rename overlay was drawn on top of the find bar";
+}
+
+TEST(LabelRename, OpeningItClosesTheOtherOverlays)
+{
+    Nav nav;
+    nav.load(kRen);
+
+    // go-to-line
+    nav.editor.openGotoLine();
+    QApplication::processEvents();
+    ASSERT_FALSE(nav.editor.gotoLineBar()->isHidden());
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(bar->isVisible());
+    EXPECT_TRUE(nav.editor.gotoLineBar()->isHidden())
+        << "opening rename left go-to-line up";
+    nav.editor.closeRename();
+
+    // the references list
+    nav.caretTo(kRen.indexOf("loop:") + 1);
+    key(&nav.editor, Qt::Key_F12, Qt::ShiftModifier);
+    ASSERT_TRUE(nav.editor.referencesBar()->isVisible());
+    openRename(nav, kRen.indexOf("loop:") + 1);
+    EXPECT_FALSE(nav.editor.referencesBar()->isVisible())
+        << "opening rename left the references list up";
+    nav.editor.closeRename();
+
+    // the suggestion list, driven directly for the reason given in
+    // ItClosesTheSuggestionList.
+    nav.editor.openCompletionExplicitly();
+    QApplication::processEvents();
+    ASSERT_TRUE(nav.editor.isCompletionVisible());
+    nav.caretTo(kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(nav.editor.openRenameAtCaret());
+    EXPECT_FALSE(nav.editor.isCompletionVisible())
+        << "opening rename left the suggestions up";
+}
+
+TEST(LabelRename, FileOpenClosesIt)
+{
+    EditorTab tab;
+    tab.resize(700, 400);
+    tab.show();
+    QApplication::processEvents();
+    Editor *editor = nullptr;
+    for (QPlainTextEdit *pane : tab.findChildren<QPlainTextEdit *>())
+        if (!pane->isReadOnly())
+            editor = static_cast<Editor *>(pane);
+    ASSERT_NE(editor, nullptr);
+
+    tab.loadFileContent(kRen);
+    QApplication::processEvents();
+    QTextCursor c(editor->document());
+    c.setPosition(kRen.indexOf("loop:") + 1);
+    editor->setTextCursor(c);
+    QApplication::processEvents();
+    ASSERT_TRUE(editor->openRenameAtCaret());
+    ASSERT_TRUE(editor->renameBar()->isVisible());
+
+    tab.loadFileContent("other:\n    nop\n");
+    QApplication::processEvents();
+    EXPECT_FALSE(editor->renameBar()->isVisible())
+        << "the overlay still points at the document that was closed";
+}
+
+TEST(LabelRename, AfterARenameTheCompletionOffersTheNewName)
+{
+    Nav nav;
+    nav.load(kRen);
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    typeInto(bar->input(), QStringLiteral("spin"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    QStringList labels;
+    for (const Completion::Item &item : nav.editor.completionItemsForTest(QString()))
+        if (item.kind == Completion::Kind::Label)
+            labels << item.label;
+    EXPECT_TRUE(labels.contains(QStringLiteral("spin")))
+        << "the label cache still does not know the new name: "
+        << labels.join(',').toStdString();
+    EXPECT_FALSE(labels.contains(QStringLiteral("loop")))
+        << "the label cache still offers the old name: "
+        << labels.join(',').toStdString();
+    // The neighbours are still there.
+    EXPECT_TRUE(labels.contains(QStringLiteral("loop2")));
+    EXPECT_TRUE(labels.contains(QStringLiteral("loop_end")));
+}
+
+TEST(LabelRename, AfterARenameTheHoverUnderlineFollows)
+{
+    Nav nav;
+    nav.load(kRen);
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    typeInto(bar->input(), QStringLiteral("spin"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    const QString after = nav.editor.toPlainText();
+    QTextCursor at(nav.editor.document());
+    at.setPosition(after.indexOf(QStringLiteral("j spin")) + 3);
+    nav.editor.setTextCursor(at);
+    QApplication::processEvents();
+
+    const QPoint p = nav.editor.cursorRect().center();
+    QMouseEvent move(QEvent::MouseMove, p, nav.editor.viewport()->mapToGlobal(p),
+                     Qt::NoButton, Qt::NoButton, Qt::ControlModifier);
+    QApplication::sendEvent(nav.editor.viewport(), &move);
+    QApplication::processEvents();
+    EXPECT_EQ(nav.editor.linkedName(), QStringLiteral("spin"))
+        << "the Ctrl-hover did not follow the rename";
+}
+
+TEST(LabelRename, AltLeftAfterARenameIsInRange)
+{
+    Nav nav;
+    nav.load(kRen);
+    // Jump first, so there is something on the back stack.
+    nav.caretTo(kRen.indexOf("j loop\n") + 3);
+    key(&nav.editor, Qt::Key_F12);
+    ASSERT_EQ(nav.editor.backStackDepth(), 1);
+
+    RenameBar *bar = openRename(nav, kRen.indexOf("loop:") + 1);
+    ASSERT_TRUE(bar->isVisible());
+    // A SHORTER name, so every offset after it moves back.
+    typeInto(bar->input(), QStringLiteral("a"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    key(&nav.editor, Qt::Key_Left, Qt::AltModifier);
+    QApplication::processEvents();
+    const int caret = nav.editor.textCursor().position();
+    EXPECT_GE(caret, 0);
+    EXPECT_LE(caret, nav.editor.document()->characterCount() - 1)
+        << "Alt+Left landed outside the document after a rename";
+}
+
+TEST(LabelRename, TwoLabelsOnOneLineAndALabelBeforeAnInstruction)
+{
+    Nav nav;
+    // Both shapes the assembler accepts and that a naive line rewrite breaks.
+    nav.load("a: b:\n    j a\n    j b\nc: addi x1, x0, 1\n    j c\n");
+    RenameBar *bar = openRename(nav, 0);
+    ASSERT_TRUE(bar->isVisible());
+    typeInto(bar->input(), QStringLiteral("first"));
+    key(bar->input(), Qt::Key_Return);
+    QApplication::processEvents();
+
+    const QString after = nav.editor.toPlainText();
+    EXPECT_TRUE(after.startsWith(QStringLiteral("first: b:\n"))) << after.toStdString();
+    EXPECT_TRUE(after.contains(QStringLiteral("    j first\n"))) << after.toStdString();
+    EXPECT_TRUE(after.contains(QStringLiteral("    j b\n"))) << "b was damaged";
+    EXPECT_TRUE(after.contains(QStringLiteral("c: addi x1, x0, 1\n"))) << "c was damaged";
 }

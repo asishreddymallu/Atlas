@@ -105,11 +105,15 @@ class RenameBar : public QWidget
     /// Opens it on `name`, with the text selected so typing replaces it.
     void openOn(const QString &name);
     QString newName() const;
+    /// The visible refusal, or empty when none is shown. For the tests.
+    QString reasonText() const;
     /// Shows why a name was refused, and keeps the bar open.
     void showReason(const QString &reason);
     void clearReason();
 
-    void reposition(const QWidget *viewport);
+    /// `topOffset` is how far down to start, so an open find bar - which
+    /// owns the same corner and is deliberately NOT closed - is not covered.
+    void reposition(const QWidget *viewport, int topOffset = 0);
     void setEditorFont(const QFont &font);
 
     /// The input, so a test can type into it without a focus policy fight.

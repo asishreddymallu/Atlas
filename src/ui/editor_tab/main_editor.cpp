@@ -4,6 +4,7 @@
 #include "find_bar.h"
 #include "goto_line_bar.h"
 #include "ui/editor_tab/label_overlays.h"
+#include <QLineEdit>
 #include "ui/theme/theme_manager.h"
 #include <QClipboard>
 #include <QGuiApplication>
@@ -71,6 +72,9 @@ Editor::Editor(QWidget *parent )
     //    it is clipped to the editor and can be driven in kites_test.
     m_completionPopup = new CompletionPopup(viewport());
     m_references      = new ReferencesBar(viewport());
+    m_rename          = new RenameBar(viewport());
+    connect(m_rename, &RenameBar::closeRequested, this, [this] { closeRename(); });
+    connect(m_rename, &RenameBar::accepted, this, [this] { applyRename(); });
     connect(m_references, &ReferencesBar::closeRequested, this, [this] { closeReferences(); });
     connect(m_references, &ReferencesBar::picked, this,
             [this](int offset)
@@ -566,11 +570,10 @@ void Editor::repositionOverlays()
     repositionFindBar();
     if (m_gotoBar && !m_gotoBar->isHidden())
         m_gotoBar->reposition(viewport());
+    if (m_rename && m_rename->isVisible())
+        m_rename->reposition(viewport(), overlayTopOffset());
     if (m_references && m_references->isVisible())
-        m_references->reposition(viewport(),
-                                 (m_findBar && !m_findBar->isHidden())
-                                     ? m_findBar->geometry().bottom() + 1 - overlayMargin
-                                     : 0);
+        m_references->reposition(viewport(), overlayTopOffset());
 }
 
 GotoLineBar *Editor::gotoLineBar() const
@@ -583,6 +586,7 @@ void Editor::openGotoLine()
     // Only one overlay at a time.
     closeFind();
     closeReferences();
+    closeRename();
 
     if (!m_gotoBar)
     {
@@ -623,6 +627,7 @@ void Editor::openFind(bool withReplace)
     if (m_gotoBar && !m_gotoBar->isHidden())
         closeGotoLine();
     closeReferences();
+    closeRename();
 
     if (!m_findBar)
     {
@@ -1042,6 +1047,19 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     if (key == Qt::Key_F12 && mods == Qt::ShiftModifier)
     {
         showReferencesAtCaret();
+        return true;
+    }
+    if (key == Qt::Key_F2 && mods == Qt::NoModifier)
+    {
+        openRenameAtCaret();
+        return true;
+    }
+    // Esc while the rename overlay is up closes only it, even when the
+    // editor rather than the field has the keys.
+    if (key == Qt::Key_Escape && mods == Qt::NoModifier && m_rename &&
+        m_rename->isVisible())
+    {
+        closeRename();
         return true;
     }
     // The list's own keys, while it is up. Before everything else, so Down
@@ -1629,6 +1647,7 @@ void Editor::clearBackStack()
     // list has to go with it - a row picked afterwards would jump into
     // whatever text now happens to sit at that offset.
     closeReferences();
+    closeRename();
 }
 
 void Editor::pushBackPosition()
@@ -1839,9 +1858,7 @@ bool Editor::showReferencesAtCaret()
     // list alone. It owns the same corner, so the list starts below it.
     closeCompletion();
     closeGotoLine();
-    const int below = (m_findBar && !m_findBar->isHidden())
-                          ? m_findBar->geometry().bottom() + 1 - overlayMargin
-                          : 0;
+    const int below = overlayTopOffset();
 
     m_references->setRows(rows, name);
     m_references->setEditorFont(font());
@@ -1861,6 +1878,115 @@ QString Editor::lineTextFor(int line) const
 {
     const QTextBlock block = document()->findBlockByNumber(line);
     return block.isValid() ? block.text().trimmed() : QString();
+}
+
+
+// ──────────────────── F2: rename a label ─────────────────────
+
+int Editor::overlayTopOffset() const
+{
+    // The find bar owns the same corner and is deliberately not closed by
+    // these overlays, so they start below it. See the references list.
+    return (m_findBar && !m_findBar->isHidden())
+               ? m_findBar->geometry().bottom() + 1 - overlayMargin
+               : 0;
+}
+
+bool Editor::openRenameAtCaret()
+{
+    const QString name = LabelIndex::nameAt(toPlainText(), textCursor().position());
+    if (name.isEmpty())
+        return false;
+    // Only a label OF THIS FILE. A mnemonic or a register is not one, and
+    // offering to rename it would promise something that cannot be done.
+    if (!labelIndex().isDefined(name))
+        return false;
+
+    closeCompletion();
+    closeGotoLine();
+    closeReferences();
+
+    m_renameFrom = name;
+    m_rename->setEditorFont(font());
+    m_rename->openOn(name);
+    // A read-only pane refuses VISIBLY. Unlike F12 and Shift+F12, renaming
+    // is an edit, and a key that silently does nothing reads as a broken
+    // key - so the overlay opens, says why, and offers no usable field.
+    m_rename->input()->setEnabled(!isReadOnly());
+    if (isReadOnly())
+        m_rename->showReason(tr("this pane is read-only"));
+    m_rename->reposition(viewport(), overlayTopOffset());
+    return true;
+}
+
+void Editor::closeRename()
+{
+    if (!m_rename || !m_rename->isVisible())
+        return;
+    m_rename->hide();
+    m_renameFrom.clear();
+    setFocus();
+}
+
+bool Editor::applyRename()
+{
+    if (!m_rename || !m_rename->isVisible())
+        return false;
+    if (isReadOnly())
+    {
+        m_rename->showReason(tr("this pane is read-only"));
+        return false;
+    }
+
+    const QString from = m_renameFrom;
+    const QString to   = m_rename->newName();
+    if (to == from)
+    {
+        // A no-op. It must not push an undo entry: a Ctrl+Z that appears to
+        // do nothing is worse than no rename at all.
+        closeRename();
+        return false;
+    }
+
+    // A COPY, not the cached reference: the first edit below invalidates
+    // the cache, and the loop would then be walking a rebuilt index.
+    const LabelIndex::Index index = labelIndex();
+    const RenameCheck       check = checkRename(from, to, index);
+    if (!check.ok)
+    {
+        m_rename->showReason(check.reason);
+        return false;
+    }
+
+    QList<int> sites;
+    for (const LabelIndex::Definition &definition : index.definitionsOf(from))
+        sites << definition.offset;
+    for (const LabelIndex::Reference &reference : index.references)
+        if (reference.name == from)
+            sites << reference.offset;
+    if (sites.isEmpty())
+    {
+        closeRename();
+        return false;
+    }
+    std::sort(sites.begin(), sites.end());
+
+    QTextCursor cursor(document());
+    cursor.beginEditBlock();
+    // LAST to FIRST. Every offset came from one scan of the document, so
+    // rewriting a site changes the offsets of everything after it; going
+    // backwards means no site is ever moved before it is used.
+    for (int i = int(sites.size()) - 1; i >= 0; --i)
+    {
+        cursor.setPosition(sites.at(i));
+        cursor.setPosition(sites.at(i) + int(from.size()), QTextCursor::KeepAnchor);
+        cursor.insertText(to);
+    }
+    // One block, so one Ctrl+Z puts every site back at once.
+    cursor.endEditBlock();
+
+    closeRename();
+    return true;
 }
 
 } // namespace Kites
