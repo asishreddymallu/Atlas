@@ -1545,3 +1545,189 @@ Recorded because the probe found it and because it is the only known
 place where the two disagree at all; `alphabetprobe` prints it on every
 run as `[reference differs on the plain line: ...]` so it cannot quietly
 grow.
+
+---
+
+## 51. Nine RV64 `*w` instructions have no entry in `instruction_syntax_map`
+
+`addw`, `addiw`, `subw`, `sllw`, `slliw`, `srlw`, `srliw`, `sraw`,
+`sraiw` are in `valid_instructions`, so the lexer makes them `OPCODE`
+tokens, and they have encodings in
+`src/common/instructions.cpp:42-43`, `:94` and the surrounding table.
+They have **no entry in `instruction_syntax_map`**
+(`src/common/instructions.cpp:763`), so the parser has no syntax to match
+and rejects every use.
+
+**The mechanism of the empty message.** `Parser::parse()` does
+`instruction_set::instruction_syntax_map[currentToken().value]`
+(`src/assembler/parser.cpp:332-333`). `operator[]` on a missing key
+default-constructs an empty `std::vector<SyntaxType>`, the loop over it
+does nothing, and the diagnostic is built from that empty list — which is
+why the error reads `Invalid syntax: Expected: ` with nothing after the
+colon.
+
+Found by `atlas-verify/harness/isaprobe`. Nothing is fixed here; the nine
+are marked `unsupported` in `instruction_docs.json` and no longer offered
+by `instructions.json`.
+
+---
+
+## 52. `fence`, `fence_i`, `fclass.s` and `fclass.d` have no code-generator path
+
+All four lex and parse cleanly and then throw out of the code generator
+with `Invalid instruction type: <name>`. `fence` and `fence_i` are
+declared `SyntaxType::PSEUDO`; `fclass.s` and `fclass.d` are
+`O_GPR_C_FPR` and reach the generator as ordinary `ICUnit`s.
+
+`fclass` is the odd one: the **execution** side is fully implemented —
+`AluOp::FCLASS_S` at `src/processor/alu.cpp:591` builds the complete
+10-bit class mask, and `FCLASS_D` at `:971` does the same — so only the
+encoding step is missing.
+
+---
+
+## 53. `call` and `tail` are declared but not implemented
+
+Both are in `valid_instructions` and both are declared
+`SyntaxType::PSEUDO` in `instruction_syntax_map`, so the parser routes
+them to `Parser::parse_pseudo()`. That function
+(`src/assembler/parse_formats/pseudo_formats.cpp`) has branches for `j`,
+`jr`, `ret`, `jalr`, `mv`, `neg`, `not`, `li`, `la` and the rest — and
+**no branch for `call` or `tail`**. The call falls through, returns
+false, and the parser reports `Expected: call <text label>`, text
+generated from the syntax map rather than from any implementation.
+
+No operand form works; the label form was tried explicitly. The
+misleading `} // call` comment at `pseudo_formats.cpp:1044` actually
+closes the `ret` branch.
+
+---
+
+## 54. `fmv.s.x` and `fmv.x.s` are one line each from working
+
+Unlike the other 34 rejected aliases, these two are **already in the
+name-to-enum table**:
+
+```cpp
+{"fmv.x.s", Instruction::kfmv_x_w},   // src/common/instructions.cpp:330
+{"fmv.s.x", Instruction::kfmv_w_x},   // src/common/instructions.cpp:332
+```
+
+so the encoder and the processor would handle them as `fmv.x.w` /
+`fmv.w.x` — `AluOp::FMV_X_W` at `src/processor/alu.cpp:622` and
+`FMV_W_X` at `:629`. They are missing only from `valid_instructions` and
+from `instruction_syntax_map`, so the **lexer** rejects them before
+anything else sees them (`Unexpected token: fmv.x.s`).
+
+Recorded because it is a different kind of gap from the other 34, which
+have no machinery behind them at all.
+
+---
+
+## 55. The fence-instruction spelling is `fence_i`, not `fence.i`
+
+`valid_instructions` and `instruction_syntax_map` carry **`fence_i`**
+with an underscore. The RISC-V spelling `fence.i` is absent everywhere,
+so a reader who types the standard form gets `Unexpected token`.
+
+`fence_i` is also not offered by `instructions.json` and does not reach
+the code generator (see **52**), so the underscore spelling is currently
+unusable as well — but it is the one the tables name.
+
+---
+
+## 56. `kites-cli` segfaults in batch mode on every program
+
+`./build/kites-cli examples/pipeline_test_code_1.s` dies with SIGSEGV,
+on every input, with or without `QT_QPA_PLATFORM=offscreen`.
+
+**Mechanism.** `CMakeLists.txt:135` is
+
+```cmake
+target_compile_definitions(kites_cli PRIVATE DISABLE_GUI)
+```
+
+`PRIVATE` applies the definition to `cli/main.cpp` and `cli/repl.cpp`
+only. `kites_core` is built once, **without** `DISABLE_GUI`, and
+`kites_cli` links that library — so the CLI gets a processor compiled
+with its GUI parts in, constructs a `QGraphicsScene` with no
+`QApplication`, and dies.
+
+**Is this the same as AGENTS known issue 1?** It is the same *fault* —
+constructing a processor builds a `QGraphicsScene` that needs a
+`QApplication` — reached by a different route and with a different fix.
+Issue 1 is about `kites_test`, and was fixed by giving the test harness
+an offscreen `QApplication` in `test/test_main.cpp`. Here an
+`QApplication` is not the intended answer: the CLI is meant to be
+GUI-free, and the define that would make it so never reaches the code
+that needs it. A `QApplication` in `cli/main.cpp` would hide the problem
+rather than fix it.
+
+Not fixed here: `CMakeLists.txt` and `src/` are outside this branch's
+scope. The processor probes in this work use a harness with an offscreen
+`QApplication` instead.
+
+---
+
+## 57. `fcvt.s.d` and `fcvt.d.s` are never mapped to an ALU operation
+
+Both assemble: they are in `valid_instructions`, in
+`instruction_syntax_map` as `O_FPR_C_FPR`, and have encodings at
+`src/common/instructions.cpp:169-170`. Both have ALU implementations —
+`AluOp::FCVT_D_S` at `src/processor/alu.cpp:1002` and `FCVT_S_D` at
+`:1008`.
+
+Neither control unit ever selects them. `grep -n 'FCVT_S_D\|FCVT_D_S'`
+over `src/processor/rvss/rvss_control_unit.cpp` and
+`src/processor/rv5s/rv5s_control_unit.cpp` returns **nothing**, so the
+two ALU cases are dead code and the destination register is written with
+zero.
+
+**Measured** (`atlas-verify/harness/cpuprobe`, real `RVSSProcessor`):
+
+| program | result |
+|---|---|
+| `fld f1, (0.5)` then `fcvt.s.d f2, f1` | f1 = `0x3FE0000000000000` ✓, f2 = **`0x0000000000000000`** |
+| `fld f4, (3.0)` then `fcvt.s.d f5, f4` | f4 = `0x4008000000000000` ✓, f5 = **0** |
+| `flw f7, (1.5f)` then `fcvt.d.s f8, f7` | f7 = `0x3FC00000` ✓, f8 = **0** |
+
+Every conversion between single and double silently yields zero. This is
+the most consequential gap found: the instruction assembles, runs, and
+produces a wrong answer rather than an error.
+
+---
+
+## 58. Float literals lose precision in the lexer
+
+`.double` and `.float` store non-representable decimal fractions to
+about six decimal places. Measured by loading each literal back with
+`fld` / `flw` on the real processor:
+
+| literal | stored bits | value | correct |
+|---|---|---|---|
+| `.double 0.5` | `0x3FE0000000000000` | 0.5 | exact ✓ |
+| `.double 3.0` | `0x4008000000000000` | 3.0 | exact ✓ |
+| `.double 0.125` | `0x3FC0000000000000` | 0.125 | exact ✓ |
+| `.double 1.0e10` | `0x4202A05F20000000` | 1e10 | exact ✓ |
+| `.double 0.1` | `0x3FB999AA60913A50` | **0.100001** | `0x3FB999999999999A` |
+| `.double 123.456789012345` | `0x405EDD3C0C1FC8F4` | **123.45679** | `0x405EDD3C07FB4C69` |
+| `.float 0.1` | `0x3DCCCD54` | **0.100001f** | `0x3DCCCCCD` |
+| `.float 1.5` | `0x3FC00000` | 1.5 | exact ✓ |
+
+Only values that are exactly representable survive. One step of the
+mechanism is visible at `src/assembler/lexer.cpp:225`:
+
+```cpp
+return {TokenType::FLOAT, std::to_string(std::stod(value)), ...};
+```
+
+`std::to_string(double)` is `%f` with six digits after the point, so the
+token carries a decimal string rather than the parsed value and the
+parser re-parses that string (`src/assembler/parser.cpp:230`). That
+accounts for the six-decimal shape of the loss, though not for every
+digit of the two inexact results above, so the round trip may be lossy in
+more than one place.
+
+**Nothing documents this**, so it is not a disagreement with a summary —
+it is a finding. A teaching simulator that stores `0.1` as `0.100001`
+will confuse anyone writing a floating-point exercise.

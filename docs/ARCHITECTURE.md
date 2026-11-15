@@ -64,6 +64,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `test/` | GoogleTest suite (28 `.cpp` files + `test/CMakeLists.txt`). |
 | `examples/` | RISC-V assembly sample programs used by the tests and the UI. |
 | `resources/` | Qt resources: themes, icons, fonts, circuit designs, instruction metadata. |
+| `resources/instructions/instruction_docs.json` | One documented entry per mnemonic — format, summary, a worked example, and for a pseudo-instruction what it expands to. Entries the assembler cannot read carry `"support": "unsupported"` with a reason, and where a working replacement exists, `useInstead`. **Nothing loads it yet.** `test/instruction_docs_test.cpp` pins it against the real assembler: every supported example must assemble end to end, every unsupported one must fail (an instruction that starts working fails the test rather than passing quietly), every `useInstead` target must work, and the set of names in `instructions.json` must EQUAL the set of supported entries — so the UI never offers an instruction Atlas cannot assemble, and never hides one it can. |
 | `external/` | Vendored third-party code (`external/lua-5.5.0`), left untouched by the layout work. |
 | `docs/` | This document and the audit/design records. |
 | `scripts/` | `build.sh`, `test.sh` convenience wrappers. |
