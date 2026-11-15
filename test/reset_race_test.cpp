@@ -54,6 +54,14 @@ void spin(int ms)
     loop.exec();
 }
 
+/// Three instructions, nothing to wait for.
+const std::string kShortProgram =
+    ".text\n"
+    "main:\n"
+    "  addi t0, x0, 5\n"
+    "  addi t1, x0, 7\n"
+    "  addi t2, x0, 9\n";
+
 /// Long enough that the worker is still inside Run() when reset lands.
 const std::string kLongProgram =
     ".text\n"
@@ -98,7 +106,12 @@ TEST(ResetRace, HammerResetWhileRunningIsSafe)
             QMetaObject::invokeMethod(&h.manager, "runSlot", Qt::QueuedConnection);
             spin(2); // let the worker get well inside Run()
             for (int i = 0; i < 100; ++i)
-                h.manager.reset(); // the call that used to corrupt the heap
+            {
+                // the call that used to corrupt the heap. The result is
+                // checked rather than discarded: a timeout here would mean
+                // the worker never left Run(), which is its own failure.
+                EXPECT_TRUE(h.manager.reset()) << "reset() timed out at cycle " << cycle;
+            }
         }
         SUCCEED();
     }
@@ -125,5 +138,44 @@ TEST(ResetRace, AfterStopTheProcessorIsInTheResetState)
             EXPECT_EQ(h.manager.getProgramCounter(), 0u)
                 << "cycle " << cycle << ": a step ran after Stop returned";
         }
+    }
+}
+
+/// The DIRECT run path: ProcessorBase::Run() entered with no BeginRun.
+///
+/// ProcessorManager::run() calls Run() straight through, with no queued
+/// slot and no epoch, and that is what the REPL does for `reset` then
+/// `load` then `run` (command_handler.cpp, CommandType::RESET and
+/// CommandType::RUN) and what every vm->DebugRun() test in this suite
+/// does. The stop that the reset left standing must not survive into
+/// the next run.
+///
+/// Before the structural fix this leaves pc at 0: StopAndReset bumped
+/// stop_epoch_, ClearStop() compared it against a running_epoch_ that
+/// no BeginRun had ever updated, returned without clearing, and the run
+/// loop exited on its first predicate check without executing a single
+/// instruction.
+TEST(ResetRace, DirectRunAfterResetStillExecutes)
+{
+    for (ProcessorType type : {ProcessorType::RVSS, ProcessorType::RV5Stage_H_F})
+    {
+        setupVmStateDirectory();
+        ProcessorManager manager(nullptr, type);
+        manager.setStepDelay(0);
+        CoutSilencer quiet;
+
+        ASSERT_TRUE(manager.reset()) << "reset() timed out with no worker running";
+
+        manager.loadProgram(kShortProgram);
+        // LoadProgram auto-adds a breakpoint at the end-of-program address
+        // (ProcessorBase::LoadProgram -> AddBreakpoint(program_size_)). With
+        // no UI to press Resume, the rv5s loop would park in the untimed
+        // pause wait while draining the pipeline. Clear it.
+        manager.setBreakpoints({});
+
+        manager.run(); // the direct path
+
+        EXPECT_GT(manager.getProgramCounter(), 0u)
+            << "the run executed nothing: a stale stop survived the reset";
     }
 }
