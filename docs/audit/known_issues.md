@@ -1636,10 +1636,23 @@ unusable as well — but it is the one the tables name.
 
 ---
 
-## 56. `kites-cli` segfaults in batch mode on every program
+## 56. `kites-cli` segfaults in batch mode on every program it processes
 
-`./build/kites-cli examples/pipeline_test_code_1.s` dies with SIGSEGV,
-on every input, with or without `QT_QPA_PLATFORM=offscreen`.
+**Measured**, not assumed. `QT_QPA_PLATFORM=offscreen ./build/kites-cli <file>`
+over the first ten `examples/*.s`:
+
+| input | exit |
+|---|---|
+| ten example programs, `cache_matrix_mul_3x3.s` … `fp_FL_FS_hazard.s` | **10 of 10 SIGSEGV** (rc 139) |
+| no argument at all | **SIGSEGV** (rc 139) |
+| a path that does not exist (`/nonexistent/nope.s`) | **rc 1, clean exit** |
+
+The last row is why the heading says "every program it processes"
+rather than "every input": the file-open check runs first and returns 1
+without ever constructing a processor. Everything that gets past it
+dies. The result is the same with and without
+`QT_QPA_PLATFORM=offscreen`, which is expected — the crash is a missing
+`QApplication`, not a missing display.
 
 **Mechanism.** `CMakeLists.txt:135` is
 
