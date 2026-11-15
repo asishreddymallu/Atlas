@@ -313,24 +313,40 @@ TEST(InstructionDocs, EveryNameInTheUniverseHasAnEntryAndEveryEntryIsInTheUniver
     for (const QString &key : docs.keys())
         documented.insert(key);
 
-    QStringList missing, extra;
+    QStringList missing, unexplained;
+    int outsideButMarked = 0;
     for (const QString &n : all)
         if (!documented.count(n))
             missing << n;
     for (const QString &key : docs.keys())
-        if (!all.count(key))
-            extra << key;
+    {
+        if (all.count(key))
+            continue;
+        // An entry outside the universe is allowed, but only if it SAYS
+        // it does not work. That is how the 36 names the lexer rejects
+        // stay documented after instructions.json stopped offering them:
+        // documenting something that does not assemble is useful, and
+        // claiming it does would not be.
+        if (isUnsupported(docs.value(key).toObject()))
+            ++outsideButMarked;
+        else
+            unexplained << key;
+    }
     missing.sort();
-    extra.sort();
+    unexplained.sort();
 
     std::cerr << "    [ info ] universe " << all.size()
-              << ", entries " << documented.size() << "\n";
+              << ", entries " << documented.size()
+              << ", documented-but-unsupported " << outsideButMarked << "\n";
     EXPECT_TRUE(missing.isEmpty())
         << "in instructions.json or accepted by the lexer, but undocumented ("
         << missing.size() << "): " << missing.join(QLatin1Char(' ')).toStdString();
-    EXPECT_TRUE(extra.isEmpty())
-        << "documented but neither offered nor accepted (" << extra.size()
-        << "): " << extra.join(QLatin1Char(' ')).toStdString();
+    EXPECT_TRUE(unexplained.isEmpty())
+        << "documented, neither offered nor accepted, and NOT marked unsupported ("
+        << unexplained.size() << "): "
+        << unexplained.join(QLatin1Char(' ')).toStdString();
+    EXPECT_GT(outsideButMarked, 0)
+        << "no entry is documented-but-unsupported; the flag has stopped being used";
 }
 
 // ═══════ (b) the support flag is the contract, checked both ways ════════
@@ -636,4 +652,66 @@ TEST(InstructionDocs, PseudoExpansionsMatchTheAssemblerIncludingFixedOperands)
         << wrongMnemonics.size() << " expansion(s) differ; names above";
     EXPECT_TRUE(wrongOperands.isEmpty())
         << wrongOperands.size() << " fixed operand(s) differ; names above";
+}
+
+// ══════ instructions.json is exactly the supported set, both ways ═══════
+//
+// instructions.json is what the UI offers in completion and highlights.
+// Offering a name the assembler cannot read teaches the wrong thing, and
+// failing to offer one it can read hides a working instruction. The two
+// files are therefore pinned to each other.
+
+TEST(InstructionDocs, InstructionsJsonIsExactlyTheSupportedSet)
+{
+    const QJsonObject docs = entries();
+    std::set<QString> supported;
+    for (const QString &name : docs.keys())
+        if (!isUnsupported(docs.value(name).toObject()))
+            supported.insert(name);
+
+    const QStringList listed = instructionNames();
+    std::set<QString> offered(listed.begin(), listed.end());
+
+    QStringList offeredButNotSupported, supportedButNotOffered;
+    for (const QString &n : offered)
+        if (!supported.count(n))
+            offeredButNotSupported << n;
+    for (const QString &n : supported)
+        if (!offered.count(n))
+            supportedButNotOffered << n;
+    offeredButNotSupported.sort();
+    supportedButNotOffered.sort();
+
+    std::cerr << "    [ info ] supported entries " << supported.size()
+              << ", names offered " << offered.size() << "\n";
+
+    EXPECT_TRUE(offeredButNotSupported.isEmpty())
+        << "offered by the UI but not a supported entry ("
+        << offeredButNotSupported.size()
+        << "): " << offeredButNotSupported.join(QLatin1Char(' ')).toStdString();
+    EXPECT_TRUE(supportedButNotOffered.isEmpty())
+        << "a supported entry the UI never offers (" << supportedButNotOffered.size()
+        << "): " << supportedButNotOffered.join(QLatin1Char(' ')).toStdString();
+}
+
+TEST(InstructionDocs, InstructionsJsonListsNoNameTwice)
+{
+    // Four names were listed twice before the sync: fsqrt.s appeared
+    // twice in FInstruction, and jal, jalr and nop were in both
+    // R32Instruction and PseudoInstruction. Both readers flatten every
+    // array, so a duplicate becomes a duplicate completion entry.
+    const QStringList listed = instructionNames();
+    QStringList duplicated;
+    std::set<QString> seen;
+    for (const QString &n : listed)
+    {
+        if (seen.count(n))
+            duplicated << n;
+        seen.insert(n);
+    }
+    duplicated.removeDuplicates();
+    duplicated.sort();
+    EXPECT_TRUE(duplicated.isEmpty())
+        << "listed more than once: " << duplicated.join(QLatin1Char(' ')).toStdString();
+    EXPECT_EQ(listed.size(), int(seen.size()));
 }
