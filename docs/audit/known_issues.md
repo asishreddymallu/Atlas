@@ -1673,17 +1673,18 @@ scope. The processor probes in this work use a harness with an offscreen
 
 Both assemble: they are in `valid_instructions`, in
 `instruction_syntax_map` as `O_FPR_C_FPR`, and have encodings at
-`src/common/instructions.cpp:169-170`. Both have ALU implementations —
-`AluOp::FCVT_D_S` at `src/processor/alu.cpp:1002` and `FCVT_S_D` at
-`:1008`.
+`src/common/instructions.cpp:169-170`.
 
-Neither control unit ever selects them. `grep -n 'FCVT_S_D\|FCVT_D_S'`
-over `src/processor/rvss/rvss_control_unit.cpp` and
-`src/processor/rv5s/rv5s_control_unit.cpp` returns **nothing**, so the
-two ALU cases are dead code and the destination register is written with
-zero.
+**Mechanism.** Neither control unit ever selects them.
+`grep -rn 'FCVT_S_D\|FCVT_D_S' src/` finds the two enumerators declared
+at `src/processor/alu.h:134-135` and handled at `src/processor/alu.cpp:1002`
+and `:1008`, and **nowhere else** — in particular not in
+`src/processor/rvss/rvss_control_unit.cpp` or
+`src/processor/rv5s/rv5s_control_unit.cpp`. Nothing in the tree ever
+constructs either `AluOp`, so both ALU cases are unreachable and the
+destination register keeps the zero it was given.
 
-**Measured** (`atlas-verify/harness/cpuprobe`, real `RVSSProcessor`):
+**Evidence** (`atlas-verify/harness/cpuprobe`, real `RVSSProcessor`):
 
 | program | result |
 |---|---|
@@ -1691,9 +1692,28 @@ zero.
 | `fld f4, (3.0)` then `fcvt.s.d f5, f4` | f4 = `0x4008000000000000` ✓, f5 = **0** |
 | `flw f7, (1.5f)` then `fcvt.d.s f8, f7` | f7 = `0x3FC00000` ✓, f8 = **0** |
 
-Every conversion between single and double silently yields zero. This is
-the most consequential gap found: the instruction assembles, runs, and
-produces a wrong answer rather than an error.
+**Scope of the claim.** Three inputs were run, not every input:
+`fcvt.s.d` on 0.5 and 3.0, and `fcvt.d.s` on 1.5f. All three were chosen
+because they are exactly representable in both widths, which rules out
+the lexer's literal-precision loss (issue 58) as the explanation. The
+*measurement* is therefore three zeros, and the reason to expect a zero
+for any other input is the mechanism above, not an exhaustive sweep.
+
+This is the most consequential gap found: the instruction assembles,
+runs, and produces a wrong answer rather than an error.
+
+**Marked in the data file.** `resources/instructions/instruction_docs.json`
+(v4) carries an optional `caveat` string on both entries:
+
+> Known bug in this simulator: the control unit never maps this
+> instruction, so it assembles but always writes 0 (known_issues 57).
+
+Both stay marked **supported**, because they do assemble, and the test
+suite only assembles — nothing it can do would observe the zero. The
+caveat is the only place the file admits it.
+`InstructionDocs.EveryCaveatIsOnASupportedEntryAndNamesARealKnownIssue`
+pins that a caveat sits on a supported entry and that the number it
+cites has a heading here.
 
 ---
 
