@@ -1688,29 +1688,67 @@ Both assemble: they are in `valid_instructions`, in
 `instruction_syntax_map` as `O_FPR_C_FPR`, and have encodings at
 `src/common/instructions.cpp:169-170`.
 
-**Mechanism.** Neither control unit ever selects them.
-`grep -rn 'FCVT_S_D\|FCVT_D_S' src/` finds the two enumerators declared
-at `src/processor/alu.h:134-135` and handled at `src/processor/alu.cpp:1002`
-and `:1008`, and **nowhere else** — in particular not in
-`src/processor/rvss/rvss_control_unit.cpp` or
-`src/processor/rv5s/rv5s_control_unit.cpp`. Nothing in the tree ever
-constructs either `AluOp`, so both ALU cases are unreachable and the
-destination register keeps the zero it was given.
+**Mechanism**, end to end, every step re-verified:
 
-**Evidence** (`atlas-verify/harness/cpuprobe`, real `RVSSProcessor`):
+1. `src/processor/rvss/rvss_control_unit.cpp:120-124` — `case 0b1010011:`
+   (F-type R) sets `reg_write_ = true` from the **opcode alone**. funct7
+   is never examined here, so an unmapped F-type op still asserts the
+   register write.
+2. `:591` — `GetAluSignal`'s `case 0b1010011:` switches on funct7.
+   `fcvt.s.d` is funct7 `0b0100000` and `fcvt.d.s` is `0b0100001`
+   (`src/common/instructions.cpp:169-170`). **Neither has a case, and
+   that switch has no `default`**, so control falls out of it.
+3. `:972` — and reaches the function's final `return alu::AluOp::NONE;`.
+4. `src/processor/alu.cpp:289` — `float result = 0.0;`. The op switch's
+   `default: break;` at `:1028` leaves it untouched for `NONE`.
+5. `:1050-1052` — `uint64_t result_bits = 0;` then a 4-byte `memcpy`
+   into that zeroed 8-byte word: an all-zero 64-bit result.
+6. `isDInstruction` returns true for both (`instructions.cpp:1137-1145`),
+   so `WriteBack()` routes to `WriteBackDouble()`, which honours
+   `GetRegWrite()` — and the zero is committed.
 
-| program | result |
+So the destination is **overwritten with +0.0, all 64 bits**. It is not
+left alone, and it does not keep a previous value.
+
+**This is a class of defect, not two instructions.** Any F-type funct7
+with no case in that switch falls through to `AluOp::NONE` and silently
+writes zero, because step 1 asserts the write from the opcode alone. The
+liveness sweep (below) found a third instance by the same route —
+`fcvt.d.lu` — and eight more float instructions that fail a different
+way, out of 143 swept.
+
+**Scope of the claim.** The first evidence here was weak and has been
+replaced: it used destinations that were already zero, so it could not
+tell "writes 0" from "does not write". Four preloaded-destination pairs
+now settle it. Each runs the same program twice, once with the
+conversion and once without, because `DebugRun()` runs to completion:
+
+| destination preloaded with | after the conversion |
 |---|---|
-| `fld f1, (0.5)` then `fcvt.s.d f2, f1` | f1 = `0x3FE0000000000000` ✓, f2 = **`0x0000000000000000`** |
-| `fld f4, (3.0)` then `fcvt.s.d f5, f4` | f4 = `0x4008000000000000` ✓, f5 = **0** |
-| `flw f7, (1.5f)` then `fcvt.d.s f8, f7` | f7 = `0x3FC00000` ✓, f8 = **0** |
+| f2 = 7.0 `0x401C000000000000`, then `fcvt.s.d f2, f1` | **`0x0000000000000000`** |
+| f2 = 123.0 `0x405EC00000000000`, then `fcvt.s.d f2, f1` | **`0x0000000000000000`** |
+| f8 = 9.0f `0x41100000`, then `fcvt.d.s f8, f7` | **`0x0000000000000000`** |
+| f8 = 123.0f `0x42F60000`, then `fcvt.d.s f8, f7` | **`0x0000000000000000`** |
 
-**Scope of the claim.** Three inputs were run, not every input:
-`fcvt.s.d` on 0.5 and 3.0, and `fcvt.d.s` on 1.5f. All three were chosen
-because they are exactly representable in both widths, which rules out
-the lexer's literal-precision loss (issue 58) as the explanation. The
-*measurement* is therefore three zeros, and the reason to expect a zero
-for any other input is the mechanism above, not an exhaustive sweep.
+The result does not depend on the old value: 7.0 and 123.0 give the same
+all-zero word. Two positive controls show the method is not blind —
+`fcvt.d.w f2, x1` over a preloaded f2 = 7.0 writes −1.0, so a real write
+is detected; and the preload alone, with nothing after it, still reads
+7.0, so the sentinel is not being lost some other way. Downstream code
+sees a clean `+0.0`: `fadd.s f3, f2, f2` on the result yields `+0.0`, no
+NaN and no trap, so the corruption propagates as ordinary arithmetic.
+
+**Why a control-unit fix alone is not enough.** Both ALU cases are also
+wrong in a second, independent way. `alu.cpp:1004` is
+`static_cast<float>(ina)` and `:1010` is `static_cast<double>(ina)`,
+where `ina` is the raw `uint64_t` (`fpexecute(AluOp, uint64_t ina, ...)`
+at `:282`) — they convert the **bit pattern as an integer**, not the
+stored value. The function memcpy's `ina` into `float a` at `:286` for
+exactly that purpose, and neither case uses `a`. Worse, `fpexecute`
+only ever memcpy's 4 bytes, so `fcvt.s.d`'s *double* operand cannot be
+read correctly by that signature at all. Mapping the funct7 would make
+these two instructions run and still produce wrong answers. This is a
+design problem in the float ALU's interface, not a one-line fix.
 
 This is the most consequential gap found: the instruction assembles,
 runs, and produces a wrong answer rather than an error.
