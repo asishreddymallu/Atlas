@@ -36,6 +36,9 @@ public:
     void changeProcessor(ProcessorType vmType);
     ProcessorType getProcessorType();
     void reset();
+    /// Drops a runSlot/debugRunSlot that is still queued, so a stop
+    /// cannot be overtaken by a run that was requested before it.
+    void cancelPendingRun();
     void loadProgram(const AssembledProgram &program);
     void loadProgram(const std::string &sourceText);
     void run();

@@ -16,6 +16,8 @@
 #include "processor/rvss/rvss_processor.h"
 #include "processor/processor_manager.h"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QtGlobal>
 #include "common/globals.h"
 #include "common/assembled_program.h"
@@ -239,6 +241,7 @@ void ProcessorManager::debugRun()
 
 void ProcessorManager::stop()
 {
+    cancelPendingRun();
     m_currentProcessor->RequestStop();
 }
 void ProcessorManager::pause()
@@ -292,10 +295,28 @@ void ProcessorManager::reset()
     // Called from the UI thread (MainWindow::tryParseAndLoadProgram) while
     // the worker may still be inside Run(). StopAndReset stops the worker,
     // waits for it to leave Run(), and only then clears - known_issues 62.
+    cancelPendingRun();
     if (!m_currentProcessor->StopAndReset())
     {
         qWarning("Kites: processor did not stop within the timeout; not reset");
     }
+}
+
+void ProcessorManager::cancelPendingRun()
+{
+    // A run is started by posting runSlot/debugRunSlot to this object on
+    // the worker thread. If one of those is still sitting in the queue
+    // when a stop arrives, it will run AFTERWARDS - Run() begins with
+    // ClearStop(), so it discards a stop that predates it - and the
+    // freshly reset processor starts stepping again. That reopens every
+    // window StopAndReset closes: it is how a Reset ends up concurrent
+    // with a Run, which is what dereferenced an empty last_breakpoint_pc_
+    // in the rv5s loop and what put the cache assertion back.
+    //
+    // Dropping the queued invocation is the narrow fix. It must happen
+    // BEFORE the stop: the UI thread is the only poster and it is inside
+    // this call, so once the queue is drained nothing new can arrive.
+    QCoreApplication::removePostedEvents(this, QEvent::MetaCall);
 }
 
 ProcessorType ProcessorManager::getProcessorType()
