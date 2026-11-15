@@ -113,6 +113,7 @@ void RVSSProcessor::setProcessorState()
 
 void RVSSProcessor::Run()
 {
+    RunScope scope(*this); // marks the worker busy; see the header's invariant
     ClearStop();
     while (!stop_requested_ && program_counter_ < program_size_)
     {
@@ -518,7 +519,14 @@ void RVSSProcessor::HandleSyscall()
                 std::cout << "VM_STDIN_START" << std::endl;
                 output_status_ = "VM_STDIN_START";
                 std::unique_lock<std::mutex> lock(input_mutex_);
-                input_cv_.wait(lock, [this]() { return !input_queue_.empty(); });
+                // Also wakes on stop: without this a program blocked in an
+                // ecall read could never be stopped, and StopAndReset would
+                // sit out its whole timeout.
+                input_cv_.wait(lock,
+                               [this]()
+                               { return !input_queue_.empty() || stop_requested_; });
+                if (input_queue_.empty())
+                    return; // stopped while waiting for input
                 output_status_ = "VM_STDIN_END";
                 std::cout << "VM_STDIN_END" << std::endl;
 
@@ -1067,6 +1075,7 @@ void RVSSProcessor::WriteBackCsr()
 
 void RVSSProcessor::DebugRun()
 {
+    RunScope scope(*this);
     ClearStop();
     while (!stop_requested_ && program_counter_ < program_size_)
     {
@@ -1194,6 +1203,9 @@ bool RVSSProcessor::StepAndNotify()
 
 void RVSSProcessor::Undo()
 {
+    // Mutates undo_stack_/redo_stack_ and the register file, all of which
+    // a running worker is writing. Called from the UI thread.
+    QMutexLocker locker(&step_mutex_);
     qInfo() << "Attempting to undo last step in rvss";
     if (undo_stack_.empty())
     {
@@ -1260,6 +1272,7 @@ void RVSSProcessor::Undo()
 
 void RVSSProcessor::Redo()
 {
+    QMutexLocker locker(&step_mutex_);
     qInfo() << "Attempting to redo last undone step in rvss";
     if (redo_stack_.empty())
     {

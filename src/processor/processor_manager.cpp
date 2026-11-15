@@ -15,6 +15,8 @@
 #include "processor/rv5s/rv5s_processor_nh_nf.h"
 #include "processor/rvss/rvss_processor.h"
 #include "processor/processor_manager.h"
+
+#include <QtGlobal>
 #include "common/globals.h"
 #include "common/assembled_program.h"
 #include "assembler/assembler.h"
@@ -287,7 +289,13 @@ Kites::CircuitScene *ProcessorManager::getCircuitScene() const
 }
 void ProcessorManager::reset()
 {
-    m_currentProcessor->Reset();
+    // Called from the UI thread (MainWindow::tryParseAndLoadProgram) while
+    // the worker may still be inside Run(). StopAndReset stops the worker,
+    // waits for it to leave Run(), and only then clears - known_issues 62.
+    if (!m_currentProcessor->StopAndReset())
+    {
+        qWarning("Kites: processor did not stop within the timeout; not reset");
+    }
 }
 
 ProcessorType ProcessorManager::getProcessorType()

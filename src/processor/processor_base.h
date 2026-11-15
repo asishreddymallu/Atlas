@@ -97,6 +97,37 @@ class ProcessorBase : public QObject
     // serializes cycles between the run thread and manual steps from the gui thread
     QMutex step_mutex_;
 
+    // ─────────────────── THREADING INVARIANT ───────────────────────────
+    // The processor object lives on a worker QThread (main_window.cpp
+    // moves ProcessorManager to it), but the UI thread calls into it
+    // directly: reset(), stop(), undo(), redo(), setBreakpoints(). Before
+    // known_issues 62 was fixed, Reset() cleared the caches and the
+    // undo/redo stacks from the UI thread while the worker was inside
+    // Run(); that is what corrupted the heap and tripped the cache
+    // assertion.
+    //
+    // LOCK ORDER, and it is a one-way street:
+    //
+    //      run_state_mutex_   ->   step_mutex_
+    //
+    //   * The UI thread takes run_state_mutex_ to wait until the worker
+    //     has left Run(), RELEASES it, and only then takes step_mutex_
+    //     to clear state. It never holds both at once.
+    //   * The worker takes step_mutex_ inside StepAndNotify(), and
+    //     pause_mutex_ separately before and after each step. It NEVER
+    //     holds step_mutex_ while acquiring pause_mutex_ or
+    //     run_state_mutex_, so no cycle can form.
+    //   * RequestStop() must NOT hold pause_mutex_ while resetting. It
+    //     used to, which put the UI thread's pause_mutex_ -> (Reset)
+    //     ordering up against the worker's, and was the lock-ordering
+    //     hazard that made a naive fix deadlock.
+    //
+    // worker_in_run_ is true for exactly as long as a Run()/DebugRun()
+    // loop is executing on the worker; RunScope maintains it.
+    QMutex run_state_mutex_;
+    QWaitCondition run_idle_condition_;
+    bool worker_in_run_{false};
+
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
     std::queue<std::string> input_queue_;
@@ -152,6 +183,33 @@ class ProcessorBase : public QObject
     void RequestStop();
     void RequestPause();
     void RequestResume();
+
+    /**@brief Marks the worker as inside/outside a Run() loop. Use RunScope. */
+    void MarkRunEntered();
+    void MarkRunExited();
+
+    /**@brief Blocks the CALLING thread until no Run() loop is executing.
+     * @return false on timeout, in which case the caller must not clear state.
+     */
+    bool WaitForRunIdle(int timeout_ms);
+
+    /**@brief Stops the worker, waits for it to leave Run(), then resets.
+     *
+     * The whole of known_issues 62 in one call. Returns false if the
+     * worker did not become idle within timeout_ms; on false NOTHING is
+     * cleared, because a hung UI is better than a corrupted processor.
+     */
+    bool StopAndReset(int timeout_ms = 3000);
+
+    /// RAII marker for a Run()/DebugRun() loop body.
+    struct RunScope
+    {
+        explicit RunScope(ProcessorBase &vm) : vm_(vm) { vm_.MarkRunEntered(); }
+        ~RunScope() { vm_.MarkRunExited(); }
+        RunScope(const RunScope &) = delete;
+        RunScope &operator=(const RunScope &) = delete;
+        ProcessorBase &vm_;
+    };
 
     bool IsStopRequested() const;
     void ClearStop();

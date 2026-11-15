@@ -7,6 +7,7 @@ namespace Kites
 {
 void RV5StageVM_Base::Run()
 {
+    RunScope scope(*this);
     ClearStop();
     while (!stop_requested_ && (program_counter_ < program_size_ || !is_pipeline_drained()))
     {
@@ -81,6 +82,7 @@ bool RV5StageVM_Base::StepAndNotify()
 
 void RV5StageVM_Base::DebugRun()
 {
+    RunScope scope(*this);
     ClearStop();
     while (!stop_requested_ && (program_counter_ < program_size_ || !is_pipeline_drained()))
     {
@@ -841,6 +843,7 @@ bool RV5StageVM_Base::is_pipeline_drained() const
 
 void RV5StageVM_Base::Undo()
 {
+    QMutexLocker locker(&step_mutex_);
     if (undo_stack_.empty())
     {
         return;
@@ -905,6 +908,7 @@ void RV5StageVM_Base::Undo()
 
 void RV5StageVM_Base::Redo()
 {
+    QMutexLocker locker(&step_mutex_);
     if (redo_stack_.empty())
     {
         return;

@@ -5,6 +5,9 @@
  */
 
 #include "processor/processor_base.h"
+
+#include <QDeadlineTimer>
+#include <QtGlobal>
 #include "common/globals.h"
 #include "config/config.h"
 #include <algorithm>
@@ -22,12 +25,75 @@ ProcessorBase::ProcessorBase()
 {
 }
 
+void ProcessorBase::MarkRunEntered()
+{
+    QMutexLocker locker(&run_state_mutex_);
+    worker_in_run_ = true;
+}
+
+void ProcessorBase::MarkRunExited()
+{
+    QMutexLocker locker(&run_state_mutex_);
+    worker_in_run_ = false;
+    run_idle_condition_.wakeAll();
+}
+
+bool ProcessorBase::WaitForRunIdle(int timeout_ms)
+{
+    QDeadlineTimer deadline(timeout_ms);
+    QMutexLocker locker(&run_state_mutex_);
+    while (worker_in_run_)
+    {
+        if (!run_idle_condition_.wait(&run_state_mutex_, deadline))
+            return false; // timed out; caller must NOT clear state
+    }
+    return true;
+}
+
+bool ProcessorBase::StopAndReset(int timeout_ms)
+{
+    // 1. Ask the worker to stop. Atomic, so no lock needed for the flag.
+    stop_requested_ = true;
+
+    // 2. Wake every place the worker can be blocked:
+    //    - the pause wait and the step-delay wait, both on
+    //      pause_wait_condition_ (and clear pause_requested_, or a paused
+    //      worker would go straight back to sleep);
+    //    - the ecall input wait on input_cv_, whose predicate now also
+    //      tests stop_requested_.
+    {
+        QMutexLocker locker(&pause_mutex_);
+        pause_requested_ = false;
+        pause_wait_condition_.wakeAll();
+    } // pause_mutex_ released HERE - see the lock-order note in the header
+    {
+        std::lock_guard<std::mutex> lock(input_mutex_);
+        input_cv_.notify_all();
+    }
+
+    // 3. Wait until the worker has actually left Run(). Bounded: on
+    //    timeout we return false and clear nothing.
+    if (!WaitForRunIdle(timeout_ms))
+        return false;
+
+    // 4. The worker is idle. step_mutex_ additionally excludes a manual
+    //    Step() driven from the UI thread.
+    QMutexLocker stepLock(&step_mutex_);
+    Reset();
+    return true;
+}
+
 void ProcessorBase::RequestStop()
 {
-    QMutexLocker locker(&pause_mutex_);
-    stop_requested_ = true;
-    pause_wait_condition_.wakeAll();
-    Reset();
+    // Was: lock pause_mutex_, set the flag, wake, and call Reset() while
+    // still holding the lock. That reset ran on the UI thread underneath
+    // a live worker (known_issues 62) and pinned a lock order that made
+    // the obvious fix deadlock.
+    if (!StopAndReset())
+    {
+        qWarning("Kites: the processor did not stop within the timeout; "
+                 "state left untouched rather than cleared under a running worker");
+    }
 }
 void ProcessorBase::RequestPause()
 {
