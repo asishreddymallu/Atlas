@@ -108,11 +108,16 @@ class ProcessorBase : public QObject
     //
     // LOCK ORDER, and it is a one-way street:
     //
-    //      run_state_mutex_   ->   step_mutex_
+    //      run_state_mutex_   ->   step_mutex_      (never both held)
+    //      run_state_mutex_   ->   pause_mutex_     (sequential, never nested)
+    //      run_state_mutex_   ->   input_mutex_     (sequential, never nested)
     //
-    //   * The UI thread takes run_state_mutex_ to wait until the worker
-    //     has left Run(), RELEASES it, and only then takes step_mutex_
-    //     to clear state. It never holds both at once.
+    //   * The UI thread takes run_state_mutex_ to publish the stop and to
+    //     wait until the worker has left Run(), RELEASES it, and only
+    //     then takes step_mutex_ to clear state. It never holds both.
+    //   * StopAndReset takes run_state_mutex_, releases it, and only
+    //     then takes pause_mutex_ and input_mutex_ in turn. No two of
+    //     the four are ever held at the same time by anyone.
     //   * The worker takes step_mutex_ inside StepAndNotify(), and
     //     pause_mutex_ separately before and after each step. It NEVER
     //     holds step_mutex_ while acquiring pause_mutex_ or
@@ -127,17 +132,34 @@ class ProcessorBase : public QObject
     QMutex run_state_mutex_;
     QWaitCondition run_idle_condition_;
     bool worker_in_run_{false};
-    // Bumped by StopAndReset under run_state_mutex_. A run carries the
-    // epoch it was REQUESTED under; if a stop has happened since, the
-    // run refuses to start. Checking the epoch and marking the worker
-    // busy happen in the same critical section (BeginRun), which is what
-    // closes the window between a run slot being dequeued and the worker
-    // actually entering Run().
+    // The thread worker_in_run_ was set on, i.e. the thread currently
+    // inside Run(). RequestStop() compares against it: a stop asked for
+    // BY the run loop (rv5s ecall exit) cannot wait for that same loop
+    // to finish, and must not Reset() under its own feet.
+    Qt::HANDLE run_thread_{nullptr};
+    // Bumped by StopAndReset under run_state_mutex_, in the SAME critical
+    // section that publishes stop_requested_. A run carries the epoch it
+    // was REQUESTED under; if a stop has happened since, the run refuses
+    // to start. Checking the epoch, marking the worker busy AND clearing
+    // the previous stop all happen in that one critical section
+    // (BeginRun), so a stop either lands before the run is approved - and
+    // cancels it - or after the clear, and survives. There is no third
+    // outcome, which is what the old check-then-act ClearStop allowed:
+    // measured at 47 hangs in 60 debug-run cycles with a 100 ms delay
+    // injected into that window.
     quint64 stop_epoch_{0};
-    // The epoch BeginRun last approved a run under. ClearStop compares
-    // the two: if a stop arrived after this run was approved, the run
-    // must NOT wipe it.
-    quint64 running_epoch_{0};
+    // Non-zero for as long as a StopAndReset is between publishing the
+    // stop and finishing its Reset(). BeginRun refuses while it is set,
+    // whatever the epoch says.
+    //
+    // The epoch alone is not enough for a run REQUESTED on the worker
+    // itself: ProcessorManager::runSlot() reads CurrentStopEpoch() at
+    // dequeue time, so its epoch always matches and the run is always
+    // approved - including one dequeued in the middle of a stop, which
+    // then clears the stop and runs to completion while StopAndReset
+    // waits. Measured at 126 timeouts in 500 debug-run cycles once the
+    // re-assert loop that had been hiding it was removed.
+    int stop_in_progress_{0};
 
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
@@ -195,7 +217,13 @@ class ProcessorBase : public QObject
     void RequestPause();
     void RequestResume();
 
-    /**@brief Marks the worker as inside/outside a Run() loop. Use RunScope. */
+    /**@brief Entry point for a Run()/DebugRun() reached WITHOUT BeginRun
+     * (ProcessorManager::run(), the REPL, the tests, the out-of-tree
+     * harnesses). Marks the worker busy and clears a stale stop - the
+     * same work BeginRun does, through the same ClearStopLocked, so
+     * there is exactly one clearing mechanism. A no-op when BeginRun has
+     * already approved this run. Use RunScope, do not call directly.
+     */
     void MarkRunEntered();
     void MarkRunExited();
 
@@ -221,6 +249,19 @@ class ProcessorBase : public QObject
      */
     bool StopAndReset(int timeout_ms = 3000);
 
+    /**@brief The stop path for a caller that IS the run loop.
+     *
+     * RV5StageProcessorNHNF::handle_syscall() calls RequestStop() from
+     * inside Run(), on the worker's own thread. Waiting for that thread
+     * to leave Run() can only time out - measured at 3016 ms per ecall -
+     * and resetting under it would wipe the program mid-run. This
+     * publishes the stop and wakes the waits, and does nothing else.
+     *
+     * @return false if the caller is NOT the run thread, in which case
+     * nothing was done and the caller should use StopAndReset().
+     */
+    bool StopFromRunLoop();
+
     /// RAII marker for a Run()/DebugRun() loop body.
     struct RunScope
     {
@@ -233,6 +274,17 @@ class ProcessorBase : public QObject
 
     bool IsStopRequested() const;
     void ClearStop();
+
+  private:
+    /**@brief THE place a stop is cleared. run_state_mutex_ must be held,
+     * so that the clear is ordered against StopAndReset's publish.
+     */
+    void ClearStopLocked();
+
+    /**@brief Drops this StopAndReset's claim on the processor. */
+    void EndStopInProgress();
+
+  public:
     virtual void SetActiveWireNames() = 0;
     virtual void setProcessorState() = 0;
 

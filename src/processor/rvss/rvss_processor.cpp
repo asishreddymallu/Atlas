@@ -114,7 +114,6 @@ void RVSSProcessor::setProcessorState()
 void RVSSProcessor::Run()
 {
     RunScope scope(*this); // marks the worker busy; see the header's invariant
-    ClearStop();
     while (!stop_requested_ && program_counter_ < program_size_)
     {
         if (last_breakpoint_pc_ != UINT64_MAX && program_counter_ != last_breakpoint_pc_)
@@ -1076,7 +1075,6 @@ void RVSSProcessor::WriteBackCsr()
 void RVSSProcessor::DebugRun()
 {
     RunScope scope(*this);
-    ClearStop();
     while (!stop_requested_ && program_counter_ < program_size_)
     {
         current_delta_.old_pc = program_counter_;

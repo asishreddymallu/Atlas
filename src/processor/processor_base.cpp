@@ -7,6 +7,7 @@
 #include "processor/processor_base.h"
 
 #include <QDeadlineTimer>
+#include <QThread>
 #include <QtGlobal>
 #include "common/globals.h"
 #include "config/config.h"
@@ -28,13 +29,23 @@ ProcessorBase::ProcessorBase()
 void ProcessorBase::MarkRunEntered()
 {
     QMutexLocker locker(&run_state_mutex_);
+    if (worker_in_run_)
+        return; // BeginRun already approved this run and cleared the stop
+    // Direct entry: ProcessorManager::run() (the REPL and the batch CLI),
+    // the vm->DebugRun() tests, the out-of-tree harnesses. Nothing checked
+    // an epoch for us, so a stop left standing by the previous
+    // StopAndReset is still set and the loop would exit without executing
+    // anything. Clear it here - same lock, same helper, one mechanism.
     worker_in_run_ = true;
+    run_thread_ = QThread::currentThreadId();
+    ClearStopLocked();
 }
 
 void ProcessorBase::MarkRunExited()
 {
     QMutexLocker locker(&run_state_mutex_);
     worker_in_run_ = false;
+    run_thread_ = nullptr;
     run_idle_condition_.wakeAll();
 }
 
@@ -47,10 +58,20 @@ quint64 ProcessorBase::CurrentStopEpoch()
 bool ProcessorBase::BeginRun(quint64 epoch)
 {
     QMutexLocker locker(&run_state_mutex_);
+    if (stop_in_progress_ > 0)
+        return false; // a stop is in flight: it asked first
     if (epoch != stop_epoch_)
         return false; // a stop happened after this run was requested
+    // Approve, mark busy and clear the previous stop in ONE critical
+    // section. StopAndReset publishes stop_requested_ under this same
+    // mutex, so the two cannot interleave: a stop is either seen by the
+    // epoch check above (and cancels this run) or lands after the clear
+    // below (and stands). The clear used to happen later, in ClearStop(),
+    // with the lock dropped in between - a stop arriving in that window
+    // was wiped and the worker then parked in the untimed pause wait.
     worker_in_run_ = true;
-    running_epoch_ = epoch;
+    run_thread_ = QThread::currentThreadId();
+    ClearStopLocked();
     return true;
 }
 
@@ -68,24 +89,28 @@ bool ProcessorBase::WaitForRunIdle(int timeout_ms)
 
 bool ProcessorBase::StopAndReset(int timeout_ms)
 {
-    // 1. Invalidate any run that was requested before this stop. Under
-    //    run_state_mutex_, so it is ordered against BeginRun: either the
-    //    run marked itself busy first (and step 3 waits for it), or it
-    //    sees the new epoch and refuses to start.
+    // 1. Claim the processor and invalidate any run that was requested
+    //    before this stop. Under run_state_mutex_, so it is ordered
+    //    against BeginRun: either the run marked itself busy first (and
+    //    step 3 waits for it), or it sees the new epoch - or the claim -
+    //    and refuses to start.
+    //    The stop flag is published in that SAME critical section, which
+    //    is what orders it against BeginRun's clear. Publishing it
+    //    outside was the residual hang: BeginRun (then ClearStop) could
+    //    pass its check, drop the lock, and only afterwards wipe a stop
+    //    that had been set in between.
+    //
+    //    The flag is atomic, but that is NOT what makes the WAKE safe:
+    //    each waiter evaluates its predicate while holding its own mutex,
+    //    and each wake below is issued while holding that SAME mutex, so
+    //    it cannot slip between a waiter's predicate check and its wait.
+    //    Measured, not assumed.
     {
         QMutexLocker locker(&run_state_mutex_);
         ++stop_epoch_;
-    }
-
-    // 2. Ask the worker to stop.
-    //
-    //    The flag itself is atomic, but that is NOT what makes the wake
-    //    safe: each waiter evaluates its predicate while holding its own
-    //    mutex, and the wake below is issued while holding that SAME
-    //    mutex, so it cannot slip between a waiter's predicate check and
-    //    its wait. Measured, not assumed - see the probe build that
-    //    sleeps between check and wait in all three waits.
-    stop_requested_ = true;
+        stop_requested_ = true;
+        ++stop_in_progress_;
+    } // run_state_mutex_ released HERE, before any other lock is taken
 
     // 2. Wake every place the worker can be blocked:
     //    - the pause wait and the step-delay wait, both on
@@ -103,45 +128,79 @@ bool ProcessorBase::StopAndReset(int timeout_ms)
         input_cv_.notify_all();
     }
 
-    // 3. Wait until the worker has actually left Run(), RE-ASSERTING the
-    //    stop as we go. A single wake is not enough in practice: Run()
-    //    opens with ClearStop(), and a run that was approved immediately
-    //    before this stop can wipe stop_requested_ and then park in the
-    //    pause wait - which has no timeout - after our wake has already
-    //    fired. Measured at roughly 1 hang in 300 stress cycles with a
-    //    one-shot wake.
+    // 3. Wait until the worker has actually left Run(). One wake is
+    //    enough now, and that is the point of this whole change.
     //
-    //    Re-asserting is safe because the flag is exactly what every
-    //    waiter's predicate tests, and the worker cannot be mid-run
-    //    legitimately once a stop has been issued. Bounded: on timeout
-    //    we return false and clear nothing.
-    QDeadlineTimer deadline(timeout_ms);
-    bool idle = false;
-    while (!(idle = WaitForRunIdle(50)) && !deadline.hasExpired())
-    {
-        stop_requested_ = true;
-        {
-            QMutexLocker locker(&pause_mutex_);
-            pause_requested_ = false;
-            pause_wait_condition_.wakeAll();
-        }
-        {
-            std::lock_guard<std::mutex> lock(input_mutex_);
-            input_cv_.notify_all();
-        }
-    }
+    //    This used to re-assert the stop and re-wake every 50 ms for the
+    //    whole timeout, because a run approved just before the stop
+    //    could wipe stop_requested_ in ClearStop() and then park in the
+    //    untimed pause wait. That was a mask over two holes, both now
+    //    closed by the critical section above: the clear happens inside
+    //    BeginRun under run_state_mutex_, and stop_in_progress_ refuses
+    //    a run dequeued while this stop is still in flight. With the
+    //    mask removed and the holes open the probe measured 126 and 119
+    //    timeouts in 500 debug-run cycles; with them closed, 0.
+    //
+    //    Bounded: on timeout we return false and clear nothing.
+    const bool idle = WaitForRunIdle(timeout_ms);
     if (!idle)
+    {
+        EndStopInProgress();
         return false;
+    }
 
     // 4. The worker is idle. step_mutex_ additionally excludes a manual
-    //    Step() driven from the UI thread.
-    QMutexLocker stepLock(&step_mutex_);
-    Reset();
+    //    Step() driven from the UI thread. The two mutexes are taken one
+    //    after the other, never nested - see the header's lock order.
+    {
+        QMutexLocker stepLock(&step_mutex_);
+        Reset();
+    }
+    EndStopInProgress();
+    return true;
+}
+
+void ProcessorBase::EndStopInProgress()
+{
+    QMutexLocker locker(&run_state_mutex_);
+    if (stop_in_progress_ > 0)
+        --stop_in_progress_;
+}
+
+bool ProcessorBase::StopFromRunLoop()
+{
+    {
+        QMutexLocker locker(&run_state_mutex_);
+        if (!worker_in_run_ || run_thread_ != QThread::currentThreadId())
+            return false; // somebody else's thread: this is not our path
+        // Same publish as StopAndReset, same critical section, so a run
+        // request that is still queued is cancelled by this stop too.
+        ++stop_epoch_;
+        stop_requested_ = true;
+    }
+    // The loop may be sitting in the pause wait (a breakpoint, or a debug
+    // run); wake it so it can see the flag. There is nothing to wait for
+    // and nothing to reset - we ARE the loop, and it is about to exit.
+    QMutexLocker locker(&pause_mutex_);
+    pause_requested_ = false;
+    pause_wait_condition_.wakeAll();
     return true;
 }
 
 void ProcessorBase::RequestStop()
 {
+    // Two callers, two threads:
+    //   * ProcessorManager::step(), on the UI thread, when the program
+    //     ran out while the user was stepping. That one wants the full
+    //     stop-and-reset.
+    //   * RV5StageProcessorNHNF::handle_syscall(), on the WORKER thread,
+    //     from inside Run(), on ecall. That one cannot wait for itself to
+    //     leave Run() - it would burn the whole timeout every time, which
+    //     measured at 3016 ms per ecall - and must not Reset() under its
+    //     own feet.
+    if (StopFromRunLoop())
+        return;
+
     // Was: lock pause_mutex_, set the flag, wake, and call Reset() while
     // still holding the lock. That reset ran on the UI thread underneath
     // a live worker (known_issues 62) and pinned a lock order that made
@@ -166,21 +225,23 @@ bool ProcessorBase::IsStopRequested() const
 {
     return stop_requested_;
 }
-void ProcessorBase::ClearStop()
+void ProcessorBase::ClearStopLocked()
 {
-    // Run() opens with ClearStop(). If a stop was issued AFTER this run
-    // was approved by BeginRun, clearing here would throw it away - and
-    // on a debug run it is worse than that, because pause_requested_ is
-    // set from start_paused_ and the worker then parks in the pause wait
-    // that the stop had already woken. StopAndReset sits out its whole
-    // timeout. Measured at 1 hang in ~300 cycles before this guard.
-    {
-        QMutexLocker locker(&run_state_mutex_);
-        if (stop_epoch_ != running_epoch_)
-            return; // a stop arrived after this run began: leave it standing
-    }
+    // run_state_mutex_ is held by the caller. That is the whole point:
+    // the clear has to be ordered against StopAndReset's publish, or a
+    // stop issued between the two is silently lost.
     stop_requested_ = false;
     pause_requested_ = start_paused_.exchange(false);
+}
+
+void ProcessorBase::ClearStop()
+{
+    // Run()/DebugRun() no longer call this - RunScope's MarkRunEntered
+    // does the clearing, on the same lock as the epoch check. The only
+    // caller left is ProcessorManager::debugRun(), which arms the REPL's
+    // manual-step mode without starting a run loop at all.
+    QMutexLocker locker(&run_state_mutex_);
+    ClearStopLocked();
 }
 
 void ProcessorBase::LoadProgram(const AssembledProgram &program)

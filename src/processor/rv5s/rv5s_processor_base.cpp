@@ -8,7 +8,6 @@ namespace Kites
 void RV5StageVM_Base::Run()
 {
     RunScope scope(*this);
-    ClearStop();
     while (!stop_requested_ && (program_counter_ < program_size_ || !is_pipeline_drained()))
     {
         if (last_breakpoint_pc_ && program_counter_ != *last_breakpoint_pc_)
@@ -83,7 +82,6 @@ bool RV5StageVM_Base::StepAndNotify()
 void RV5StageVM_Base::DebugRun()
 {
     RunScope scope(*this);
-    ClearStop();
     while (!stop_requested_ && (program_counter_ < program_size_ || !is_pipeline_drained()))
     {
 #ifdef VM_DEBUG_PRINTS
