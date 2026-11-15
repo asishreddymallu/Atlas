@@ -50,6 +50,7 @@ bool ProcessorBase::BeginRun(quint64 epoch)
     if (epoch != stop_epoch_)
         return false; // a stop happened after this run was requested
     worker_in_run_ = true;
+    running_epoch_ = epoch;
     return true;
 }
 
@@ -102,9 +103,34 @@ bool ProcessorBase::StopAndReset(int timeout_ms)
         input_cv_.notify_all();
     }
 
-    // 3. Wait until the worker has actually left Run(). Bounded: on
-    //    timeout we return false and clear nothing.
-    if (!WaitForRunIdle(timeout_ms))
+    // 3. Wait until the worker has actually left Run(), RE-ASSERTING the
+    //    stop as we go. A single wake is not enough in practice: Run()
+    //    opens with ClearStop(), and a run that was approved immediately
+    //    before this stop can wipe stop_requested_ and then park in the
+    //    pause wait - which has no timeout - after our wake has already
+    //    fired. Measured at roughly 1 hang in 300 stress cycles with a
+    //    one-shot wake.
+    //
+    //    Re-asserting is safe because the flag is exactly what every
+    //    waiter's predicate tests, and the worker cannot be mid-run
+    //    legitimately once a stop has been issued. Bounded: on timeout
+    //    we return false and clear nothing.
+    QDeadlineTimer deadline(timeout_ms);
+    bool idle = false;
+    while (!(idle = WaitForRunIdle(50)) && !deadline.hasExpired())
+    {
+        stop_requested_ = true;
+        {
+            QMutexLocker locker(&pause_mutex_);
+            pause_requested_ = false;
+            pause_wait_condition_.wakeAll();
+        }
+        {
+            std::lock_guard<std::mutex> lock(input_mutex_);
+            input_cv_.notify_all();
+        }
+    }
+    if (!idle)
         return false;
 
     // 4. The worker is idle. step_mutex_ additionally excludes a manual
@@ -142,6 +168,17 @@ bool ProcessorBase::IsStopRequested() const
 }
 void ProcessorBase::ClearStop()
 {
+    // Run() opens with ClearStop(). If a stop was issued AFTER this run
+    // was approved by BeginRun, clearing here would throw it away - and
+    // on a debug run it is worse than that, because pause_requested_ is
+    // set from start_paused_ and the worker then parks in the pause wait
+    // that the stop had already woken. StopAndReset sits out its whole
+    // timeout. Measured at 1 hang in ~300 cycles before this guard.
+    {
+        QMutexLocker locker(&run_state_mutex_);
+        if (stop_epoch_ != running_epoch_)
+            return; // a stop arrived after this run began: leave it standing
+    }
     stop_requested_ = false;
     pause_requested_ = start_paused_.exchange(false);
 }

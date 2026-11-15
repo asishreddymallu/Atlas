@@ -134,6 +134,10 @@ class ProcessorBase : public QObject
     // closes the window between a run slot being dequeued and the worker
     // actually entering Run().
     quint64 stop_epoch_{0};
+    // The epoch BeginRun last approved a run under. ClearStop compares
+    // the two: if a stop arrived after this run was approved, the run
+    // must NOT wipe it.
+    quint64 running_epoch_{0};
 
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
