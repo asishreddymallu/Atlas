@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "about": "Documentation for every mnemonic the assembler's lexer knows, plus the names instructions.json lists. 'format' is a template and 'example' is a line that assembles (branch/jump targets use label_t, la uses a .data label named label_d). Entries with support 'unsupported' do not assemble end to end; 'reason' says why and 'useInstead' names the working spelling, if any. Summaries are RISC-V behaviour checked against this simulator, which is 64-bit only.",
+  "about": "Documentation for every mnemonic the assembler's lexer knows, plus the names instructions.json lists. 'format' is a template and 'example' is a line that assembles (branch/jump targets use label_t, la uses a .data label named label_d). Entries with support 'unsupported' do not assemble end to end; 'reason' says why and 'useInstead' names the working spelling, if any. Summaries are RISC-V behaviour checked against this simulator, which is 64-bit only. An entry with a 'caveat' assembles but misbehaves when run; the caveat names the known issue.",
   "entries": {
     "lui": {
       "ext": "RV32I",
@@ -13,7 +13,7 @@
       "ext": "RV32I",
       "category": "upper-immediate",
       "format": "auipc rd, imm",
-      "summary": "Add upper immediate to the PC: rd = pc + (imm << 12)",
+      "summary": "Add upper immediate to the PC: rd = pc + (imm << 12), with the shifted immediate sign-extended to 64 bits",
       "example": "auipc x5, 1"
     },
     "jal": {
@@ -1385,14 +1385,16 @@
       "category": "float-convert",
       "format": "fcvt.s.d fd, fs1",
       "summary": "Convert a double to a single-precision float",
-      "example": "fcvt.s.d f1, f2"
+      "example": "fcvt.s.d f1, f2",
+      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but always writes 0 (known_issues 57)."
     },
     "fcvt.d.s": {
       "ext": "D",
       "category": "float-convert",
       "format": "fcvt.d.s fd, fs1",
       "summary": "Convert a single-precision float to a double",
-      "example": "fcvt.d.s f1, f2"
+      "example": "fcvt.d.s f1, f2",
+      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but always writes 0 (known_issues 57)."
     },
     "csrrw": {
       "ext": "Zicsr",
