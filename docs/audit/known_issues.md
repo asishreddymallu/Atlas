@@ -1899,3 +1899,75 @@ and make the error sites use the source text the lexer already holds
 rather than re-reading the file (part 2); the second would repair every
 in-memory diagnostic at once.
 
+
+---
+
+## 60. `fcvt.d.lu` writes zero: the ALU case is labelled `FCVT_S_LU` by mistake
+
+The mirror of issue 57. There the control unit never names the
+operation; here it names it correctly and the **ALU has no case for it**.
+
+**Measured** (`atlas-verify/harness/livesweep`, real `RVSSProcessor`,
+destination preloaded with `0x40934800ABCDEF12` and `x5 = 965`):
+
+| program | f1 after |
+|---|---|
+| `fcvt.d.lu f1, x5` | **`0x0000000000000000`** |
+| `fcvt.d.l f1, x5` | `0x408E280000000000` (965.0) |
+| `fcvt.d.wu f1, x5` | `0x408E280000000000` (965.0) |
+| `fcvt.s.lu f1, x5` | `0x44714000` (965.0f) |
+
+Its two nearest neighbours work. It does not.
+
+**Mechanism.** The control unit is fine, in both models:
+`src/processor/rvss/rvss_control_unit.cpp:720-722` returns
+`alu::AluOp::FCVT_D_LU` for funct5 `0b00011`, and
+`src/processor/rv5s/rv5s_control_unit.cpp:355-356` does the same.
+
+`src/processor/alu.cpp` has three entry points — `execute` (`:18`),
+`fpexecute` for single precision (`:282`) and `dfpexecute` for double
+(`:661`). A D-extension instruction reaches `dfpexecute`
+(`rvss_processor.cpp:392`, from `ExecuteDouble()`), whose `switch (op)`
+begins at `:699`.
+
+In that switch the conversions run in order:
+
+```
+:844   case AluOp::FCVT_D_W:
+:850   case AluOp::FCVT_D_WU:
+:856   case AluOp::FCVT_D_L:
+:862   case AluOp::FCVT_S_LU:     <- should be FCVT_D_LU
+```
+
+`FCVT_S_LU` already has its own case at `:482`, in `fpexecute`, where it
+belongs and where it works. The one at `:862` is a **copy-paste slip
+with the right body and the wrong label**:
+
+```cpp
+case AluOp::FCVT_S_LU:
+{
+    auto ula = static_cast<uint64_t>(ina);
+    result = static_cast<double>(ula);   // `result` here IS a double
+    break;
+}
+```
+
+That body is exactly what `FCVT_D_LU` should do. Changing the label
+alone would fix the instruction. Because the two labels sit in
+different switches, the duplicate is not a compile error — it is simply
+dead code in `dfpexecute`, since a single-precision op never arrives
+there.
+
+With no case, `FCVT_D_LU` reaches `default: break;` (`:1028`), leaves
+`double result = 0.0;` (`:668`) untouched, and `:1050-1052` commits that
+zero. The destination is **written with +0.0**, exactly as in 57 — not
+left alone.
+
+**Both models are affected.** `alu.cpp` is one shared file, and the rv5s
+control unit maps the operation the same way, so rv5s selects the same
+missing case.
+
+Not fixed here: `src/` is outside this branch's scope.
+`resources/instructions/instruction_docs.json` carries a `caveat` on the
+entry so the documentation does not promise a working instruction.
+
