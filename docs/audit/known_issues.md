@@ -1931,6 +1931,21 @@ out-of-tree harnesses** — the eight test files that assemble from a
 `std::istringstream`, and `atlas-verify/harness/{cpuprobe,livesweep}`.
 Not the GUI, and not the CLI.
 
+**Measured through the app's own path**
+(`atlas-verify/harness/apppath` replays `main_window.cpp:844-847`
+exactly — write the buffer to the temp file, call the file overload,
+catch, read the dump):
+
+| program | message box | editor's inline error |
+|---|---|---|
+| `addi x5, x6` | `Failed to parse file: <...>/vm_state/temp.asm` | `Invalid syntax: Expected: addi <gp-reg>, <gp-reg>, <imm>` (line 3, cols 3-7) |
+| `la x5, s9` | same | `Invalid syntax: Expected: la <reg>, <text label>` (line 5) |
+| `addi x5, x6, 3` | none | `"errorCode": 0` |
+
+No "Could not open the file" anywhere. The message box is generic, which
+is its own (much smaller) complaint, but the real diagnostic reaches the
+user inline with the right line and columns.
+
 That is still worth fixing, because it is what makes a failure in those
 harnesses unreadable — this entry exists only because a harness hit it
 and the message sent the investigation the wrong way. But it is a
