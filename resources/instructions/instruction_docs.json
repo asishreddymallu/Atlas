@@ -1386,7 +1386,7 @@
       "format": "fcvt.s.d fd, fs1",
       "summary": "Convert a double to a single-precision float",
       "example": "fcvt.s.d f1, f2",
-      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but always writes 0 (known_issues 57)."
+      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but overwrites its destination register with 0 (known_issues 57)."
     },
     "fcvt.d.s": {
       "ext": "D",
@@ -1394,7 +1394,7 @@
       "format": "fcvt.d.s fd, fs1",
       "summary": "Convert a single-precision float to a double",
       "example": "fcvt.d.s f1, f2",
-      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but always writes 0 (known_issues 57)."
+      "caveat": "Known bug in this simulator: the control unit never maps this instruction, so it assembles but overwrites its destination register with 0 (known_issues 57)."
     },
     "csrrw": {
       "ext": "Zicsr",
