@@ -133,6 +133,11 @@ void ProcessorManager::runSlotEpoch(quint64 epoch)
         // them. Returning silently leaves the Processor action disabled
         // with no run in progress - measured as a stuck UI in the
         // run-then-immediate-stop scenario.
+        // debugRunSlotEpoch set start_paused_ before getting here. Nothing
+        // consumed it, because the clear inside BeginRun never ran, so the
+        // NEXT plain Run would silently start paused - a window that looks
+        // exactly like a hang.
+        m_currentProcessor->start_paused_ = false;
         emit runFinishedSignal();
         return;
     }

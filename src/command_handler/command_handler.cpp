@@ -289,7 +289,15 @@ void ExecuteCommand(const Command &command, ProcessorManager &manager, ReplState
         break;
     }
     case CommandType::STOP:
-        manager.stop();
+        // Both of these return false when the worker did not leave Run()
+        // within the timeout, and on false NOTHING was cleared. Swallowing
+        // that left the REPL reporting success over a processor that is
+        // still running (and tripped -Wunused-result on reset()).
+        if (!manager.stop())
+        {
+            throw std::runtime_error("the processor did not stop within the timeout; "
+                                     "nothing was reset");
+        }
         break;
     case CommandType::UNDO:
         manager.undo();
@@ -298,7 +306,11 @@ void ExecuteCommand(const Command &command, ProcessorManager &manager, ReplState
         manager.redo();
         break;
     case CommandType::RESET:
-        manager.reset();
+        if (!manager.reset())
+        {
+            throw std::runtime_error("the processor did not stop within the timeout; "
+                                     "nothing was reset");
+        }
         break;
     case CommandType::MODIFY_REGISTER:
         ExecuteModifyRegister(command.args, manager);
