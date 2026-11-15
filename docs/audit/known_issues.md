@@ -1802,3 +1802,100 @@ more than one place.
 **Nothing documents this**, so it is not a disagreement with a summary —
 it is a finding. A teaching simulator that stores `0.1` as `0.100001`
 will confuse anyone writing a floating-point exercise.
+
+---
+
+## 59. A label named like a register cannot be referenced, and the error says "Could not open the file"
+
+Two defects stacked: a name collision that makes a valid-looking
+program fail, and an error path that replaces the real complaint with a
+meaningless one. Found by accident — the liveness sweep used `s9` as a
+data label, and the resulting message sent the investigation the wrong
+way for several minutes.
+
+**Minimal reproducer.**
+
+```asm
+.data
+  s9: .float 9.0
+.text
+main:
+  la x5, s9
+```
+
+Through `assemble(std::istream &)`, the route every in-memory caller
+uses, this throws:
+
+```
+Could not open the file.: iostream error
+```
+
+Nothing is wrong with any file. Renaming the label to `snine` makes the
+program assemble.
+
+**Mechanism, part 1 — the collision.** `src/assembler/lexer.cpp:129`
+tests `IsValidGeneralPurposeRegister(value)`, and `:133`
+`IsValidFloatingPointRegister(value)`, **before** the operand-position
+rule at `:151-155` that would make the identifier a `LABEL_REF`. So an
+identifier whose text matches a register is lexed as a register
+wherever it appears, and the parser's format match then fails.
+
+Proved at the token level (`atlas-verify/harness/cur_tokdump`):
+
+| source | token for the last operand |
+|---|---|
+| `la x5, s9` | `GP_REGISTER` |
+| `la x6, safe` | `LABEL_REF` |
+
+The *definition* is unaffected — `s9:` lexes as `LABEL`, and a program
+that defines `s9` without referencing it assembles cleanly. Only the
+reference breaks.
+
+The rule at `:151-155` carries a comment explaining that an identifier
+in operand position is a label reference "even if its text happens to
+match an instruction mnemonic, e.g. `j add`". That protection was
+placed above the `isValidInstruction` check but **below** the two
+register checks, so mnemonic-named labels work and register-named
+labels do not.
+
+**Affected names.** Every one tested fails: `x5`, `f1`, and the ABI
+aliases `zero`, `ra`, `s9`, `t0`, `a0`, `fa0`. The alias table is
+`src/common/register_names.h:16-19` (`zero ra sp gp tp t0-t6 s0-s11
+a0-a7`) plus `x0-x31`, `f0-f31` and the FP aliases — roughly 128
+reserved words, none of them documented as reserved. `safe` works.
+
+It is not specific to `la`: `beq x5, x5, s9` fails the same way.
+
+**Mechanism, part 2 — why the message is useless.** The parser does
+produce a good diagnostic. Assembled from a file on disk, the same
+program reports:
+
+```
+Invalid syntax: Expected: la <reg>, <text label>
+```
+
+and `beq x5, x5, s9` reports its own `Expected: beq <gp-reg>,
+<gp-reg>, <imm> or beq <gp-reg>, <gp-reg>, <text-label>`.
+
+The message is lost on the in-memory path. Every one of those error
+sites quotes the offending source line by **re-reading it from disk** —
+`GetLineFromFile(filename_, token.line_number)`, at `parser.cpp:129`,
+`pseudo_formats.cpp:77`, `:249`, `:918`, `csr_formats.cpp:88`,
+`f_d_formats.cpp:466`, `:488` and twelve places in `i_m_formats.cpp` —
+32 call sites in all.
+`GetLineFromFile` opens the path and throws when it cannot
+(`src/utils/utils.cpp:94-98`). A stream has no path, so building the
+error message throws `std::ios_base::failure("Could not open the
+file.")`, and that escapes in place of the diagnostic.
+
+So the editor and every in-memory caller get "Could not open the file"
+for **any** syntax error, not just this one. That is the more damaging
+half: the collision costs a rename, the masked diagnostic costs the
+search.
+
+**Not fixed here.** `src/` is outside this branch's scope. A fix would
+move the two register checks below the operand-position rule (part 1)
+and make the error sites use the source text the lexer already holds
+rather than re-reading the file (part 2); the second would repair every
+in-memory diagnostic at once.
+
