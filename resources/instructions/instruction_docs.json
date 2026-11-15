@@ -1,12 +1,12 @@
 {
-  "schema": 1,
-  "about": "Documentation for every mnemonic in instructions.json. 'format' is a template, 'example' is a line that must assemble (branch/jump targets use label_t, la uses a .data label named label_d). Entries with status 'pending' are not standard RISC-V and are filled in after the assembler and processor have been read.",
+  "schema": 2,
+  "about": "Documentation for every mnemonic the assembler's lexer knows, plus the names instructions.json lists. 'format' is a template and 'example' is a line that assembles (branch/jump targets use label_t, la uses a .data label named label_d). Entries with support 'unsupported' do not assemble end to end; 'reason' says why and 'useInstead' names the working spelling, if any. Summaries are RISC-V behaviour checked against this simulator, which is 64-bit only.",
   "entries": {
     "lui": {
       "ext": "RV32I",
       "category": "upper-immediate",
       "format": "lui rd, imm",
-      "summary": "Load upper immediate: rd = imm << 12, low 12 bits zero",
+      "summary": "Load upper immediate: rd = imm << 12, low 12 bits zero; the result is sign-extended to 64 bits",
       "example": "lui x5, 1"
     },
     "auipc": {
@@ -209,7 +209,7 @@
       "ext": "RV32I",
       "category": "shift",
       "format": "sll rd, rs1, rs2",
-      "summary": "Shift rs1 left by the low bits of rs2 (5 bits in RV32, 6 in RV64)",
+      "summary": "Shift rs1 left by the low 6 bits of rs2 (this simulator is 64-bit only)",
       "example": "sll x5, x6, x7"
     },
     "slt": {
@@ -237,14 +237,14 @@
       "ext": "RV32I",
       "category": "shift",
       "format": "srl rd, rs1, rs2",
-      "summary": "Shift rs1 right by the low bits of rs2, filling with zeros",
+      "summary": "Shift rs1 right by the low 6 bits of rs2, filling with zeros",
       "example": "srl x5, x6, x7"
     },
     "sra": {
       "ext": "RV32I",
       "category": "shift",
       "format": "sra rd, rs1, rs2",
-      "summary": "Shift rs1 right by the low bits of rs2, keeping the sign bit",
+      "summary": "Shift rs1 right by the low 6 bits of rs2, keeping the sign bit",
       "example": "sra x5, x6, x7"
     },
     "or": {
@@ -266,7 +266,9 @@
       "category": "system",
       "format": "fence",
       "summary": "Order memory accesses before the fence against those after it",
-      "example": "fence"
+      "example": "fence",
+      "support": "unsupported",
+      "reason": "Parses, but the code generator has no encoding for it and throws 'Invalid instruction type'."
     },
     "ecall": {
       "ext": "RV32I",
@@ -316,63 +318,81 @@
       "category": "arithmetic",
       "format": "addiw rd, rs1, imm",
       "summary": "32-bit add of rs1 and imm, result sign-extended to 64 bits",
-      "example": "addiw x5, x6, 1"
+      "example": "addiw x5, x6, 1",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "slliw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "slliw rd, rs1, shamt",
       "summary": "32-bit shift left by a constant, result sign-extended to 64 bits",
-      "example": "slliw x5, x6, 3"
+      "example": "slliw x5, x6, 3",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "srliw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "srliw rd, rs1, shamt",
       "summary": "32-bit logical shift right by a constant, result sign-extended",
-      "example": "srliw x5, x6, 3"
+      "example": "srliw x5, x6, 3",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "sraiw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sraiw rd, rs1, shamt",
       "summary": "32-bit arithmetic shift right by a constant, result sign-extended",
-      "example": "sraiw x5, x6, 3"
+      "example": "sraiw x5, x6, 3",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "addw": {
       "ext": "RV64I",
       "category": "arithmetic",
       "format": "addw rd, rs1, rs2",
       "summary": "32-bit add, result sign-extended to 64 bits",
-      "example": "addw x5, x6, x7"
+      "example": "addw x5, x6, x7",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "subw": {
       "ext": "RV64I",
       "category": "arithmetic",
       "format": "subw rd, rs1, rs2",
       "summary": "32-bit subtract, result sign-extended to 64 bits",
-      "example": "subw x5, x6, x7"
+      "example": "subw x5, x6, x7",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "sllw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sllw rd, rs1, rs2",
       "summary": "32-bit shift left by the low 5 bits of rs2, result sign-extended",
-      "example": "sllw x5, x6, x7"
+      "example": "sllw x5, x6, x7",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "srlw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "srlw rd, rs1, rs2",
       "summary": "32-bit logical shift right by the low 5 bits of rs2, result sign-extended",
-      "example": "srlw x5, x6, x7"
+      "example": "srlw x5, x6, x7",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "sraw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sraw rd, rs1, rs2",
       "summary": "32-bit arithmetic shift right by the low 5 bits of rs2, result sign-extended",
-      "example": "sraw x5, x6, x7"
+      "example": "sraw x5, x6, x7",
+      "support": "unsupported",
+      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
     },
     "mul": {
       "ext": "M",
@@ -509,10 +529,11 @@
     },
     "sqrt.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fsqrt.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fsqrt.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fsqrt.s.",
+      "summary": "Not accepted by this assembler. Write fsqrt.s."
     },
     "fsgnj.s": {
       "ext": "F",
@@ -539,29 +560,31 @@
       "ext": "F",
       "category": "float-arithmetic",
       "format": "fmin.s fd, fs1, fs2",
-      "summary": "fd = the smaller of fs1 and fs2",
+      "summary": "fd = the smaller of fs1 and fs2; -0.0 counts as smaller than +0.0; if one operand is NaN the other is returned",
       "example": "fmin.s f1, f2, f3"
     },
     "fmax.s": {
       "ext": "F",
       "category": "float-arithmetic",
       "format": "fmax.s fd, fs1, fs2",
-      "summary": "fd = the larger of fs1 and fs2",
+      "summary": "fd = the larger of fs1 and fs2; +0.0 counts as larger than -0.0; if one operand is NaN the other is returned",
       "example": "fmax.s f1, f2, f3"
     },
     "min.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmin.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmin.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmin.s.",
+      "summary": "Not accepted by this assembler. Write fmin.s."
     },
     "max.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmax.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmax.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmax.s.",
+      "summary": "Not accepted by this assembler. Write fmax.s."
     },
     "fcvt.w.s": {
       "ext": "F",
@@ -621,59 +644,67 @@
     },
     "cvt.w.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.w.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.w.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.w.s.",
+      "summary": "Not accepted by this assembler. Write fcvt.w.s."
     },
     "cvt.wu.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.wu.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.wu.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.wu.s.",
+      "summary": "Not accepted by this assembler. Write fcvt.wu.s."
     },
     "cvt.l.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.l.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.l.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.l.s.",
+      "summary": "Not accepted by this assembler. Write fcvt.l.s."
     },
     "cvt.lu.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.lu.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.lu.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.lu.s.",
+      "summary": "Not accepted by this assembler. Write fcvt.lu.s."
     },
     "cvt.s.w": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.s.w",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.s.w",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.s.w.",
+      "summary": "Not accepted by this assembler. Write fcvt.s.w."
     },
     "cvt.s.wu": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.s.wu",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.s.wu",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.s.wu.",
+      "summary": "Not accepted by this assembler. Write fcvt.s.wu."
     },
     "cvt.s.l": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.s.l",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.s.l",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.s.l.",
+      "summary": "Not accepted by this assembler. Write fcvt.s.l."
     },
     "cvt.s.lu": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.s.lu",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.s.lu",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.s.lu.",
+      "summary": "Not accepted by this assembler. Write fcvt.s.lu."
     },
     "fmv.x.w": {
       "ext": "F",
@@ -691,38 +722,44 @@
     },
     "fmv.x.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmv.x.w",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmv.x.w",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmv.x.w.",
+      "summary": "Not accepted by this assembler. Write fmv.x.w."
     },
     "fmv.s.x": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmv.w.x",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmv.w.x",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmv.w.x.",
+      "summary": "Not accepted by this assembler. Write fmv.w.x."
     },
     "mv.x.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmv.x.w",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and nothing in the assembler or the processor defines it.",
+      "summary": "Not an instruction in this assembler."
     },
     "fclass.s": {
       "ext": "F",
       "category": "float-classify",
       "format": "fclass.s rd, fs1",
       "summary": "rd = a one-hot mask saying what kind of number fs1 is (infinity, normal, subnormal, zero, NaN, and its sign)",
-      "example": "fclass.s x5, f1"
+      "example": "fclass.s x5, f1",
+      "support": "unsupported",
+      "reason": "Parses, but the code generator has no encoding for it and throws 'Invalid instruction type'."
     },
     "class.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fclass.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and fclass.s cannot be assembled either (no encoding path).",
+      "summary": "Not available in this assembler."
     },
     "feq.s": {
       "ext": "F",
@@ -747,52 +784,59 @@
     },
     "eq.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "feq.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "feq.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts feq.s.",
+      "summary": "Not accepted by this assembler. Write feq.s."
     },
     "lt.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "flt.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "flt.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts flt.s.",
+      "summary": "Not accepted by this assembler. Write flt.s."
     },
     "le.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fle.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fle.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fle.s.",
+      "summary": "Not accepted by this assembler. Write fle.s."
     },
     "ne.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "ge.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "lt.u.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "ge.u.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "fld": {
       "ext": "D",
@@ -866,10 +910,11 @@
     },
     "sqrt.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fsqrt.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fsqrt.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fsqrt.d.",
+      "summary": "Not accepted by this assembler. Write fsqrt.d."
     },
     "fsgnj.d": {
       "ext": "D",
@@ -915,94 +960,107 @@
     },
     "min.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmin.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmin.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmin.d.",
+      "summary": "Not accepted by this assembler. Write fmin.d."
     },
     "max.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fmax.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fmax.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fmax.d.",
+      "summary": "Not accepted by this assembler. Write fmax.d."
     },
     "cvt.s.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.s.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.s.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.s.d.",
+      "summary": "Not accepted by this assembler. Write fcvt.s.d."
     },
     "cvt.d.s": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.d.s",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.d.s",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.d.s.",
+      "summary": "Not accepted by this assembler. Write fcvt.d.s."
     },
     "cvt.w.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.w.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.w.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.w.d.",
+      "summary": "Not accepted by this assembler. Write fcvt.w.d."
     },
     "cvt.wu.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.wu.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.wu.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.wu.d.",
+      "summary": "Not accepted by this assembler. Write fcvt.wu.d."
     },
     "cvt.d.w": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.d.w",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.d.w",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.d.w.",
+      "summary": "Not accepted by this assembler. Write fcvt.d.w."
     },
     "cvt.d.wu": {
       "ext": "F",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fcvt.d.wu",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "fcvt.d.wu",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts fcvt.d.wu.",
+      "summary": "Not accepted by this assembler. Write fcvt.d.wu."
     },
     "class.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "fclass.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and fclass.d cannot be assembled either (no encoding path).",
+      "summary": "Not available in this assembler."
     },
     "eq.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "feq.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "feq.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts feq.d.",
+      "summary": "Not accepted by this assembler. Write feq.d."
     },
     "ne.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "lt.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": "flt.d",
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": "flt.d",
+      "reason": "The lexer does not accept this name ('Unexpected token'). The assembler accepts flt.d.",
+      "summary": "Not accepted by this assembler. Write flt.d."
     },
     "ge.d": {
       "ext": "D",
-      "category": "unverified-alias",
-      "status": "pending",
-      "aliasOfProposed": null,
-      "note": "Not a standard RISC-V mnemonic. Meaning, operand format and example to be settled from what the assembler encodes and the processor executes."
+      "category": "unsupported-name",
+      "support": "unsupported",
+      "useInstead": null,
+      "reason": "The lexer does not accept this name, and the processor has no operation for it (it implements only feq, flt and fle).",
+      "summary": "Not an instruction in this assembler."
     },
     "la": {
       "ext": "pseudo",
@@ -1026,7 +1084,7 @@
       "format": "mv rd, rs",
       "summary": "Copy a register: rd = rs",
       "example": "mv x5, x6",
-      "expandsTo": "addi rd, rs, 0"
+      "expandsTo": "add rd, rs, x0"
     },
     "not": {
       "ext": "pseudo",
@@ -1195,6 +1253,224 @@
       "summary": "Jump to the address in rs",
       "example": "jr x5",
       "expandsTo": "jalr x0, 0(rs)"
+    },
+    "mulw": {
+      "ext": "RV64M",
+      "category": "multiply-divide",
+      "format": "mulw rd, rs1, rs2",
+      "summary": "32-bit multiply of the low words, result sign-extended to 64 bits",
+      "example": "mulw x5, x6, x7"
+    },
+    "divw": {
+      "ext": "RV64M",
+      "category": "multiply-divide",
+      "format": "divw rd, rs1, rs2",
+      "summary": "32-bit signed division of the low words, result sign-extended; dividing by zero gives -1",
+      "example": "divw x5, x6, x7"
+    },
+    "divuw": {
+      "ext": "RV64M",
+      "category": "multiply-divide",
+      "format": "divuw rd, rs1, rs2",
+      "summary": "32-bit unsigned division of the low words, result sign-extended; dividing by zero gives all ones",
+      "example": "divuw x5, x6, x7"
+    },
+    "remw": {
+      "ext": "RV64M",
+      "category": "multiply-divide",
+      "format": "remw rd, rs1, rs2",
+      "summary": "32-bit signed remainder of the low words, result sign-extended; remainder by zero gives rs1's low word",
+      "example": "remw x5, x6, x7"
+    },
+    "remuw": {
+      "ext": "RV64M",
+      "category": "multiply-divide",
+      "format": "remuw rd, rs1, rs2",
+      "summary": "32-bit unsigned remainder of the low words, result sign-extended; remainder by zero gives rs1's low word",
+      "example": "remuw x5, x6, x7"
+    },
+    "feq.d": {
+      "ext": "D",
+      "category": "float-compare",
+      "format": "feq.d rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 == fs2, else 0 (0 if either is NaN)",
+      "example": "feq.d x5, f1, f2"
+    },
+    "flt.d": {
+      "ext": "D",
+      "category": "float-compare",
+      "format": "flt.d rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 < fs2, else 0 (0 if either is NaN)",
+      "example": "flt.d x5, f1, f2"
+    },
+    "fle.d": {
+      "ext": "D",
+      "category": "float-compare",
+      "format": "fle.d rd, fs1, fs2",
+      "summary": "rd = 1 if fs1 <= fs2, else 0 (0 if either is NaN)",
+      "example": "fle.d x5, f1, f2"
+    },
+    "fmin.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fmin.d fd, fs1, fs2",
+      "summary": "fd = the smaller of fs1 and fs2; -0.0 counts as smaller than +0.0; if one operand is NaN the other is returned",
+      "example": "fmin.d f1, f2, f3"
+    },
+    "fmax.d": {
+      "ext": "D",
+      "category": "float-arithmetic",
+      "format": "fmax.d fd, fs1, fs2",
+      "summary": "fd = the larger of fs1 and fs2; +0.0 counts as larger than -0.0; if one operand is NaN the other is returned",
+      "example": "fmax.d f1, f2, f3"
+    },
+    "fcvt.w.d": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.w.d rd, fs1",
+      "summary": "Convert a double to a signed 32-bit integer, sign-extended into rd",
+      "example": "fcvt.w.d x5, f1"
+    },
+    "fcvt.wu.d": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.wu.d rd, fs1",
+      "summary": "Convert a double to an unsigned 32-bit integer, sign-extended into rd",
+      "example": "fcvt.wu.d x5, f1"
+    },
+    "fcvt.l.d": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.l.d rd, fs1",
+      "summary": "Convert a double to a signed 64-bit integer",
+      "example": "fcvt.l.d x5, f1"
+    },
+    "fcvt.lu.d": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.lu.d rd, fs1",
+      "summary": "Convert a double to an unsigned 64-bit integer",
+      "example": "fcvt.lu.d x5, f1"
+    },
+    "fcvt.d.w": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.d.w fd, rs1",
+      "summary": "Convert a signed 32-bit integer to a double",
+      "example": "fcvt.d.w f1, x5"
+    },
+    "fcvt.d.wu": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.d.wu fd, rs1",
+      "summary": "Convert an unsigned 32-bit integer to a double",
+      "example": "fcvt.d.wu f1, x5"
+    },
+    "fcvt.d.l": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.d.l fd, rs1",
+      "summary": "Convert a signed 64-bit integer to a double",
+      "example": "fcvt.d.l f1, x5"
+    },
+    "fcvt.d.lu": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.d.lu fd, rs1",
+      "summary": "Convert an unsigned 64-bit integer to a double",
+      "example": "fcvt.d.lu f1, x5"
+    },
+    "fcvt.s.d": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.s.d fd, fs1",
+      "summary": "Convert a double to a single-precision float",
+      "example": "fcvt.s.d f1, f2"
+    },
+    "fcvt.d.s": {
+      "ext": "D",
+      "category": "float-convert",
+      "format": "fcvt.d.s fd, fs1",
+      "summary": "Convert a single-precision float to a double",
+      "example": "fcvt.d.s f1, f2"
+    },
+    "csrrw": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrw rd, csr, rs1",
+      "summary": "Swap: rd = old CSR value, then CSR = rs1",
+      "example": "csrrw x5, fcsr, x6"
+    },
+    "csrrs": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrs rd, csr, rs1",
+      "summary": "rd = old CSR value, then set every CSR bit that is set in rs1",
+      "example": "csrrs x5, fcsr, x6"
+    },
+    "csrrc": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrc rd, csr, rs1",
+      "summary": "rd = old CSR value, then clear every CSR bit that is set in rs1",
+      "example": "csrrc x5, fcsr, x6"
+    },
+    "csrrwi": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrwi rd, csr, uimm",
+      "summary": "Like csrrw, but the value written is a 5-bit immediate",
+      "example": "csrrwi x5, fcsr, 1"
+    },
+    "csrrsi": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrsi rd, csr, uimm",
+      "summary": "Like csrrs, but the bits to set come from a 5-bit immediate",
+      "example": "csrrsi x5, fcsr, 1"
+    },
+    "csrrci": {
+      "ext": "Zicsr",
+      "category": "csr",
+      "format": "csrrci rd, csr, uimm",
+      "summary": "Like csrrc, but the bits to clear come from a 5-bit immediate",
+      "example": "csrrci x5, fcsr, 1"
+    },
+    "fclass.d": {
+      "ext": "D",
+      "category": "float-classify",
+      "format": "fclass.d rd, fs1",
+      "summary": "rd = a one-hot mask saying what kind of number fs1 is",
+      "example": "fclass.d x5, f1",
+      "support": "unsupported",
+      "reason": "Parses, but the code generator has no encoding for it and throws 'Invalid instruction type'."
+    },
+    "fence_i": {
+      "ext": "Zifencei",
+      "category": "system",
+      "format": "fence_i",
+      "summary": "Synchronise the instruction stream with earlier stores",
+      "example": "fence_i",
+      "support": "unsupported",
+      "reason": "Parses, but the code generator has no encoding for it ('Invalid instruction type'). Note the underscore: RISC-V spells it fence.i."
+    },
+    "call": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "call label",
+      "summary": "Call a subroutine: ra = return address, then jump to label",
+      "example": "call label_t",
+      "support": "unsupported",
+      "reason": "Declared as a pseudo-instruction, but the parser has no expansion for it and rejects every form ('Expected: call <text label>')."
+    },
+    "tail": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "tail label",
+      "summary": "Tail call: jump to label without saving a return address",
+      "example": "tail label_t",
+      "support": "unsupported",
+      "reason": "Declared as a pseudo-instruction, but the parser has no expansion for it and rejects every form ('Expected: tail <text label>')."
     }
   }
 }
