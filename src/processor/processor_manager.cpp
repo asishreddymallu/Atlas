@@ -126,7 +126,16 @@ void ProcessorManager::runSlotEpoch(quint64 epoch)
     // run start on the freshly reset state - measured at 5 of 5 before
     // this existed.
     if (!m_currentProcessor->BeginRun(epoch))
-        return; // overtaken by a stop: do not run, do not ClearStop
+    {
+        // Overtaken by a stop: do not run, do not ClearStop. The UI still
+        // has to be told, because it disabled the execution actions when
+        // it asked for this run and runFinishedSlot is what re-enables
+        // them. Returning silently leaves the Processor action disabled
+        // with no run in progress - measured as a stuck UI in the
+        // run-then-immediate-stop scenario.
+        emit runFinishedSignal();
+        return;
+    }
     run();
     m_currentProcessor->MarkRunExited(); // idempotent with Run()'s RunScope
     emit runFinishedSignal();
