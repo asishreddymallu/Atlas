@@ -1699,10 +1699,15 @@ Both assemble: they are in `valid_instructions`, in
    (`src/common/instructions.cpp:169-170`). **Neither has a case, and
    that switch has no `default`**, so control falls out of it.
 3. `:972` — and reaches the function's final `return alu::AluOp::NONE;`.
-4. `src/processor/alu.cpp:289` — `float result = 0.0;`. The op switch's
-   `default: break;` at `:1028` leaves it untouched for `NONE`.
-5. `:1050-1052` — `uint64_t result_bits = 0;` then a 4-byte `memcpy`
-   into that zeroed 8-byte word: an all-zero 64-bit result.
+4. `src/processor/alu.cpp` has three entry points — `execute` (`:18`),
+   `fpexecute` for single precision (`:282`) and `dfpexecute` for double
+   (`:661`). A D-extension instruction reaches **`dfpexecute`**
+   (`rvss_processor.cpp:392`), whose `double result = 0.0;` is at
+   `:668` and whose op switch ends in `default: break;` at `:1028`,
+   leaving `result` untouched for `NONE`.
+5. `:1050-1052` — `uint64_t result_bits = 0;` then
+   `memcpy(&result_bits, &result, sizeof(result))`: an all-zero 64-bit
+   result.
 6. `isDInstruction` returns true for both (`instructions.cpp:1137-1145`),
    so `WriteBack()` routes to `WriteBackDouble()`, which honours
    `GetRegWrite()` — and the zero is committed.
@@ -1712,10 +1717,21 @@ left alone, and it does not keep a previous value.
 
 **This is a class of defect, not two instructions.** Any F-type funct7
 with no case in that switch falls through to `AluOp::NONE` and silently
-writes zero, because step 1 asserts the write from the opcode alone. The
-liveness sweep (below) found a third instance by the same route —
-`fcvt.d.lu` — and eight more float instructions that fail a different
-way, out of 143 swept.
+writes zero, because step 1 asserts the write from the opcode alone.
+
+The liveness sweep over all 146 supported instructions found nine more
+broken float instructions, in two further shapes:
+
+- **issue 60**, `fcvt.d.lu`: the **mirror** of this one, not another
+  instance of it. There the control unit names the operation correctly
+  and the **ALU** has no case for it — the slot where `FCVT_D_LU`
+  belongs holds a mislabelled duplicate `case AluOp::FCVT_S_LU:`. Same
+  symptom, opposite half.
+- **issue 61**, the eight fused multiply-adds: a third shape again —
+  they are never routed to the float path at all, so nothing is
+  written and the destination keeps its old value rather than a zero.
+
+Of 143 instructions swept, 132 were live and these 11 were not.
 
 **Scope of the claim.** The first evidence here was weak and has been
 replaced: it used destinations that were already zero, so it could not
@@ -1741,14 +1757,12 @@ NaN and no trap, so the corruption propagates as ordinary arithmetic.
 **Why a control-unit fix alone is not enough.** Both ALU cases are also
 wrong in a second, independent way. `alu.cpp:1004` is
 `static_cast<float>(ina)` and `:1010` is `static_cast<double>(ina)`,
-where `ina` is the raw `uint64_t` (`fpexecute(AluOp, uint64_t ina, ...)`
-at `:282`) — they convert the **bit pattern as an integer**, not the
-stored value. The function memcpy's `ina` into `float a` at `:286` for
-exactly that purpose, and neither case uses `a`. Worse, `fpexecute`
-only ever memcpy's 4 bytes, so `fcvt.s.d`'s *double* operand cannot be
-read correctly by that signature at all. Mapping the funct7 would make
-these two instructions run and still produce wrong answers. This is a
-design problem in the float ALU's interface, not a one-line fix.
+where `ina` is the raw `uint64_t` (`dfpexecute(AluOp, uint64_t ina,
+...)` at `:661`) — they convert the **bit pattern as an integer**, not
+the stored value. `dfpexecute` memcpy's `ina` into `double a` at `:665`
+for exactly that purpose, and neither case uses `a`. Mapping the funct7
+would make these two instructions run and still produce wrong answers,
+so this is not a one-line fix.
 
 This is the most consequential gap found: the instruction assembles,
 runs, and produces a wrong answer rather than an error.
