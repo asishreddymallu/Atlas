@@ -1902,10 +1902,40 @@ sites quotes the offending source line by **re-reading it from disk** —
 error message throws `std::ios_base::failure("Could not open the
 file.")`, and that escapes in place of the diagnostic.
 
-So the editor and every in-memory caller get "Could not open the file"
-for **any** syntax error, not just this one. That is the more damaging
-half: the collision costs a rename, the masked diagnostic costs the
-search.
+**Who actually hits this — a correction.** An earlier version of this
+entry said the editor gets "Could not open the file" for any syntax
+error. That is **wrong**, and the claim was never checked against the
+app's own path. It was checked afterwards:
+
+`assemble(std::istream &)` has **no caller anywhere in `src/`**. All
+three real callers use the file-path overload:
+
+| caller | route |
+|---|---|
+| `src/ui/main_window/main_window.cpp:844-847` (Assemble / Run / Debug) | writes the editor buffer to `globals::temporary_assembly_file_path`, then `assemble(<that path>)` |
+| `src/processor/processor_manager.cpp:79-82` | same temp file, same overload |
+| `src/command_handler/command_handler.cpp:187` (the CLI) | `assemble(filePath)` |
+
+Because a real file is on disk, `GetLineFromFile` opens it and the
+diagnostic survives. What the user sees for a bad line is therefore the
+*parser's* message, not an iostream failure: `assemble()` dumps every
+real per-line error to `globals::errors_dump_file_path`
+(`assembler.cpp:93` → `DumpErrors`, which writes `error.message`
+verbatim) and throws `"Failed to parse file: <path>"` (`:98`).
+`main_window.cpp:861-862` then feeds that dump to
+`EditorTab::setErrorLinesFromFile` for the inline squiggles and shows
+`e.what()` in the message box.
+
+So the masked-diagnostic half reaches only **the unit tests and the
+out-of-tree harnesses** — the eight test files that assemble from a
+`std::istringstream`, and `atlas-verify/harness/{cpuprobe,livesweep}`.
+Not the GUI, and not the CLI.
+
+That is still worth fixing, because it is what makes a failure in those
+harnesses unreadable — this entry exists only because a harness hit it
+and the message sent the investigation the wrong way. But it is a
+testing-path defect, not a user-facing one, and the collision in part 1
+is the half that reaches the app.
 
 **Not fixed here.** `src/` is outside this branch's scope. A fix would
 move the two register checks below the operand-position rule (part 1)
@@ -2078,4 +2108,114 @@ predicates may well be the only thing in the way.
 
 Not fixed here: `src/` is outside this branch's scope. All eight entries
 in `resources/instructions/instruction_docs.json` carry a `caveat`.
+
+
+---
+
+## 62. `Reset()` runs on the UI thread while the processor thread is still executing
+
+An intermittent abort, in two different shapes, from one cause.
+
+**Reproduction.** 200 runs of `atlas-verify/harness/transcript` (which
+drives the real `MainWindow`), each hermetic, on
+`examples/ex_mem_fwd.s`, with the stock `vm_state/config.ini`:
+`processor_type=single_stage` (so `RVSSProcessor`),
+`hazard_detection=false`, `forwarding=false`, `cache_enabled=false`.
+
+**6 of 200 aborted (3%).** Five were the cache assertion; the sixth was
+something else, and the sixth is the one that explains both.
+
+| shape | count |
+|---|---|
+| `cache.cpp:410` assertion, `getByteFromCache called on a cache line that is not present!` | 5 |
+| glibc `malloc_printerr` — heap corruption | 1 |
+
+Note that `cache_enabled=false` does not take the cache out of the
+path. `MemoryController::readInstruction` (`memory_controller.cpp:95`)
+is `return instruction_cache_.readWord(address);` unconditionally, and
+neither `memory_controller.cpp` nor `cache.cpp` reads an enable flag at
+all. Every instruction fetch goes through a cache whatever the config
+says.
+
+**Shape 1 — the assertion, on the processor's worker thread.** The
+faulting thread is never the main thread:
+
+```
+Kites::Cache::getByteFromCache(unsigned long)        <- assert
+Kites::Cache::readGeneric<unsigned int>(unsigned long)
+Kites::Cache::readWord(unsigned long)
+Kites::MemoryController::readInstruction(unsigned long)
+Kites::RVSSProcessor::Fetch()
+Kites::RVSSProcessor::Step()
+Kites::RVSSProcessor::StepAndNotify()
+Kites::RVSSProcessor::Run()
+Kites::ProcessorManager::run()
+Kites::ProcessorManager::runSlot()          <- queued slot invocation
+QObject::event -> QThread::exec             <- a worker QThread
+```
+
+In all five, the **main** thread was inside `settle()`'s event loop
+doing Qt painting (`QWidgetRepaintManager::paintAndFlush`,
+`QWidgetPrivate::paintBackground`, `getOpaqueChildren`) — not in any
+Kites code.
+
+The assertion itself is a single-iteration invariant. `readGeneric`
+(`cache.cpp:504-515`) does, per byte: if `findWay` says the line is
+absent, `evictCacheLine` then `bringIn`, and then `getByteFromCache`.
+Tripping the assert means the line was gone **again** between the
+`bringIn` on `:511` and the lookup on `:513`.
+
+**Shape 2 — the heap corruption, on the main thread, caught in the
+act.** This one names the other party:
+
+```
+MainWindow::run(bool)
+MainWindow::tryParseAndLoadProgram()
+Kites::ProcessorManager::reset()
+Kites::RVSSProcessor::Reset()
+std::stack<Kites::StepDelta>::operator=(&&)
+std::deque<Kites::StepDelta>::clear()
+~StepDelta -> ~vector<Kites::RegisterChange> -> deallocate
+malloc_printerr                              <- glibc: heap corrupted
+```
+
+`RVSSProcessor::Reset()` (`rvss_processor.cpp:1327-1352`) does two
+things that matter here, with no lock and no check that the processor
+has stopped:
+
+- `memory_controller_.reset()`, which resets all three caches
+  (`memory_controller.cpp:14-21`) — the exact mutation that would make
+  a line vanish between `:511` and `:513`;
+- `current_delta_.register_changes.clear()` and
+  `undo_stack_ = std::stack<StepDelta>()`, while the worker thread is
+  pushing into `current_delta_.register_changes` from `WriteBack()`.
+
+So one call, from the UI thread, clears both the cache the worker is
+fetching through and the delta vectors the worker is appending to.
+Which shape you get depends on which it reaches first.
+
+Every `ProcessorManager` connection is `Qt::DirectConnection`
+(`processor_manager.cpp:38-64`), so a signal emitted on the worker runs
+its slot on the worker, and a UI action runs on the UI thread — the two
+meet on the same objects.
+
+**What the evidence supports, and what it does not.**
+
+Supports the race: the heap-corruption core catches the main thread
+inside `Reset()` destroying containers the worker owns; `Reset()`
+demonstrably also clears the caches; the processor genuinely runs on a
+separate `QThread`; and the failure is intermittent at a few percent,
+which is what a timing window looks like.
+
+Does **not** support it, and should not be claimed: in the five
+assertion cores the main thread is in Qt painting, **not** inside
+`Cache::reset()`. No core catches a second thread inside the cache at
+the instant of that assertion, so the ordering for shape 1 is inferred
+from shape 2, not observed. A plain single-threaded bug in
+`evictCacheLine`/`bringIn` would produce an identical assertion and
+nothing here rules it out.
+
+Not fixed here: `src/` is outside this branch's scope. The harness now
+distinguishes an abort from a result, so a run that dies is not read as
+a transcript difference.
 
