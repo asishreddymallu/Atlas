@@ -469,28 +469,32 @@
       "category": "float-fused",
       "format": "fmadd.s fd, fs1, fs2, fs3",
       "summary": "fd = fs1 x fs2 + fs3 (single precision, one rounding)",
-      "example": "fmadd.s f1, f2, f3, f4"
+      "example": "fmadd.s f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fmsub.s": {
       "ext": "F",
       "category": "float-fused",
       "format": "fmsub.s fd, fs1, fs2, fs3",
       "summary": "fd = fs1 x fs2 - fs3 (single precision, one rounding)",
-      "example": "fmsub.s f1, f2, f3, f4"
+      "example": "fmsub.s f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fnmsub.s": {
       "ext": "F",
       "category": "float-fused",
       "format": "fnmsub.s fd, fs1, fs2, fs3",
       "summary": "fd = -(fs1 x fs2) + fs3 (single precision, one rounding)",
-      "example": "fnmsub.s f1, f2, f3, f4"
+      "example": "fnmsub.s f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fnmadd.s": {
       "ext": "F",
       "category": "float-fused",
       "format": "fnmadd.s fd, fs1, fs2, fs3",
       "summary": "fd = -(fs1 x fs2) - fs3 (single precision, one rounding)",
-      "example": "fnmadd.s f1, f2, f3, f4"
+      "example": "fnmadd.s f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fadd.s": {
       "ext": "F",
@@ -857,28 +861,32 @@
       "category": "float-fused",
       "format": "fmadd.d fd, fs1, fs2, fs3",
       "summary": "fd = fs1 x fs2 + fs3 (double precision, one rounding)",
-      "example": "fmadd.d f1, f2, f3, f4"
+      "example": "fmadd.d f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fmsub.d": {
       "ext": "D",
       "category": "float-fused",
       "format": "fmsub.d fd, fs1, fs2, fs3",
       "summary": "fd = fs1 x fs2 - fs3 (double precision, one rounding)",
-      "example": "fmsub.d f1, f2, f3, f4"
+      "example": "fmsub.d f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fnmsub.d": {
       "ext": "D",
       "category": "float-fused",
       "format": "fnmsub.d fd, fs1, fs2, fs3",
       "summary": "fd = -(fs1 x fs2) + fs3 (double precision, one rounding)",
-      "example": "fnmsub.d f1, f2, f3, f4"
+      "example": "fnmsub.d f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fnmadd.d": {
       "ext": "D",
       "category": "float-fused",
       "format": "fnmadd.d fd, fs1, fs2, fs3",
       "summary": "fd = -(fs1 x fs2) - fs3 (double precision, one rounding)",
-      "example": "fnmadd.d f1, f2, f3, f4"
+      "example": "fnmadd.d f1, f2, f3, f4",
+      "caveat": "Known bug in this simulator: fused multiply-add instructions are never routed to the floating-point path, so it assembles but writes nothing and the destination register keeps its old value (known_issues 61)."
     },
     "fadd.d": {
       "ext": "D",
@@ -1378,7 +1386,8 @@
       "category": "float-convert",
       "format": "fcvt.d.lu fd, rs1",
       "summary": "Convert an unsigned 64-bit integer to a double",
-      "example": "fcvt.d.lu f1, x5"
+      "example": "fcvt.d.lu f1, x5",
+      "caveat": "Known bug in this simulator: the ALU has no case for this operation, so it assembles but overwrites its destination register with 0 (known_issues 60)."
     },
     "fcvt.s.d": {
       "ext": "D",
