@@ -416,17 +416,36 @@ line" from "is itself a token".
 | letters | `A`–`Z`, `a`–`z` (ASCII only) |
 | digits | `0`–`9` |
 | whitespace | space, `\t`, `\r`, `\f`, `\v` |
-| punctuation it has a branch for | `_` `,` `"` `(` `)` `.` `-` |
+| punctuation it has a branch for | `_` `,` `(` `)` `.` `-` |
 
-**It abandons the line on the other 31:**
+**Nothing followed the character on the other 31:**
 
 ```
 !  "  #  $  %  &  '  *  +  /  :  ;  <  =  >  ?  @  [  \  ]  ^  `  {  |  }  ~
 U+00E9 (é)   U+4E2D (中)   U+00A0 (NBSP)   U+FEFF (BOM)   U+1F600 (emoji)
 ```
 
-(`"`, `#` and `;` are on that list because they end the line in their own
-way — a string and a comment — rather than by `skipLine()`.)
+**Three of those 31 are there for a different reason**, and it is worth
+being exact about which:
+
+- **`#` and `;`** really do end the line — they start a **comment**, so
+  `skipComment()` runs to the end of it. That is `skipLine()`-equivalent
+  in effect.
+- **`"` does NOT end the line.** It has a branch of its own:
+  `stringLiteral()` reads to the next `"` on the same line, and after that
+  closing quote the lexer carries straight on. It shows up in the list
+  above only because the probe's line is `    j loop " tail:` — the quote
+  opens a string that is never closed, so `tail:` is swallowed and no
+  definition follows. An unterminated string, not an abandoned line.
+
+So the 31 break down as **23** characters the dispatch has no branch for
+at all, plus `#` and `;` (comment), plus `"` (string), plus the five
+non-ASCII. Only those 23 — and the five non-ASCII — reach
+`else { skipLine(); return INVALID; }`.
+
+`LabelIndex::tokenise()` mirrors all three mechanisms separately: a
+string is tracked and skipped over, a comment ends the scan, and an
+unknown character ends the scan.
 
 **Disagreements with the index: 0.** In particular there is **no**
 character where the lexer carries on and the index abandons, which is the
