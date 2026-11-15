@@ -974,6 +974,21 @@ name, so the next comparison is against something that was true:
 `role_transcript_f76b7ed`, md5
 `b518ba12776391c34cc520e77585d013`. HEAD matches it exactly.
 
+> **RETIRED.** That md5 is not a baseline, it is the signature of a
+> BROKEN run. `transcript/main.cpp` opened `examples/ex_mem_fwd.s`
+> relative to the working directory with no `is_open()` check, so a
+> wrong CWD left the program empty, the debug session never started,
+> every debug row came out "idle", and the transcript hashed to
+> `b518ba12…`. Deleting that one file reproduces the value exactly,
+> byte for byte, three times out of three.
+>
+> The gate is now an **A/B**: build the base commit and HEAD out of
+> tree, run the same harness against both in one session with a correct
+> CWD, and require 0 differing rows. No stored md5 is trusted, because a
+> stored md5 cannot tell a clean run from a broken one. The harness now
+> exits 3 with a message if it cannot open its program, so this
+> particular silence cannot happen again.
+
 ---
 
 ## 35. Tests and harnesses shared the developer's real configuration
@@ -1449,6 +1464,12 @@ edited, so they are corrected here.
    byte: md5 `b518ba12776391c34cc520e77585d013`, 0 differing rows. The 845
    positional rows have no counterpart in the baseline and are not a
    behavioural difference.
+
+   > **RETIRED**, see the note in 34. `b518ba12…` is the signature of a
+   > run whose program file could not be opened, not of correct
+   > behaviour, and it was matched here because the comparison was made
+   > against a file produced the same way. The gate is now an A/B
+   > between two freshly built trees in one session.
 
 ---
 
@@ -2127,7 +2148,7 @@ in `resources/instructions/instruction_docs.json` carry a `caveat`.
 
 ---
 
-## 62. `Reset()` runs on the UI thread while the processor thread is still executing
+## 62. FIXED: `Reset()` ran on the UI thread while the processor thread was still executing
 
 An intermittent abort, in two different shapes, from one cause.
 
@@ -2214,23 +2235,187 @@ Every `ProcessorManager` connection is `Qt::DirectConnection`
 its slot on the worker, and a UI action runs on the UI thread — the two
 meet on the same objects.
 
-**What the evidence supports, and what it does not.**
+**Both sides of the race were caught in one core.** An earlier version
+of this entry said no core catches a second thread inside the cache at
+the instant of the assertion, and inferred shape 1's ordering from
+shape 2. That caveat is **retired**. Hammering `reset()` in a tight loop
+widened the window enough to catch the pair simultaneously:
 
-Supports the race: the heap-corruption core catches the main thread
-inside `Reset()` destroying containers the worker owns; `Reset()`
-demonstrably also clears the caches; the processor genuinely runs on a
-separate `QThread`; and the failure is intermittent at a few percent,
-which is what a timing window looks like.
+| worker thread (asserting) | main thread, same instant |
+|---|---|
+| `Cache::getByteFromCache` | `vector<CacheChange::LineChange>::_M_move_assign` |
+| `Cache::readGeneric<uint32_t>` | `Kites::CacheChange::operator=(&&)` |
+| `Cache::readWord` | **`Kites::Cache::clearHistory()`** |
+| `MemoryController::readInstruction` | **`Kites::Cache::reset()`** |
+| `RVSSProcessor::Fetch` | `Kites::MemoryController::reset()` |
+| `Step` / `StepAndNotify` / `Run` | `Kites::RVSSProcessor::Reset()` |
+| `ProcessorManager::run` / `runSlot` | `Kites::ProcessorManager::reset()` |
 
-Does **not** support it, and should not be claimed: in the five
-assertion cores the main thread is in Qt painting, **not** inside
-`Cache::reset()`. No core catches a second thread inside the cache at
-the instant of that assertion, so the ordering for shape 1 is inferred
-from shape 2, not observed. A plain single-threaded bug in
-`evictCacheLine`/`bringIn` would produce an identical assertion and
-nothing here rules it out.
+The UI thread is inside `Cache::reset()` while the worker is inside
+`Cache::getByteFromCache()`. Observed, not inferred.
 
-Not fixed here: `src/` is outside this branch's scope. The harness now
-distinguishes an abort from a result, so a run that dies is not read as
-a transcript difference.
+**Stop is the dominant real-world trigger**, not a second Run.
+`ProcessorBase::RequestStop()` *itself* called `Reset()`, so every press
+of Stop (`main_window.cpp:306`) and every `~MainWindow`
+(`main_window.cpp:996`) entered this race - and Stop is pressed while a
+run is in progress by definition. That is why the transcript harness,
+which triggers Stop, aborted at about 3%.
+
+### The fix
+
+Design (a)+(c), in `ed07da3` and `2178f46`, with the test in `6eb5412`.
+
+`StopAndReset()` sets `stop_requested_`, wakes every place the worker
+can block, waits on a new `run_state_mutex_`/`run_idle_condition_` pair
+until the worker has left `Run()`, and only then takes `step_mutex_` and
+clears. The wait is bounded at 3 s; on timeout **nothing** is cleared,
+because a stuck UI is better than a corrupted processor.
+`RequestStop()` no longer calls `Reset()` while holding `pause_mutex_` -
+that was the lock-ordering hazard. The order is now one-way,
+`run_state_mutex_` -> `step_mutex_`, never both held at once, and it is
+written down as an invariant at the declaration site. `Undo()` and
+`Redo()` take `step_mutex_` in both processors.
+
+A second hole had to be closed before any of that held. A run is started
+by posting `runSlot` to the worker; one still queued when a stop arrives
+starts *afterwards*, because `Run()` opens with `ClearStop()` and so
+discards a stop that predates it. The processor had just been reset and
+began stepping again, putting `Reset()` back alongside `Run()` - that is
+what dereferenced an empty `last_breakpoint_pc_` in the rv5s loop and
+what put the cache assertion back. `ProcessorManager::cancelPendingRun()`
+drops the queued invocation before the stop.
+
+### Evidence
+
+| | before | after |
+|---|---|---|
+| reset hammer, 1000 cycles x 200 resets, per processor | 20 of 20 runs aborted on cycle 1 | rvss 1000 clean, rv5s 1000 clean |
+| hang stress, 500 cycles per processor, 5 s watchdog | rv5s aborted at cycle 6 | 0 hangs, 0 aborts, 0 pending-run restarts |
+| 308-iteration driver | 2 of 14 processes died | 300 iterations, 0 aborted |
+| transcript, 200 runs | 6 aborted | 200 clean |
+| `ResetRace.*` in `kites_test` | aborts the binary, 3 of 3 | passes, 50 of 50 runs |
+
+The harness now distinguishes an abort from a result, so a run that dies
+is not read as a transcript difference.
+
+**Still open, deliberately** - see issue 63: the UI thread reads
+worker-owned state through raw pointers during a run, and `breakpoints_`
+and `last_breakpoint_pc_` are read in the `Run()` loop outside
+`step_mutex_`. None of that is fixed here.
+
+
+---
+
+## 63. The UI thread reads worker-owned processor state during a run
+
+Issue 62 fixed the *writes*: `Reset`, `Undo` and `Redo` from the UI
+thread can no longer land while the worker is inside `Run()`. The
+**reads** are still unprotected, and so is one remaining write.
+
+**Raw pointers handed straight to the views.** `ProcessorManager`
+exposes the processor's own objects and `MainWindow` stores them in
+widgets that repaint while the worker is running:
+
+| site | what is handed out |
+|---|---|
+| `src/ui/main_window/main_window.cpp:104` | `getRegisterFile()` -> `RegisterContainer` |
+| `:907` | `getRegisterFile()` again, on processor change |
+| `:798` | `getMemoryController()` -> `MemoryTab` |
+| `:800` | `getMemoryController()` -> `CacheTab` |
+| `:911`, `:916` | the same controller, on processor change |
+
+Every register the worker writes in `WriteBack()`, every cache line it
+touches in `Fetch()`, can be read concurrently by a paint on the UI
+thread. Nothing synchronises the two.
+
+**Profiler counters.** `src/ui/processor_tab/vm_state_table_model.cpp:81-91`
+reads `getProgramCounter()`, `getCycles()`, `getCPI()` and `getIPC()`
+from the UI thread while the worker increments them.
+
+**`breakpoints_`, and `last_breakpoint_pc_` with it.** A plain
+`std::vector<uint64_t>` at `processor_base.h:104`, written by
+`SetBreakpoints`/`AddBreakpoint`/`RemoveBreakpoint` from the UI thread
+and read inside the `Run()` loop - `rvss_processor.cpp:124`, `:1074`,
+`rv5s_processor_base.cpp:20` - **outside `step_mutex_`**. Protecting
+only the setter would be false assurance, which is why issue 62 left it
+alone: roughly 13 sites across three files, and the reads sit in the hot
+loop.
+
+`last_breakpoint_pc_` (`std::optional<uint64_t>`) is in the same
+cluster, and it is the one with a demonstrated symptom. The rv5s loop
+does
+
+```cpp
+if (last_breakpoint_pc_ && program_counter_ != *last_breakpoint_pc_)
+```
+
+which is safe single-threaded but not against a concurrent
+`last_breakpoint_pc_.reset()`. A stress harness that called
+`ProcessorManager::step()` during a run aborted on
+`std::optional::operator*` -> `__glibcxx_assert_fail` inside
+`RV5StageVM_Base::Run()`, i.e. an empty optional dereferenced between
+the test and the use.
+
+**How reachable is it?** Not from the UI as it stands: the transcript's
+own role rows show `STEP`, `UNDO` and `REDO` with `enabled=0` during a
+run, so the app disables exactly the actions that would provoke it. The
+raw-pointer reads, by contrast, happen on every repaint and are
+reachable now. The harness was corrected to respect the same
+enablement, and the finding recorded here rather than dropped.
+
+**Not fixed in this stage.** A fix means either a lock the `Run()` loop
+participates in, or snapshotting state into the signal payload so the
+views never touch live processor objects. Both are larger than the
+reset fix and want their own stage.
+
+---
+
+## 64. `vm_state/` follows the working directory, so the app behaves differently per launch directory
+
+`src/common/globals.cpp:11-25`:
+
+```cpp
+std::filesystem::path getWritableDataDirectory()
+{
+#ifdef __APPLE__
+    ... HOME/Library/Application Support/Kites ...
+#endif
+    return std::filesystem::current_path();
+}
+std::filesystem::path invokation_path = getWritableDataDirectory();
+std::filesystem::path vm_state_directory = invokation_path / "vm_state";
+```
+
+On Linux that is the **current directory**, captured at static-init
+time. macOS gets a proper per-user location; Linux does not. Launch the
+app from two directories and it uses two different `vm_state/`.
+
+What is actually in there, and who reads it:
+
+| file | read back? |
+|---|---|
+| `config.ini` | **never**. `src/config/config.cpp` contains no file I/O at all; the path is only `exists()`-checked and written (`utils.cpp:67`, `:489`). The processor, memory and cache settings in it are decorative - `cache_enabled=false` does not disable the cache, see 62. |
+| `custom_pseudo_instructions.json` | **yes** - `custom_pseudo_manager.cpp:584`, `:607`, reached from `main_window.cpp:842` on every assemble. Custom pseudo-instructions therefore exist or not depending on where the app was started. |
+| `temp.asm`, `disassembly.txt`, `errors_dump.json` | written then read back within the same operation |
+| `registers_dump.json`, `vm_state_dump.json`, `memory_dump.json`, `cache_dump.json` | written only |
+
+**Consequences seen in this work.** Every out-of-tree harness run from
+the checkout wrote into the repository's own `vm_state/`; it is
+gitignored, so no tracked file ever changed, but the runs were not
+hermetic and `run_hermetic.sh` (which sets only the `XDG_*` variables)
+did not isolate them. The harness runner now creates a sandbox
+directory, copies `examples/` into it and `cd`s there before running, so
+`vm_state/` is isolated too - proved by identical timestamps and an
+identical aggregate md5 of the repository's `vm_state/` across a run.
+
+Measured, for the record: an empty `vm_state/` and the repository's own
+(which defines a custom pseudo-instruction `vlsi`) produce an identical
+transcript. So the directory dependence is real but did **not** explain
+the `b518` baseline - that was a missing `examples/ex_mem_fwd.s`, see
+the note in 34.
+
+**The durable fix** is to make `getWritableDataDirectory()` honour
+`XDG_DATA_HOME` on Linux exactly as it already honours
+`Application Support` on macOS - one function in `src/`, for a later
+stage. Until then, launch directory is part of the app's configuration.
 
