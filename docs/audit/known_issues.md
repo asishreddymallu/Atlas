@@ -1971,3 +1971,97 @@ Not fixed here: `src/` is outside this branch's scope.
 `resources/instructions/instruction_docs.json` carries a `caveat` on the
 entry so the documentation does not promise a working instruction.
 
+
+---
+
+## 61. The eight fused multiply-add instructions never write their destination
+
+`fmadd`, `fmsub`, `fnmadd` and `fnmsub`, in both `.s` and `.d`, assemble
+and run and leave the destination register exactly as it was. Not
+zeroed, as in 57 and 60 — **not written at all**.
+
+**Measured** (`atlas-verify/harness/livesweep`, real `RVSSProcessor`,
+f1 preloaded with `0x40934800ABCDEF12`, five different source sets):
+
+| program | f1 after |
+|---|---|
+| `fmadd.s f1, f2, f3, f4` | `0x40934800ABCDEF12` — **the sentinel, unchanged** |
+| `fadd.s f1, f2, f3` (control, same preload) | `0x411C0000` (9.75) |
+| `fmadd.d f1, f2, f3, f4` | `0x40934800ABCDEF12` — **unchanged** |
+
+All eight behave the same across all five source sets.
+
+**Mechanism — the dispatch, shared by both models.** The control unit is
+not where this starts. `SetControlSignals` handles all four opcodes
+(`src/processor/rvss/rvss_control_unit.cpp:126-133`, setting
+`reg_write_ = true`), and `rs3` really is decoded and read
+(`rvss_processor.cpp` `ExecuteFloat()`: `rs3 = (instruction >> 27) &
+0b11111`, `reg3_value = registers_.ReadFpr(rs3)`).
+
+The break is one level up, in the routing:
+
+- `isFInstruction` (`src/common/instructions.cpp:1085`) and
+  `isDInstruction` (`:1120`) switch only on opcodes `0b0000111`,
+  `0b0100111` and `0b1010011`. **Neither has a case for `0b1000011`,
+  `0b1000111`, `0b1001011` or `0b1001111`**, so both return false for
+  every FMA.
+- `Execute()` (`rvss_processor.cpp:188-196`) and `WriteBack()`
+  (`:834-842`) use those two predicates to choose the float path. With
+  both false, an FMA falls through to the generic integer path.
+- The generic `switch (opcode)` in `WriteBack()` (`:856`) has no case
+  for any FMA opcode either, so **no register is written**. That is why
+  these read UNCHANGED rather than ZEROED: control never reaches a
+  write, so there is no zero to commit.
+
+**rv5s shares this half.** `rv5s_processor_h_nf.cpp:215-216` and
+`rv5s_processor_h_f.cpp:285-286` call the same two shared predicates.
+
+**Is fixing the predicates enough? No — and this is the 57 situation
+again, one layer along.** Read, not run:
+
+*The ALU implementations are correct.* `alu.cpp:330-348` (`fpexecute`)
+and `:709-727` (`dfpexecute`) are
+
+```cpp
+case AluOp::FMADD_S:  result = std::fma(a, b, c);    break;
+case AluOp::FMSUB_S:  result = std::fma(a, b, -c);   break;
+case AluOp::FNMADD_S: result = std::fma(-a, b, -c);  break;
+case AluOp::FNMSUB_S: result = std::fma(-a, b, c);   break;
+```
+
+and the same four for `_D`. Those match the RISC-V definitions, and —
+unlike the broken conversions in 57 — they use the memcpy'd `a`, `b`,
+`c`, not the raw `ina`. This half is sound.
+
+*The ALU-op selection is not.* In rvss's `GetAluSignal`, only one of the
+four opcodes has a top-level case at all:
+
+| opcode | top-level case in `GetAluSignal` |
+|---|---|
+| `0b1000011` FMADD | `:586` — returns `FMADD_S` **unconditionally** |
+| `0b1000111` FMSUB | **none** |
+| `0b1001011` FNMSUB | **none** |
+| `0b1001111` FNMADD | **none** |
+
+`:586-589` sits directly under a `// TODO: correct this` comment
+(`:584`) and ignores `funct2`, so `fmadd.d` would be executed as
+`FMADD_S`. The block at `:871-882` that *does* distinguish `.s` from
+`.d` by `funct2` is a **`funct7` case nested inside opcode `0b1010011`**,
+so it can never be reached by an instruction whose opcode is
+`0b1000011`. The three opcodes with no case fall through to the
+function's final `return alu::AluOp::NONE;` (`:972`) — the same
+fall-through as 57, with the same consequence once a write is reached.
+
+So repairing `isFInstruction`/`isDInstruction` alone would, on rvss,
+make **one** of the eight work (`fmadd.s`), run `fmadd.d` at the wrong
+precision, and turn the other six from "writes nothing" into "writes
+zero". That is a worse failure, not a better one.
+
+**rv5s's control unit does not have this second hole.**
+`rv5s_control_unit.cpp:96-97` covers the opcodes and `:382-387` selects
+on `funct2` (`FMSUB_S`/`FMSUB_D`, `FNMADD_S`/`FNMADD_D`, …). On rv5s the
+predicates may well be the only thing in the way.
+
+Not fixed here: `src/` is outside this branch's scope. All eight entries
+in `resources/instructions/instruction_docs.json` carry a `caveat`.
+
