@@ -622,8 +622,49 @@ TEST(InstructionDocs, PseudoExpansionsMatchTheAssemblerIncludingFixedOperands)
                 {
                     const QString produced = result.operands.at(i);
                     const QStringList parts = produced.split(QLatin1Char(','));
-                    // `ra` is x1 and `fp` is x8 once the assembler has
-                    // resolved aliases, so both spellings are accepted.
+                    // ── Exactly which alias resolutions this accepts ──
+                    //
+                    // The assembler normalises ABI aliases to xN before the
+                    // operands reach here (control 2b saw `ret` produce
+                    // "x0,x1,0" for a documented `jalr x0, 0(ra)`), so a
+                    // documented alias needs its number accepted beside it.
+                    // The whole table is three rows and nothing else:
+                    //
+                    //     ra -> also accepts x1
+                    //     sp -> also accepts x2
+                    //     fp -> also accepts x8
+                    //
+                    // Two things about that table are wrong and are left
+                    // alone deliberately, because fixing either changes what
+                    // the test accepts and no current expansion exercises it:
+                    //
+                    //   - `fp` is a DEAD row. src/common/register_names.h
+                    //     kGprAliases has `s0` at index 8; this assembler has
+                    //     no `fp` alias at all, so a documented `fp` could
+                    //     never assemble in the first place.
+                    //   - `gp` (x3) and `tp` (x4) are admitted by the literal
+                    //     register regex above but have NO row here, so an
+                    //     expansion documented with either would be checked
+                    //     against a produced `x3`/`x4` and would fail WRONGLY.
+                    //
+                    // Other leniency in this loop, all measured:
+                    //
+                    //   - Position is NOT checked. `parts.contains()` asks
+                    //     only whether the fixed operand appears somewhere in
+                    //     that step. Rewriting sltz's expansion to
+                    //     `slt rd, x0, rs` - which is sgtz, the opposite
+                    //     comparison - was measured to pass 12/12.
+                    //   - Multiplicity is not checked either: nop's
+                    //     `addi x0, x0, 0` needs x0 present, not present twice.
+                    //   - Anything that is not xN / ra / sp / gp / tp / fp,
+                    //     not an integer, and not N(reg) is skipped as a
+                    //     placeholder. That silently includes the real aliases
+                    //     `zero`, `t0`-`t6`, `s0`-`s11` and `a0`-`a7`: a
+                    //     documented `add rd, rs, zero` is never checked.
+                    //   - `rs` inside `N(rs)` is skipped by design; only the
+                    //     fixed N is checked.
+                    //   - Entries marked unsupported, or with no example, are
+                    //     not compared at all.
                     QStringList accept{needle};
                     if (needle == QLatin1String("ra")) accept << QStringLiteral("x1");
                     if (needle == QLatin1String("sp")) accept << QStringLiteral("x2");
