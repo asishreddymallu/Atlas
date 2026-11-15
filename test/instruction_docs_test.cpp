@@ -715,3 +715,87 @@ TEST(InstructionDocs, InstructionsJsonListsNoNameTwice)
         << "listed more than once: " << duplicated.join(QLatin1Char(' ')).toStdString();
     EXPECT_EQ(listed.size(), int(seen.size()));
 }
+
+// ══════════════════════ (g) the "caveat" field ═════════════════════════
+//
+// A caveat marks an entry that ASSEMBLES but misbehaves when run. The
+// test suite can only assemble, so nothing here can observe the defect
+// itself; the caveat is the place the file admits it, and this test
+// pins the two things that can be checked mechanically.
+//
+// The field is optional, so this test is vacuous if it ever disappears
+// from the file. The count is printed for exactly that reason - read it.
+
+TEST(InstructionDocs, EveryCaveatIsOnASupportedEntryAndNamesARealKnownIssue)
+{
+    // The numbered headings of docs/audit/known_issues.md, e.g. "## 57. ...".
+    const QString issues = readFile("../docs/audit/known_issues.md");
+    ASSERT_FALSE(issues.isEmpty()) << "docs/audit/known_issues.md is unreadable from test/";
+    std::set<int> headings;
+    {
+        QRegularExpression heading(QStringLiteral(R"(^##\s+(\d+)\.)"),
+                                   QRegularExpression::MultilineOption);
+        auto it = heading.globalMatch(issues);
+        while (it.hasNext())
+            headings.insert(it.next().captured(1).toInt());
+    }
+    ASSERT_FALSE(headings.empty()) << "no numbered heading parsed out of known_issues.md";
+
+    const QJsonObject docs = entries();
+    QStringList onUnsupported, notAString, noNumber, danglingNumber;
+    int withCaveat = 0;
+    for (const QString &name : docs.keys())
+    {
+        const QJsonObject entry = docs.value(name).toObject();
+        if (!entry.contains("caveat"))
+            continue;
+        ++withCaveat;
+
+        // A caveat on an unsupported entry is meaningless: an entry that
+        // does not assemble cannot also "assemble but misbehave".
+        if (isUnsupported(entry))
+            onUnsupported << name;
+
+        const QJsonValue value = entry.value("caveat");
+        if (!value.isString())
+        {
+            notAString << name;
+            continue;
+        }
+        const QString caveat = value.toString();
+
+        // The caveat must point at a known issue by number, and that
+        // number must actually have a heading in the file.
+        QRegularExpression reference(QStringLiteral(R"(known[_ ]issues?\s*#?\s*(\d+))"),
+                                     QRegularExpression::CaseInsensitiveOption);
+        auto cited = reference.globalMatch(caveat);
+        if (!cited.hasNext())
+        {
+            noNumber << QStringLiteral("%1: \"%2\"").arg(name, caveat);
+            continue;
+        }
+        while (cited.hasNext())
+        {
+            const int number = cited.next().captured(1).toInt();
+            if (!headings.count(number))
+                danglingNumber << QStringLiteral("%1 cites known_issues %2, which has no heading")
+                                      .arg(name).arg(number);
+        }
+    }
+
+    std::cerr << "    [ info ] entries with a caveat " << withCaveat
+              << "; known_issues headings parsed " << headings.size() << "\n";
+    for (const QStringList *list : {&onUnsupported, &notAString, &noNumber, &danglingNumber})
+        for (const QString &f : *list)
+            std::cerr << "    [ FAIL  ] " << f.toStdString() << "\n";
+
+    EXPECT_TRUE(onUnsupported.isEmpty())
+        << "caveat on an unsupported entry: "
+        << onUnsupported.join(QLatin1Char(' ')).toStdString();
+    EXPECT_TRUE(notAString.isEmpty())
+        << "caveat is not a string: " << notAString.join(QLatin1Char(' ')).toStdString();
+    EXPECT_TRUE(noNumber.isEmpty())
+        << noNumber.size() << " caveat(s) name no known_issues number; names above";
+    EXPECT_TRUE(danglingNumber.isEmpty())
+        << danglingNumber.size() << " caveat(s) cite a missing known issue; names above";
+}
