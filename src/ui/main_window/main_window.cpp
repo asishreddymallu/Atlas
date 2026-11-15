@@ -139,9 +139,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     setCentralWidget(central);
     resize(1200, 800);
-    connect(this, &MainWindow::runProcessorSignal, m_processorManager, &ProcessorManager::runSlot);
+    // requestRun/requestDebugRun snapshot the stop epoch on THIS thread
+    // and post it with the invocation, so a Stop issued afterwards
+    // cancels the run even if it is already queued or already dequeued.
+    connect(this, &MainWindow::runProcessorSignal, m_processorManager,
+            &ProcessorManager::requestRun, Qt::DirectConnection);
     connect(this, &MainWindow::debugRunProcessorSignal, m_processorManager,
-            &ProcessorManager::debugRunSlot);
+            &ProcessorManager::requestDebugRun, Qt::DirectConnection);
     // well temporarily disable the execution buttons when vm is running
     connect(m_processorManager, &ProcessorManager::runFinishedSignal, this, &MainWindow::runFinishedSlot);
     connect(m_processorManager, &ProcessorManager::runErrorSignal, this,
@@ -303,7 +307,11 @@ void MainWindow::setUpExecutionActions()
                     m_runAction->setText("Run");
                     setThemedIcon(m_runAction, Icon::Play, largeIconSize);
                     setActionHint(m_runAction, "Run program");
-                    m_processorManager->stop();
+                    if (!m_processorManager->stop())
+                    {
+                        QMessageBox::critical(this, "Error",
+                                              "The processor did not stop within the timeout.");
+                    }
                 }
             });
 
@@ -830,7 +838,19 @@ bool MainWindow::tryParseAndLoadProgram()
     if (m_saveAction)
         m_saveAction->setEnabled(false); // read-only editor: a disabled QAction also
                                          // swallows its Ctrl+S shortcut
-    m_processorManager->reset();
+    if (!m_processorManager->reset())
+    {
+        // The worker did not stop, so NOTHING was reset. Loading a program
+        // onto a processor that is still running is the race this guards
+        // against, so stop here instead.
+        editor->setCanWrite(true);
+        if (m_saveAction)
+            m_saveAction->setEnabled(true);
+        QMessageBox::critical(this, "Error",
+                              "The processor did not stop. The program was not loaded.\n"
+                              "Try again, or restart the application.");
+        return false;
+    }
     try
     {
         std::string rawText = editor->getRawText();
@@ -993,7 +1013,11 @@ void MainWindow::themeChangedSlot([[maybe_unused]] const QString &themeId)
 
 MainWindow::~MainWindow()
 {
-    m_processorManager->stop();
+    // Best effort on the way out. If it times out there is nothing left
+    // to do but warn - StopAndReset has already declined to clear state
+    // under a live worker, which is the safe half.
+    if (!m_processorManager->stop())
+        qWarning("Kites: processor did not stop during shutdown");
     if(m_processorThread->isRunning())
     {
         m_processorThread->quit();

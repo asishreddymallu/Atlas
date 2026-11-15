@@ -127,6 +127,13 @@ class ProcessorBase : public QObject
     QMutex run_state_mutex_;
     QWaitCondition run_idle_condition_;
     bool worker_in_run_{false};
+    // Bumped by StopAndReset under run_state_mutex_. A run carries the
+    // epoch it was REQUESTED under; if a stop has happened since, the
+    // run refuses to start. Checking the epoch and marking the worker
+    // busy happen in the same critical section (BeginRun), which is what
+    // closes the window between a run slot being dequeued and the worker
+    // actually entering Run().
+    quint64 stop_epoch_{0};
 
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
@@ -187,6 +194,15 @@ class ProcessorBase : public QObject
     /**@brief Marks the worker as inside/outside a Run() loop. Use RunScope. */
     void MarkRunEntered();
     void MarkRunExited();
+
+    /**@brief The epoch a run should be requested under (UI thread). */
+    quint64 CurrentStopEpoch();
+
+    /**@brief Atomically: has a stop happened since `epoch`? If not, mark
+     * the worker busy and return true. If yes, return false and the
+     * caller must NOT run - the request was overtaken by a stop.
+     */
+    bool BeginRun(quint64 epoch);
 
     /**@brief Blocks the CALLING thread until no Run() loop is executing.
      * @return false on timeout, in which case the caller must not clear state.

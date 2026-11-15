@@ -55,6 +55,15 @@ ProcessorManager::ProcessorManager(QObject *parent, ProcessorType vmType) : QObj
 
 void ProcessorManager::changeProcessor(ProcessorType vmType)
 {
+    // The assignment below destroys the current processor. If the worker
+    // were inside Run() on it that is a use-after-free, so stop first.
+    // The UI disables this action during a run, which is why it has not
+    // been seen; it is one line to make it safe regardless.
+    if (m_currentProcessor && !m_currentProcessor->StopAndReset())
+    {
+        qWarning("Kites: processor did not stop; not switching processor");
+        return;
+    }
     m_currentProcessorType = vmType;
     m_currentProcessor = ProcessorFactory::createVM(vmType);
     m_currentProcessor->step_delay_ = m_stepDelayMs;
@@ -94,10 +103,46 @@ void ProcessorManager::loadProgram(const std::string &sourceText)
     emit updateDisassemblySignal(QString::fromStdString(buffer.str()));
 }
 
+void ProcessorManager::requestRun()
+{
+    // UI thread. Snapshot the epoch NOW and carry it with the posted call,
+    // so a stop issued between here and the worker picking the call up
+    // cancels this run.
+    QMetaObject::invokeMethod(this, "runSlotEpoch", Qt::QueuedConnection,
+                              Q_ARG(quint64, m_currentProcessor->CurrentStopEpoch()));
+}
+
+void ProcessorManager::requestDebugRun()
+{
+    QMetaObject::invokeMethod(this, "debugRunSlotEpoch", Qt::QueuedConnection,
+                              Q_ARG(quint64, m_currentProcessor->CurrentStopEpoch()));
+}
+
+void ProcessorManager::runSlotEpoch(quint64 epoch)
+{
+    // BeginRun checks the epoch and marks the worker busy in ONE critical
+    // section. Without that, a stop could land between the check and
+    // Run()'s RunScope, see worker_in_run_ still false, reset, and let the
+    // run start on the freshly reset state - measured at 5 of 5 before
+    // this existed.
+    if (!m_currentProcessor->BeginRun(epoch))
+        return; // overtaken by a stop: do not run, do not ClearStop
+    run();
+    m_currentProcessor->MarkRunExited(); // idempotent with Run()'s RunScope
+    emit runFinishedSignal();
+}
+
+void ProcessorManager::debugRunSlotEpoch(quint64 epoch)
+{
+    m_currentProcessor->start_paused_ = true;
+    runSlotEpoch(epoch);
+}
+
 void ProcessorManager::runSlot()
 {
-    run();
-    emit runFinishedSignal();
+    // Kept for callers with no epoch of their own (the out-of-tree
+    // harnesses). Uses the current epoch, so it always runs.
+    runSlotEpoch(m_currentProcessor->CurrentStopEpoch());
 }
 
 void ProcessorManager::debugRunSlot()
@@ -239,10 +284,9 @@ void ProcessorManager::debugRun()
     m_currentProcessor->RequestPause();
 }
 
-void ProcessorManager::stop()
+bool ProcessorManager::stop()
 {
-    cancelPendingRun();
-    m_currentProcessor->RequestStop();
+    return m_currentProcessor->StopAndReset();
 }
 void ProcessorManager::pause()
 {
@@ -290,34 +334,26 @@ Kites::CircuitScene *ProcessorManager::getCircuitScene() const
 {
     return m_currentProcessor->circuit_scene_.get();
 }
-void ProcessorManager::reset()
+bool ProcessorManager::reset()
 {
     // Called from the UI thread (MainWindow::tryParseAndLoadProgram) while
     // the worker may still be inside Run(). StopAndReset stops the worker,
     // waits for it to leave Run(), and only then clears - known_issues 62.
-    cancelPendingRun();
+    // The stop epoch (bumped inside StopAndReset) is what cancels a run
+    // that was requested before this stop, including one already taken
+    // off the queue by the worker.
+    // The result is returned, not swallowed: on timeout nothing was
+    // cleared, so a caller that went on to loadProgram() would be loading
+    // onto a processor that is still running - the original race.
     if (!m_currentProcessor->StopAndReset())
     {
-        qWarning("Kites: processor did not stop within the timeout; not reset");
+        qWarning("Kites: the processor did not stop within the timeout; "
+                 "nothing was reset and nothing should be loaded");
+        return false;
     }
+    return true;
 }
 
-void ProcessorManager::cancelPendingRun()
-{
-    // A run is started by posting runSlot/debugRunSlot to this object on
-    // the worker thread. If one of those is still sitting in the queue
-    // when a stop arrives, it will run AFTERWARDS - Run() begins with
-    // ClearStop(), so it discards a stop that predates it - and the
-    // freshly reset processor starts stepping again. That reopens every
-    // window StopAndReset closes: it is how a Reset ends up concurrent
-    // with a Run, which is what dereferenced an empty last_breakpoint_pc_
-    // in the rv5s loop and what put the cache assertion back.
-    //
-    // Dropping the queued invocation is the narrow fix. It must happen
-    // BEFORE the stop: the UI thread is the only poster and it is inside
-    // this call, so once the queue is drained nothing new can arrive.
-    QCoreApplication::removePostedEvents(this, QEvent::MetaCall);
-}
 
 ProcessorType ProcessorManager::getProcessorType()
 {

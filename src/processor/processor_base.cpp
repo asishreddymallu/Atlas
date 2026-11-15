@@ -38,6 +38,21 @@ void ProcessorBase::MarkRunExited()
     run_idle_condition_.wakeAll();
 }
 
+quint64 ProcessorBase::CurrentStopEpoch()
+{
+    QMutexLocker locker(&run_state_mutex_);
+    return stop_epoch_;
+}
+
+bool ProcessorBase::BeginRun(quint64 epoch)
+{
+    QMutexLocker locker(&run_state_mutex_);
+    if (epoch != stop_epoch_)
+        return false; // a stop happened after this run was requested
+    worker_in_run_ = true;
+    return true;
+}
+
 bool ProcessorBase::WaitForRunIdle(int timeout_ms)
 {
     QDeadlineTimer deadline(timeout_ms);
@@ -52,7 +67,23 @@ bool ProcessorBase::WaitForRunIdle(int timeout_ms)
 
 bool ProcessorBase::StopAndReset(int timeout_ms)
 {
-    // 1. Ask the worker to stop. Atomic, so no lock needed for the flag.
+    // 1. Invalidate any run that was requested before this stop. Under
+    //    run_state_mutex_, so it is ordered against BeginRun: either the
+    //    run marked itself busy first (and step 3 waits for it), or it
+    //    sees the new epoch and refuses to start.
+    {
+        QMutexLocker locker(&run_state_mutex_);
+        ++stop_epoch_;
+    }
+
+    // 2. Ask the worker to stop.
+    //
+    //    The flag itself is atomic, but that is NOT what makes the wake
+    //    safe: each waiter evaluates its predicate while holding its own
+    //    mutex, and the wake below is issued while holding that SAME
+    //    mutex, so it cannot slip between a waiter's predicate check and
+    //    its wait. Measured, not assumed - see the probe build that
+    //    sleeps between check and wait in all three waits.
     stop_requested_ = true;
 
     // 2. Wake every place the worker can be blocked:

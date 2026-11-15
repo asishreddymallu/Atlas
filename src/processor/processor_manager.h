@@ -35,16 +35,24 @@ public:
     ProcessorManager(QObject *parent = nullptr, ProcessorType vmType = ProcessorType::RVSS);
     void changeProcessor(ProcessorType vmType);
     ProcessorType getProcessorType();
-    void reset();
-    /// Drops a runSlot/debugRunSlot that is still queued, so a stop
-    /// cannot be overtaken by a run that was requested before it.
-    void cancelPendingRun();
+    /**@brief Stops the worker and resets. @return false on timeout, in
+     * which case NOTHING was cleared and the caller must not load or run.
+     */
+    [[nodiscard]] bool reset();
     void loadProgram(const AssembledProgram &program);
     void loadProgram(const std::string &sourceText);
     void run();
     void step();
     void debugRun();
-    void stop();
+    /**@brief Stops the worker and resets. @return false on timeout. */
+    bool stop();
+
+    /**@brief Request a run from the UI thread. Snapshots the stop epoch
+     * at REQUEST time and posts it with the invocation, so a stop issued
+     * afterwards cancels this run even if it is already queued.
+     */
+    void requestRun();
+    void requestDebugRun();
     void pause();
     void resume();
     void undo();
@@ -84,6 +92,8 @@ private:
     // we need this as when we chage vm we need preserve the step delay
     unsigned int m_stepDelayMs{1000};
 public slots:
+    void runSlotEpoch(quint64 epoch);
+    void debugRunSlotEpoch(quint64 epoch);
     void runSlot();
     // same as runSlot but the processor starts paused so the user can step from the first instruction
     void debugRunSlot();
