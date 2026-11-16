@@ -2278,12 +2278,48 @@ written down as an invariant at the declaration site. `Undo()` and
 
 A second hole had to be closed before any of that held. A run is started
 by posting `runSlot` to the worker; one still queued when a stop arrives
-starts *afterwards*, because `Run()` opens with `ClearStop()` and so
-discards a stop that predates it. The processor had just been reset and
+starts *afterwards*, because `Run()` opened with `ClearStop()` and so
+discarded a stop that predates it. The processor had just been reset and
 began stepping again, putting `Reset()` back alongside `Run()` - that is
 what dereferenced an empty `last_breakpoint_pc_` in the rv5s loop and
-what put the cache assertion back. `ProcessorManager::cancelPendingRun()`
-drops the queued invocation before the stop.
+what put the cache assertion back. `StopAndReset` bumps a stop epoch and
+publishes the stop in one critical section; `requestRun` snapshots the
+epoch on the UI thread, and `BeginRun` refuses any run whose epoch is
+stale or that arrives while a stop is in flight (`stop_in_progress_`).
+
+**The clear itself moved, in `3e44e05`, `663cb06` and `ae3c832`.**
+`Run()` no longer opens with `ClearStop()` at all; that call is gone from
+all four run loops. `ClearStopLocked()`
+(`src/processor/processor_base.cpp`), which requires `run_state_mutex_`,
+is now the only place a stop is ever cleared, and two entry points reach
+it: `BeginRun()` for a run requested from the UI, and `MarkRunEntered()`
+- via `RunScope` - for one entered directly by the REPL, the tests or a
+harness. The clear therefore happens in the *same* critical section that
+checks the epoch, so a stop either lands before the run is approved and
+cancels it, or after the clear and survives. There is no third outcome.
+
+The `ClearStop()` this entry described was check-then-act across an
+unlock: it tested the epoch under `run_state_mutex_`, released the lock,
+and only then wrote `stop_requested_ = false`. A stop landing in that
+window was wiped and the worker parked in the untimed pause wait
+(`rvss_processor.cpp:136`, `rv5s_processor_base.cpp:33`), which presents
+as a hung Stop button. Measured on a patched out-of-tree copy, debug-run
+stop cycles with a 3 s timeout: **47 of 60 (rvss) and 48 of 60 (rv5s)**
+timed out with a 100 ms delay injected between the guard and the writes,
+against 8 of 60 and 1 of 60 with the same delay injected *before* the
+guard. The same delay moved across the guard is the whole difference, so
+the window is guard-to-write and nothing else. With the fix in, 0 of 500
+per processor. The 50 ms stop re-assert loop that had been masking this
+is deleted; worst-case stop latency is 1 ms (rvss) / 0 ms (rv5s) either
+way, so it bought nothing.
+
+`663cb06` also makes the REPL report a failed `stop`/`reset` instead of
+discarding the result (`command_handler.cpp:296`, `:309`), and disarms
+`start_paused_` when a run is refused, so a Debug Run cancelled by a stop
+no longer leaves the *next* plain Run silently paused. `ae3c832` adds
+`ResetRace.DirectRunAfterResetStillExecutes`, which pins the direct-run
+path: `reset()` -> `loadProgram()` -> `run()` executed nothing at all
+(`pc == 0`, both processor types) while the stale stop survived.
 
 ### Evidence
 
@@ -2419,3 +2455,154 @@ the note in 34.
 `Application Support` on macOS - one function in `src/`, for a later
 stage. Until then, launch directory is part of the app's configuration.
 
+---
+
+## 65. `kites-cli` segfaults before the REPL prompt, at `995d7ea` and at HEAD
+
+Issue 56 recorded the CLI dying in **batch** mode on every program it
+processes. It dies in **interactive** mode too, and earlier: with no
+argument at all, before a single character of the prompt is printed.
+
+| tree | `QT_QPA_PLATFORM=offscreen ./build/kites-cli` (no args) |
+|---|---|
+| `995d7ea`, the branch point | **SIGSEGV**, rc 139 |
+| HEAD (`ae3c832`) | **SIGSEGV**, rc 139 |
+
+Pre-existing, not a regression from this branch: `git diff --stat
+995d7ea..HEAD -- cli/ CMakeLists.txt` is empty.
+
+**Where.** `cli/main.cpp:51` constructs a `QCoreApplication`; the REPL
+branch then constructs the processor at `cli/main.cpp:116`, before
+`RunRepl` at `:138`. Backtrace under gdb, innermost first:
+
+```
+QGraphicsScenePrivate::init()                  <- SIGSEGV
+Kites::CircuitScene::CircuitScene(QObject*)
+Kites::RVSSCircuitScene::RVSSCircuitScene(QObject*)
+std::make_unique<Kites::RVSSCircuitScene>()
+Kites::RVSSProcessor::RVSSProcessor()
+Kites::ProcessorFactory::RegisterVM<Kites::RVSSProcessor>(...)::{lambda()}
+...
+```
+
+Every processor constructor builds a `CircuitScene`, which is a
+`QGraphicsScene`, which needs a `QApplication` — a `QCoreApplication` is
+not enough. This is the same fault as AGENTS.md "Harness Root Cause 1"
+(`kites_test` crashing before it was given an offscreen `QApplication`)
+and the same fault as issue 56, reached one step earlier. Issue 56 has
+the mechanism in full: `DISABLE_GUI` is `PRIVATE` to `kites_cli`
+(`CMakeLists.txt:135`) and never reaches `kites_core`, so the CLI links
+a processor compiled with its GUI parts in.
+
+**Consequence for this branch.** The REPL's direct `Run()` path — the
+`reset` / `load` / `run` sequence at `command_handler.cpp:309`, `:277`,
+which enters `Run()` with no `BeginRun()` — cannot be exercised through
+the shipped binary at all. The bug issue 62 describes on that path is
+real and is pinned by `ResetRace.DirectRunAfterResetStillExecutes` in
+`kites_test`, which has a `QApplication`; it is simply unreachable from
+`./build/kites-cli` today for this unrelated reason. Anyone verifying
+the REPL by hand will meet this crash first.
+
+Not fixed here: the fix is in `CMakeLists.txt`, which is outside this
+branch's scope. See issue 56 for why an added `QApplication` would be
+the wrong answer.
+
+---
+
+## 66. Only one of the four rv5s variants handles `ecall` at all
+
+`handle_syscall()` is pure virtual on the base
+(`rv5s_processor_base.h:104`) and all four variants override it. **Three
+of the four overrides are never called.**
+
+| variant | definition | called from |
+|---|---|---|
+| `RV5StageProcessorNHNF` | `rv5s_processor_nh_nf.cpp:332` | `rv5s_processor_nh_nf.cpp:204`, in `pipeline_execute()` |
+| `RV5StageProcessorHF` | `rv5s_processor_h_f.cpp:461` | **nowhere** |
+| `RV5StageProcessorHNF` | `rv5s_processor_h_nf.cpp:326` | **nowhere** |
+| `RV5StageProcessorNHF` | `rv5s_processor_nh_f.cpp:625` | **nowhere** |
+
+`grep -n handle_syscall src/processor/rv5s/*.cpp` returns exactly one
+call site. In the other three files the SYSTEM opcode `0b1110011`
+appears only inside the uncalled body, so their `pipeline_execute()` has
+no branch for it and an `ecall` falls through to the ordinary ALU path:
+it is decoded as an I-type with `funct3 == 0b000`, i.e. executed as an
+`addi`-shaped instruction, and the pipeline continues to the next
+instruction.
+
+**`nh_nf` treats any SYSTEM instruction as exit, regardless of `a7`.**
+The body at `rv5s_processor_nh_nf.cpp:332-341` tests only the opcode and
+`funct3`; it never reads `a7`, so it does not distinguish
+`SYSCALL_EXIT` (10) from `SYSCALL_READ` (63) or any other service, and
+`ebreak` — same opcode, same `funct3`, differing only in the immediate —
+takes the same path. Every one of them stops the processor and writes
+`output_status_ = "ECALL_EXIT"`.
+
+**Measured.** A short program ending in `li a7, 63` then `ecall` — `a7`
+set to `SYSCALL_READ`, with nothing in the input queue — run on each
+variant through an out-of-tree harness with a 6 s watchdog (breakpoints
+cleared first, because `LoadProgram` auto-adds one at `program_size_`):
+
+| variant | result |
+|---|---|
+| `rv5-nh-nf` | returns; the handler fires and the run stops at the `ecall` |
+| `rv5-h-f`, `rv5-h-nf`, `rv5-nh-f` | return, `pc == 28`, program ran to the end |
+
+**None of the four blocks.** This was worth measuring because
+`SYSCALL_READ` is the one service that could park a run in an untimed
+wait while a Stop is pending. It cannot here: the only
+`input_cv_.wait()` in the tree is `rvss_processor.cpp:524`, and no rv5s
+path reaches it. The only untimed waits the rv5s loops can enter are the
+pause waits at `rv5s_processor_base.cpp:33` and `rvss_processor.cpp:136`,
+both of which `StopAndReset` wakes.
+
+Status: **recorded, not fixed.** Three dead overrides and an `a7`-blind
+fourth are simulator-semantics work, not threading work, and AGENTS.md
+rule 4 keeps core logic out of this branch.
+
+---
+
+## 67. Intentional behaviour change: an `ecall` exit no longer resets the processor
+
+At `995d7ea`, `RV5StageProcessorNHNF::handle_syscall()` called
+`RequestStop()`, and `RequestStop()` called `Reset()` — from inside
+`Run()`, on the worker's own thread. A program that ended in `ecall`
+therefore wiped its own registers, memory and undo history at the moment
+it finished, destroying exactly the state the user ran it to see.
+
+That is gone and is **not** being restored. `RequestStop()` now
+dispatches on the caller: `StopFromRunLoop()`
+(`src/processor/processor_base.cpp`) returns true when the caller *is*
+the run thread (`worker_in_run_ && run_thread_ ==
+QThread::currentThreadId()`), publishes the stop, wakes the pause wait,
+and does nothing else. The processor is left stopped with its final
+state intact.
+
+Two reasons, not one. It is the behaviour a user wants — a finished
+program should leave its results on screen — and it is the only safe
+behaviour, because the old path reset the processor while the loop it
+was called from was still running, which is the same UI-thread-versus-
+worker collision issue 62 is about, with the two parties on one thread.
+
+**Also a performance fix.** Between `995d7ea` and `3e44e05`,
+`RequestStop()` waited for the worker to leave `Run()` before resetting.
+Called *by* that worker, that wait can only time out. Measured, `run()`
+wall time on a program ending in `ecall`:
+
+| tree | `rv5-nh-nf` | the other three variants |
+|---|---|---|
+| `995d7ea` | 0 ms (and reset its own state) | 0 ms |
+| HEAD before `3e44e05` | **3016 ms** per `ecall` | 0 ms |
+| HEAD (`ae3c832`) | 0 ms | 0 ms |
+
+The other three are unaffected because they never call `handle_syscall`
+at all — see issue 66.
+
+**The change is confined to the worker-thread caller.** The only other
+`RequestStop()` caller is `ProcessorManager::step()`
+(`processor_manager.cpp:285`), which fires when a program finishes while
+being stepped. That one runs on the UI thread, so `StopFromRunLoop()`
+declines it and it still goes through `StopAndReset()` — it still
+resets, exactly as it did at `995d7ea`. Nothing in `src/ui/` or `cli/`
+depended on the `ecall` path resetting; anything that comes to depend
+on it must call `reset()` explicitly.
