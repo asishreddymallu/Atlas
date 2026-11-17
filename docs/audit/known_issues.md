@@ -1703,7 +1703,7 @@ scope. The processor probes in this work use a harness with an offscreen
 
 ---
 
-## 57. `fcvt.s.d` and `fcvt.d.s` are never mapped to an ALU operation
+## 57. FIXED: `fcvt.s.d` and `fcvt.d.s` were never mapped to an ALU operation
 
 Both assemble: they are in `valid_instructions`, in
 `instruction_syntax_map` as `O_FPR_C_FPR`, and have encodings at
@@ -1800,6 +1800,53 @@ caveat is the only place the file admits it.
 `InstructionDocs.EveryCaveatIsOnASupportedEntryAndNamesARealKnownIssue`
 pins that a caveat sits on a supported entry and that the number it
 cites has a heading here.
+
+### Fixed
+
+In `bffe212`, with the tests in `3e23f78`. Both halves had to go, and the
+entry above was right that mapping alone would not have been enough.
+
+**The mapping.** Both control units gained funct7 `0b0100000` ->
+`FCVT_S_D` and `0b0100001` -> `FCVT_D_S`. The entry named only
+`rvss_control_unit.cpp`; `rv5s_control_unit.cpp`'s F-type decode (the
+`alu_op_ == 3` switch) had exactly the same gap and returned
+`AluOp::NONE` for the same two instructions, so rv5s was broken the same
+way and is fixed the same way.
+
+**The two ALU bodies.** `FCVT_D_S` now memcpy's a `float` out of the low
+32 bits of `ina` instead of `static_cast<float>(ina)`, which converted
+the bit pattern as an integer - 1.5f, `0x3FC00000`, became
+1067450368.0. `FCVT_S_D` now rounds the memcpy'd `a` once and returns
+the 32-bit pattern **zero-extended**, through `int_result`, because the
+shared tail memcpy's eight bytes of `double` and would otherwise have
+stored the double bits of the rounded single. Zero-extension rather than
+NaN-boxing, because that is what `Alu::fpexecute` already returns and
+reads; nothing in this simulator NaN-boxes.
+
+Measured on `RVSSProcessor` and on all four rv5s variants, destination
+preloaded with `0x40934800ABCDEF12`:
+
+| program | before | after | correct |
+|---|---|---|---|
+| `fcvt.s.d` of 1.5 | **`0x0000000000000000`** | `0x3FC00000` | `0x3FC00000` |
+| `fcvt.s.d` of 0.1 | **`0x0`** | `0x3DCCCCCD` | `0x3DCCCCCD` |
+| `fcvt.s.d` of 1+2^-24 (a tie) | **`0x0`** | `0x3F800000` | `0x3F800000`, half to even |
+| `fcvt.s.d` of 1+3*2^-24 (a tie) | **`0x0`** | `0x3F800002` | `0x3F800002`, half to even |
+| `fcvt.s.d` of 1e300 / -1e300 | **`0x0`** | `0x7F800000` / `0xFF800000` | overflow to +/-inf |
+| `fcvt.s.d` of 1e-40 | **`0x0`** | `0x000116C2` | a subnormal single |
+| `fcvt.s.d` of -0.0 | **`0x0`** | `0x80000000` | the sign survives |
+| `fcvt.d.s` of 1.5f | **`0x0`** | `0x3FF8000000000000` | `0x3FF8000000000000` |
+| `fcvt.d.s` of 0.1f | **`0x0`** | `0x3FB99999A0000000` | exact widening |
+| `fcvt.d.s` of `0x00000001` | **`0x0`** | `0x36A0000000000000` | the smallest subnormal |
+| `fcvt.d.s` of -0.0f | **`0x0`** | `0x8000000000000000` | the sign survives |
+
+Every "correct" column was computed in Python with `struct.pack`, outside
+the code under test. NaN rows are not in the table because IEEE 754 does
+not pin a converted NaN's payload; the tests assert quiet-NaN-ness, and
+what this host actually produces is `0x7FF8000000000000` ->
+`0x7FC00000` and `0x7FC00000` -> `0x7FF8000000000000`.
+
+The caveats are off both entries, in `f22bc25`.
 
 ---
 
@@ -2080,7 +2127,7 @@ in-memory diagnostic at once.
 
 ---
 
-## 60. `fcvt.d.lu` writes zero: the ALU case is labelled `FCVT_S_LU` by mistake
+## 60. FIXED: `fcvt.d.lu` wrote zero, because the ALU case was labelled `FCVT_S_LU`
 
 The mirror of issue 57. There the control unit never names the
 operation; here it names it correctly and the **ALU has no case for it**.
@@ -2145,14 +2192,30 @@ left alone.
 control unit maps the operation the same way, so rv5s selects the same
 missing case.
 
-Not fixed here: `src/` is outside this branch's scope.
-`resources/instructions/instruction_docs.json` carries a `caveat` on the
-entry so the documentation does not promise a working instruction.
+### Fixed
+
+In `981ebf7`, with the tests in `3e23f78`: the label, one word. The
+diagnosis above was exactly right and the body needed no change.
+
+Measured on `RVSSProcessor` and on all four rv5s variants. The last two
+rows are the ones that distinguish `fcvt.d.lu` from `fcvt.d.l`, and they
+are the reason an unsigned conversion needs its own case at all:
+
+| source | before | after | correct | what `fcvt.d.l` gives |
+|---|---|---|---|---|
+| 0 | `0x0` | `0x0000000000000000` | `0x0000000000000000` | same |
+| 1 | **`0x0`** | `0x3FF0000000000000` | `0x3FF0000000000000` | same |
+| 965 | **`0x0`** | `0x408E280000000000` | `0x408E280000000000` | same |
+| 2^53+1 | **`0x0`** | `0x4340000000000000` | rounds to 2^53 | same |
+| **2^63** | **`0x0`** | `0x43E0000000000000` | +9.22e18 | `0xC3E0000000000000`, **negative** |
+| **2^64-1** | **`0x0`** | `0x43F0000000000000` | +1.84e19 | `0xBFF0000000000000`, **-1.0** |
+
+The caveat is off the entry, in `f22bc25`.
 
 
 ---
 
-## 61. The eight fused multiply-add instructions never write their destination
+## 61. FIXED: the eight fused multiply-adds never wrote their destination
 
 `fmadd`, `fmsub`, `fnmadd` and `fnmsub`, in both `.s` and `.d`, assemble
 and run and leave the destination register exactly as it was. Not
@@ -2240,8 +2303,73 @@ zero". That is a worse failure, not a better one.
 on `funct2` (`FMSUB_S`/`FMSUB_D`, `FNMADD_S`/`FNMADD_D`, …). On rv5s the
 predicates may well be the only thing in the way.
 
-Not fixed here: `src/` is outside this branch's scope. All eight entries
-in `resources/instructions/instruction_docs.json` carry a `caveat`.
+### Fixed
+
+In `07c756a`, with the tests in `3e23f78`. The entry above got both known
+halves right, and there was a third nobody had looked for.
+
+**1. The predicates.** `isFInstruction` and `isDInstruction` now cover
+the four R4-type opcodes and classify by **fmt** (bits 26:25, `00`
+single, `01` double) - because an R4-type's bits 31:25 are `rs3 << 2 |
+fmt`, not a funct7. On rv5s that predicate turned out to be the single
+gate on everything else: `rv5s_processor_base.cpp` decodes `frs3`, reads
+`freg3_data`, sets `freg_write`, `rv5s_hdu.cpp` stalls on `frs3` and the
+forwarding variants forward to it - all of it already written, all of it
+behind that one `if`.
+
+**2. The ALU-op selection, rvss only.** The unconditional
+`case 0b1000011: return FMADD_S;` under its "TODO: correct this" is gone,
+replaced by four top-level opcode cases that select on `funct2`. The
+four fmt-aware blocks that had been sitting unreachable as funct7 cases
+nested inside opcode `0b1010011` - 60 lines of correct, dead code - are
+deleted.
+
+**3. A third hole, in writeback, which only bites once the first two are
+fixed.** `WriteBackFloat`/`WriteBackDouble` in **both** models chose
+GPR-versus-FPR from funct7 alone:
+
+```cpp
+if (funct7 == 0b1010000 || funct7 == 0b1100000 || funct7 == 0b1110000)  // -> GPR
+```
+
+For an FMA those bits are `rs3 << 2 | fmt`. `fmadd.s fd, f1, f2, f20`
+reads `0b1010000` - the pattern that means `feq.s`/`fcvt.w.s` - so the
+result would have gone to the **integer** register `x[rd]`; `rs3` = 24
+and 28 collide the same way, and `.d` collides with the `...0001` row.
+Routing the eight without this would have turned "writes nothing" into
+"corrupts a GPR", which is worse. All four sites now require opcode
+`0b1010011`, and
+`FloatCompleteness.FusedMultiplyAddDoesNotTouchIntegerRegisters` covers
+the three colliding `rs3` values in both widths.
+
+Measured on `RVSSProcessor` and on all four rv5s variants, destination
+preloaded with `0x40934800ABCDEF12`:
+
+| program | before | after | correct |
+|---|---|---|---|
+| `fmadd.d` 3,5,7 | **the sentinel** | `0x4036000000000000` | 22.0 |
+| `fmsub.d` 3,5,7 | **the sentinel** | `0x4020000000000000` | 8.0 |
+| `fnmsub.d` 3,5,7 | **the sentinel** | `0xC020000000000000` | -8.0 |
+| `fnmadd.d` 3,5,7 | **the sentinel** | `0xC036000000000000` | -22.0 |
+| `fmadd.s` 3,5,7 | **the sentinel** | `0x41B00000` | 22.0f |
+| `fmsub.s` / `fnmsub.s` / `fnmadd.s` | **the sentinel** | `0x41000000` / `0xC1000000` / `0xC1B00000` | 8, -8, -22 |
+| `fmadd.d(-1.0, +0.0, -0.0)` | **the sentinel** | `0x8000000000000000` | -0.0 |
+
+And the case that makes a fused multiply-add worth having at all, with
+`a = 1+2^-52`, `b = 1-2^-52`, `c = -1.0`, so that `a*b` is exactly
+`1 - 2^-104`:
+
+| | result |
+|---|---|
+| before | the sentinel, nothing written |
+| **fused, one rounding (correct)** | **`0xB970000000000000`**, -4.93e-32 |
+| multiplied then added, two roundings | `0x0000000000000000` |
+
+`fmadd.d(inf, 0, 1)` is an invalid operation; the test asserts
+quiet-NaN-ness rather than a payload, and this host produces
+`0xFFF8000000000000`.
+
+The caveats are off all eight entries, in `f22bc25`.
 
 
 ---
