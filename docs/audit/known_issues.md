@@ -1605,6 +1605,31 @@ declared `SyntaxType::PSEUDO`; `fclass.s` and `fclass.d` are
 10-bit class mask, and `FCLASS_D` at `:971` does the same — so only the
 encoding step is missing.
 
+**The missing step is one character**, found while surveying NaN
+handling. `src/common/instructions.cpp`:
+
+```cpp
+static const std::unordered_set<std::string> FDExtensionR3TypeInstructions = {
+    "fmv.x.w",
+    "fmv.w.x",
+    "fclass.s"        // <- no comma
+    "fclass.d",       // so the two adjacent literals concatenate
+    "fmv.x.d",
+    "fmv.d.x",
+};
+```
+
+C++ concatenates adjacent string literals, so the set contains
+`"fclass.sfclass.d"` and **neither** real name.
+`isValidFDR3TypeInstruction` therefore returns false for both,
+`code_generator.cpp:439` falls through to its `else`, and the throw
+names the instruction. `fence`/`fence_i` are a separate, genuine gap;
+this half is a typo.
+
+Not fixed here: every stage that has met it so far had the assembler out
+of scope. It is a one-character change plus a test that assembles
+`fclass.s` and `fclass.d`.
+
 ---
 
 ## 53. `call` and `tail` are declared but not implemented
@@ -2973,3 +2998,241 @@ either pass the line text the lexer already has, or let `GetLineFromFile`
 return an empty string instead of throwing when the file cannot be
 opened. Not done here — it touches every error construction site in the
 parser.
+
+---
+
+## 70. FIXED: a NaN result carried the input's payload and sign
+
+RISC-V's F extension, "NaN Generation and Propagation": unless an
+instruction says otherwise, a NaN **result** is the canonical NaN —
+positive, quiet bit set, payload zero. `0x7FC00000` single,
+`0x7FF8000000000000` double. The payload of an input NaN is not
+propagated, and neither is its sign. This simulator propagated both.
+
+Fixed in `ad36904`, with the tests in `45a2871`.
+
+**Surveyed before changing anything**: 306 cases x 5 models = 1530 runs,
+four NaN shapes per width, through assembled programs on real
+processors. All five models agreed on every case but one (see 74).
+
+| `fadd.s`, NaN operand | before | after | spec |
+|---|---|---|---|
+| `0x7FC00000` canonical qNaN | `0x7FC00000` | `0x7FC00000` | `0x7FC00000` |
+| `0xFFC00000` negative qNaN | **`0xFFC00000`** | `0x7FC00000` | `0x7FC00000` |
+| `0x7FE00000` high-payload qNaN | **`0x7FE00000`** | `0x7FC00000` | `0x7FC00000` |
+| `0x7F800001` sNaN | **`0x7FC00001`** | `0x7FC00000` | `0x7FC00000` |
+
+The same four rows for `fsub`, `fmul`, `fdiv`, `fsqrt`, all eight fused
+multiply-adds, `fcvt.s.d` and `fcvt.d.s`, in both widths. The invalid
+operations returned whatever the host produces, which for x86-64 is a
+**negative** default NaN:
+
+| | before | after |
+|---|---|---|
+| `inf - inf` | **`0xFFC00000`** / `0xFFF8000000000000` | canonical |
+| `0 * inf` | **`0xFFC00000`** / `0xFFF8000000000000` | canonical |
+| `inf / inf` | **`0xFFC00000`** / `0xFFF8000000000000` | canonical |
+| `fma(inf, 0, 1)` | **`0xFFC00000`** / `0xFFF8000000000000` | canonical |
+| `0 / 0`, `sqrt(-1)` | `0x7FC00000` / `0x7FF8…` — positive, by accident | canonical |
+
+`fmin`/`fmax` needed nothing extra. Their rule is different — one NaN
+operand returns the *other operand*, not a NaN — and the survey found
+that half already correct in 32 of 32 cases. Only the both-NaN case
+returns a NaN, and it is now canonical.
+
+### Where, and why an allow-list
+
+Every NaN result leaves through one of two exits of
+`Alu::fpexecute`/`Alu::dfpexecute`, which the survey confirmed by
+enumerating every `return` in both functions:
+
+* the shared tail's float packing — all the arithmetic, `fmin`/`fmax`,
+  the FMAs, `fcvt.d.s`, the int-to-float conversions, and `fsgnj*`;
+* the tail's `is_int_result` return — `feq`/`flt`/`fle`, and `fcvt.s.d`,
+  which goes that way because its result is a 32-bit single;
+* everything else returns early and never reaches either: the
+  float-to-int conversions, `fclass`, and the four `fmv` forms.
+  `flw`/`fsw`/`fld`/`fsd` are not ALU ops at all.
+
+The fix canonicalizes at those two points, driven by an **allow-list of
+the 26 producers** rather than a list of exemptions. Forty ops reach the
+float exit; exactly 26 were measured producing a NaN. The other fourteen
+are the six `fsgnj`/`fsgnjn`/`fsgnjx`, which must keep an operand's
+payload and sign, and the eight integer-to-float conversions, which
+cannot produce a NaN. Naming the producers means an op added to the tail
+later canonicalizes nothing until someone decides it should; the other
+way round it would silently start rewriting results. The
+`is_int_result` point tests for `FCVT_S_D` by name, so `feq`/`flt`/`fle`
+cannot be caught by it.
+
+A canonical single is returned in the low 32 bits, zero-extended — this
+simulator's convention for every single, not the spec's. See 71.
+
+---
+
+## 71. A single is zero-extended in an f register, not NaN-boxed
+
+RISC-V requires a 32-bit value held in a 64-bit `f` register to be
+**NaN-boxed**: the upper 32 bits all ones, so that a single looks like a
+qNaN to any double-precision operation that reads it. This simulator
+zero-extends instead, everywhere and consistently.
+
+Measured, and consistent in all five models: `fmv.w.x` of `0x3F800000`
+leaves `0x000000003F800000`; `Alu::fpexecute` returns
+`static_cast<uint64_t>(result_bits)` from a 32-bit pattern; every reader
+takes the low 32 bits with `memcpy(&a, &ina, sizeof(float))`.
+
+**It is self-consistent, which is why nothing has broken.** A
+single-precision value written by one instruction is read correctly by
+the next, because both ends agree. The deviation shows only against real
+hardware and against a program that reads a single-width register with a
+double-width instruction: on hardware that yields a NaN, here it yields
+a small denormal double.
+
+Touch points a fix would need, in order:
+
+1. `Alu::fpexecute`'s single return — OR in `0xFFFFFFFF00000000`;
+2. the `FMV_W_X` case and the `FCVT_S_D` path, which both hand back a
+   32-bit pattern;
+3. `flw` in the memory stage of rvss and of `rv5s_processor_base.cpp`
+   (see 74, which has to be settled first);
+4. every reader: the `memcpy(&a, &ina, sizeof(float))` sites are
+   unaffected, but anything comparing a whole 64-bit register against a
+   single's bits is not — including `test/float_test_support.h` and the
+   float tests, which assert the zero-extended form today.
+
+Deliberately not done as part of 70: canonical NaN is about the *value*
+of a NaN result, boxing is about the *representation* of every single.
+Mixing them would make both unreviewable.
+
+---
+
+## 72. `fflags` is never written, and the flags it would hold are not RISC-V's
+
+Four independent defects, all measured over the 1530 survey runs.
+
+**1. `fflags` (CSR 0x001) is never written by anything.** It read `0` in
+every one of those runs. `RegisterFile` keeps CSRs in a flat array
+indexed by address (`registers.cpp:66-78`), so 0x001 `fflags`, 0x002
+`frm` and 0x003 `fcsr` are three unrelated slots with no aliasing;
+RISC-V defines `fflags` as `fcsr[4:0]`. The ALU writes **0x003** only
+(`rvss_processor.cpp:358` and the rv5s equivalents), so a program that
+reads `fflags` — the normal way to read the flags — gets zero.
+
+**2. The bit order is reversed.** `alu.h:23-27` defines
+`FCSR_INVALID_OP` as bit 0 … `FCSR_INEXACT` as bit 4. RISC-V's `fflags`
+is NX bit 0, UF 1, OF 2, DZ 3, NV 4. Every flag is in the wrong place.
+
+**3. Every double-precision op's status is narrowed to a bool.**
+`Alu::dfpexecute` returns `std::pair<uint64_t, bool>` (`alu.h:376`)
+while `fpexecute` returns `std::pair<uint64_t, uint8_t>`. The measured
+`fcsr` values across the whole survey were `0`, `1` and `2` and nothing
+else — doubles can only ever report "some flag" or "none".
+
+**4. The write replaces rather than accrues.** `WriteCsr(0x003, …)`
+stores the new value, so each instruction clears whatever the previous
+one raised. RISC-V's flags are sticky until explicitly cleared.
+
+A fix touches `alu.h`, `alu.cpp`, `rvss_processor.cpp` and four rv5s
+variants, and it needs its own survey: the flag *values* the ALU
+computes have never been checked against the spec either, only their
+plumbing. That is why the canonical-NaN tests assert no flags at all —
+asserting today's behaviour would pin an encoding that has to change.
+
+---
+
+## 73. `fcvt.w.s` saturates the wrong way for NaN, and has a boundary UB
+
+The float-to-int conversions guard before converting —
+`!isfinite(a) || a > max || a < min` — and saturate explicitly, so no
+out-of-range `static_cast` runs on ordinary inputs. Seven of the eight
+pick the saturation value with `(a < 0) ? min : max`, which sends a NaN
+to the maximum, as the spec's table requires. `FCVT_W_S` alone
+(`src/processor/alu.cpp`) uses `(a > 0 ? INT32_MAX : INT32_MIN)` — and
+`NaN > 0` is false.
+
+| | measured, all five models | spec |
+|---|---|---|
+| `fcvt.w.s` of a qNaN | **`0xFFFFFFFF80000000`** | `0x000000007FFFFFFF` |
+| `fcvt.w.d`, `fcvt.l.s/d`, `fcvt.lu.s/d`, `fcvt.wu.s/d` of a qNaN | max, or 0 for unsigned | correct |
+
+**A second, separate defect at the boundary.** `INT32_MAX` is 2147483647,
+which as a `float` rounds **up** to 2147483648.0f. So for exactly that
+input, `a > static_cast<float>(INT32_MAX)` is false, the guard does not
+fire, and the else branch runs `static_cast<int32_t>(2147483648.0f)` —
+out of range, and **undefined behaviour** in C++:
+
+| input | measured here | spec |
+|---|---|---|
+| `0x4EFFFFFF` = 2147483520.0f, the largest in range | `0x7FFFFF80` | correct |
+| `0x4F000000` = 2147483648.0f, one ulp past | **`0xFFFFFFFF80000000`** | `0x000000007FFFFFFF` |
+
+The measured value is x86-64's "integer indefinite", which is what
+`cvttss2si` returns on overflow. Being UB, it is not guaranteed to stay
+that at another optimisation level or on another target. The same
+rounding argument applies to `(float)INT64_MAX` and to the `.d` forms
+against `INT64_MAX`; only the `.s`/`w` pair was measured.
+
+Recorded, not fixed: this stage was canonical NaN, and these are
+integer-result paths that leave through early returns and were never in
+its allow-list.
+
+---
+
+## 74. rv5s sign-extends a loaded single; rvss zero-extends it
+
+Found by the pass-through negative control of the NaN survey, and it is
+the only case in 306 where the five models disagreed.
+
+```
+fsw f1, 0(x10)      # f1 = 0xFFC00000, a negative qNaN
+flw f2, 0(x10)
+```
+
+| model | `f2` |
+|---|---|
+| rvss | `0x00000000FFC00000` |
+| rv5-nh-nf, rv5-nh-f, rv5-h-nf, rv5-h-f | **`0xFFFFFFFFFFC00000`** |
+
+rvss zero-extends the loaded word into the f register; all four rv5s
+variants sign-extend it. Neither matches RISC-V, which NaN-boxes (71),
+but **they do not match each other**, and that is the part that makes a
+program's result depend on which model a student picked. Any single
+whose bit 31 is set is affected — every negative single, not just NaNs.
+
+Not fixed: the fix is in the rv5s memory stage, outside this stage's
+file, and it interacts with 71 — whoever settles the representation
+should settle both at once.
+
+---
+
+## 75. `fdiv` by zero returns a NaN, not an infinity
+
+`AluOp::FDIV_S` and `FDIV_D` in `src/processor/alu.cpp` test the divisor
+and return `quiet_NaN()` for **any** zero divisor:
+
+```cpp
+if (b == 0.0f)
+{
+    result = std::numeric_limits<float>::quiet_NaN();
+    fcsr |= FCSR_DIV_BY_ZERO;
+}
+```
+
+IEEE 754 and RISC-V both say a finite non-zero divided by zero is
+**±inf**, with the divide-by-zero flag raised; only `0/0` is a NaN, and
+that one raises invalid rather than divide-by-zero.
+
+| | measured | spec |
+|---|---|---|
+| `fdiv.s 1.0, 0.0` | **`0x7FC00000`** (a NaN) | `0x7F800000` (+inf), DZ |
+| `fdiv.s -1.0, 0.0` | **`0x7FC00000`** | `0xFF800000` (-inf), DZ |
+| `fdiv.s 0.0, 0.0` | `0x7FC00000` | NaN, but with NV, not DZ |
+
+Canonicalization does not help and was not applied to hide it: after
+`ad36904` the wrong answer is simply a *canonical* wrong answer. The
+canonical-NaN tests deliberately leave `x/0` out, so that nothing pins
+this behaviour.
+
+Not fixed: it is a value defect in an op the canonical-NaN stage only
+passed through, and it deserves its own red test and control.
