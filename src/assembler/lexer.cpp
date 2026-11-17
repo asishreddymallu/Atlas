@@ -221,8 +221,24 @@ Token Lexer::number()
     }
     else if (std::regex_match(value, float_regex))
     {
-
-        return {TokenType::FLOAT, std::to_string(std::stod(value)), line_number_, start_column, column_number_};
+        // The literal text goes through UNTOUCHED, and is converted once,
+        // where it is used (Parser::parse, the .float and .double arms).
+        //
+        // This used to be std::to_string(std::stod(value)), which is three
+        // defects in one line (known_issues 58):
+        //   * std::to_string(double) is "%f": six digits after the point.
+        //     `1e-7` became the string "0.000000" and so stored ZERO, and
+        //     anything needing more than six decimals was truncated.
+        //   * both halves follow the C locale, and QApplication's
+        //     constructor calls setlocale(LC_ALL, ""). Under a
+        //     comma-decimal locale to_string emitted "0,100000" and stod
+        //     then stopped at the comma: `.double 0.1` stored ZERO.
+        //   * std::stod THROWS std::out_of_range on a subnormal or an
+        //     overflow, out of the lexer and out of assemble(). The GUI
+        //     showed a message box whose entire text was "stod".
+        // Integer literals are unaffected: the NUM branches above still
+        // normalise through parserUnsignedPrefixed().
+        return {TokenType::FLOAT, value, line_number_, start_column, column_number_};
     }
 
     return {TokenType::INVALID, "Invalid", line_number_, start_column, column_number_};

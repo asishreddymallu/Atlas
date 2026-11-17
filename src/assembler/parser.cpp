@@ -12,12 +12,53 @@
 #include "processor/registers.h"
 
 
+#include <charconv>
 #include <cstdint>
 #include <iostream>
+#include <optional>
+#include <string>
+#include <system_error>
 #include <vector>
 
 namespace Kites
 {
+namespace
+{
+/**
+ * @brief Converts a float literal's TEXT to T, once, correctly rounded.
+ *
+ * std::from_chars and nothing else (known_issues 58):
+ *
+ *   * it is locale-INDEPENDENT by specification. std::stod, std::stof,
+ *     std::to_string, scanf and friends all follow the C locale, and
+ *     QApplication's constructor calls setlocale(LC_ALL, ""), so in a
+ *     running Kites the C locale is the user's. Under a comma-decimal
+ *     locale the old code read `0.1` as 0.
+ *   * it is correctly rounded, from the decimal digits.
+ *   * it reports an out-of-range literal instead of THROWING, which is
+ *     what std::stod did - out of the lexer, out of assemble(), and into
+ *     a message box whose entire text was "stod".
+ *
+ * T is float for `.float` and double for `.double`. The float conversion
+ * runs on the TEXT; narrowing an already-rounded double would round
+ * twice and can land one ulp away (measured on
+ * 6748.838134765625000000000000001: 0x45D2E6B5 correct, 0x45D2E6B4 via a
+ * double).
+ *
+ * @return the value, or nullopt if the text is not a number at all or
+ *         does not fit in T.
+ */
+template <typename T> std::optional<T> parseFloatLiteral(const std::string &text)
+{
+    T          value{};
+    const auto first  = text.data();
+    const auto last   = text.data() + text.size();
+    const auto result = std::from_chars(first, last, value);
+    if (result.ec != std::errc{} || result.ptr != last)
+        return std::nullopt;
+    return value;
+}
+} // namespace
 Token Parser::prevToken()
 {
     if (pos_ > 0)
@@ -77,6 +118,21 @@ void Parser::parseDataDirective()
     {
         if (data_index_ % alignment != 0)
             data_index_ += alignment - (data_index_ % alignment);
+    };
+    // A literal that does not fit the directive's width is a mistake in
+    // the program, and is reported like any other: through recordError,
+    // with a line and a column, the same shape the .zero directive uses
+    // below. It used to escape as std::out_of_range from std::stod.
+    auto recordFloatLiteralOutOfRange = [&](const Token &token, const char *width)
+    {
+        const std::string message =
+            "Float literal '" + token.value + "' is out of range for a " + width;
+        recordError(ParseError(token.line_number, token.column_number, token.end_column, message,
+                               DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
+        errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
+            message, std::string("Expected a value representable as a ") + width, filename_,
+            token.line_number, token.column_number,
+            GetLineFromFile(filename_, token.line_number)));
     };
     while (currentToken().value != "text" && currentToken().value != "data" &&
            currentToken().value != "bss" && currentToken().value != "section" &&
@@ -210,9 +266,16 @@ void Parser::parseDataDirective()
             {
                 if (currentToken().type == TokenType::FLOAT)
                 {
-                    align(4);
-                    data_buffer_.emplace_back(static_cast<float>(std::stof(currentToken().value)));
-                    data_index_ += 4;
+                    if (const auto value = parseFloatLiteral<float>(currentToken().value))
+                    {
+                        align(4);
+                        data_buffer_.emplace_back(*value);
+                        data_index_ += 4;
+                    }
+                    else
+                    {
+                        recordFloatLiteralOutOfRange(currentToken(), "32-bit float");
+                    }
                 }
                 nextToken();
             }
@@ -226,9 +289,16 @@ void Parser::parseDataDirective()
             {
                 if (currentToken().type == TokenType::FLOAT)
                 {
-                    align(8);
-                    data_buffer_.emplace_back(static_cast<double>(std::stod(currentToken().value)));
-                    data_index_ += 8;
+                    if (const auto value = parseFloatLiteral<double>(currentToken().value))
+                    {
+                        align(8);
+                        data_buffer_.emplace_back(*value);
+                        data_index_ += 8;
+                    }
+                    else
+                    {
+                        recordFloatLiteralOutOfRange(currentToken(), "64-bit double");
+                    }
                 }
                 nextToken();
             }
