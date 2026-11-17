@@ -279,6 +279,69 @@ namespace alu
     }
 }
 
+namespace
+{
+/// The canonical NaN of the RISC-V F extension: positive, quiet bit set,
+/// payload zero. A single is returned in the low 32 bits, zero-extended,
+/// which is this simulator's convention for a single everywhere (the
+/// spec NaN-boxes instead; see docs/audit/known_issues.md).
+constexpr uint64_t kCanonicalNaN32 = 0x7FC00000ULL;
+constexpr uint64_t kCanonicalNaN64 = 0x7FF8000000000000ULL;
+
+bool isNaNBits32(uint64_t bits)
+{
+    const auto word = static_cast<uint32_t>(bits);
+    return ((word >> 23) & 0xFF) == 0xFF && (word & 0x7FFFFF) != 0;
+}
+bool isNaNBits64(uint64_t bits)
+{
+    return ((bits >> 52) & 0x7FF) == 0x7FF && (bits & 0xFFFFFFFFFFFFFULL) != 0;
+}
+
+/**
+ * @brief The ops whose NaN result must be the canonical NaN.
+ *
+ * An ALLOW-list, not an exempt list, and the difference matters. Forty
+ * ops reach the shared tail of fpexecute/dfpexecute; a measured sweep of
+ * 306 NaN cases on five models found that exactly these 26 ever produce
+ * a NaN. The other fourteen are the six fsgnj/fsgnjn/fsgnjx - which must
+ * keep an operand's payload and sign, and are the reason an exempt list
+ * would be fragile - and the eight integer-to-float conversions, which
+ * cannot produce a NaN at all.
+ *
+ * Naming the producers means a new op added to the tail canonicalizes
+ * nothing until someone decides it should. The other way round, it would
+ * silently start rewriting results.
+ *
+ * Not here, and not by accident: feq/flt/fle leave through the tail's
+ * `is_int_result` return, and fcvt.w/wu/l/lu, fclass and the fmv pair
+ * leave through early returns. None of them is in this list, and the
+ * one place that canonicalizes an `is_int_result` value tests for
+ * FCVT_S_D explicitly.
+ */
+bool canonicalizesNaN(AluOp op)
+{
+    switch (op)
+    {
+    case AluOp::FADD_S:   case AluOp::FADD_D:
+    case AluOp::FSUB_S:   case AluOp::FSUB_D:
+    case AluOp::FMUL_S:   case AluOp::FMUL_D:
+    case AluOp::FDIV_S:   case AluOp::FDIV_D:
+    case AluOp::FSQRT_S:  case AluOp::FSQRT_D:
+    case AluOp::FMIN_S:   case AluOp::FMIN_D:
+    case AluOp::FMAX_S:   case AluOp::FMAX_D:
+    case AluOp::FMADD_S:  case AluOp::FMADD_D:
+    case AluOp::FMSUB_S:  case AluOp::FMSUB_D:
+    case AluOp::FNMADD_S: case AluOp::FNMADD_D:
+    case AluOp::FNMSUB_S: case AluOp::FNMSUB_D:
+    case AluOp::FCVT_S_D: case AluOp::FCVT_D_S:
+        return true;
+    default:
+        return false;
+    }
+}
+} // namespace
+
 [[nodiscard]] std::pair<uint64_t, uint8_t> Alu::fpexecute(AluOp op, uint64_t ina, uint64_t inb,
                                                           uint64_t inc, uint8_t rm)
 {
@@ -655,7 +718,10 @@ namespace alu
     }
     uint32_t result_bits = 0;
     std::memcpy(&result_bits, &result, sizeof(result));
-    return {static_cast<uint64_t>(result_bits), fcsr};
+    uint64_t out = static_cast<uint64_t>(result_bits);
+    if (canonicalizesNaN(op) && isNaNBits32(out))
+        out = kCanonicalNaN32;
+    return {out, fcsr};
 }
 
 [[nodiscard]] std::pair<uint64_t, bool> Alu::dfpexecute(AluOp op, uint64_t ina, uint64_t inb,
@@ -1061,11 +1127,23 @@ namespace alu
     std::fesetround(original_rm);
     if (is_int_result)
     {
+        // Every op that leaves here carries an INTEGER result - feq, flt,
+        // fle - except fcvt.s.d, which the single/double split sends this
+        // way because its result is a 32-bit single rather than the
+        // double the exit below packs. So this is the one place where an
+        // is_int_result value is a floating-point value, and the test is
+        // for that op by name.
+        if (op == AluOp::FCVT_S_D && isNaNBits32(int_result))
+        {
+            return {kCanonicalNaN32, fcsr};
+        }
         return {int_result, fcsr};
     }
 
     uint64_t result_bits = 0;
     std::memcpy(&result_bits, &result, sizeof(result));
+    if (canonicalizesNaN(op) && isNaNBits64(result_bits))
+        result_bits = kCanonicalNaN64;
     return {result_bits, fcsr};
 }
 
