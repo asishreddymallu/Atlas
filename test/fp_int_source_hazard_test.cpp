@@ -322,6 +322,114 @@ TEST(FpIntSourceHazard, AnIndexIsNotARegisterClass)
     }
 }
 
+// ───────── the other direction: a PLAIN INTEGER consumer ──────────────
+//
+// Everything above has an FP-class consumer. The integer forwarding
+// block has the mirror-image hole: ex_mem_reg_.alu_result is latched for
+// EVERY instruction, `reg_write` is set for every OP-FP instruction, and
+// `rd` carries the same five bits as `frd` - so an FP producer writing
+// f5 can reach an ordinary `addi` reading x5.
+//
+// t0 is x5 and a0 is x10, so a producer writing f5 or f10 collides with
+// a consumer reading t0 or a0 respectively.
+
+namespace
+{
+/// f1 = 3.0, f2 = 3.0, f6 = 7.0, and a sentinel in the integer register
+/// the consumer will read.
+std::string integerConsumerSetup(int gpr, uint64_t sentinel)
+{
+    return loadDouble(1, kThreeD, 11) + loadDouble(2, kThreeD, 12) + loadDouble(6, kSevenD, 13) +
+           loadImmediate(gpr, sentinel);
+}
+} // namespace
+
+TEST(FpIntSourceHazard, FpProducerDoesNotReachAPlainIntegerConsumer)
+{
+    QTemporaryDir dir;
+    ASSERT_TRUE(dir.isValid());
+    struct Producer
+    {
+        const char *what;
+        const char *text;
+        int         index; // the f register it writes
+    };
+    const Producer producers[] = {
+        {"fadd.d f5", "fadd.d f5, f1, f2", 5},
+        {"fadd.d f10", "fadd.d f10, f1, f2", 10},
+        {"fcvt.d.l f5", "fcvt.d.l f5, t3", 5},
+        {"fmadd.d f10", "fmadd.d f10, f1, f2, f6", 10},
+        {"fld f10", "fld f10, 0(t4)", 10},
+        {"flw f5", "flw f5, 0(t4)", 5},
+    };
+    // t3 = 7 for fcvt.d.l, t4 = 1600 holding 3.0 for the loads.
+    const std::string common = "    addi t3, x0, 7\n" + kGap + "    addi t4, x0, 1600\n" + kGap +
+                               loadDouble(3, kThreeD, 14) + "    fsd f3, 0(t4)\n" + kGap;
+
+    for (const Producer &p : producers)
+    {
+        const char *reg = (p.index == 5) ? "t0" : "a0";
+        for (int d : {0, 1})
+        {
+            // rs1 of an addi
+            checkCase(dir, std::string(p.what) + " -> addi s0, " + reg + ", 1",
+                      common + integerConsumerSetup(p.index, 90) + "    " + p.text + "\n" +
+                          nops(d) + "    addi s0, " + reg + ", 1\n" + kGap,
+                      true, 8, 91, Owe::All, d);
+            // rs2 of an add
+            checkCase(dir, std::string(p.what) + " -> add s0, t5, " + reg,
+                      common + integerConsumerSetup(p.index, 90) + "    addi t5, x0, 5\n" + kGap +
+                          "    " + p.text + "\n" + nops(d) + "    add s0, t5, " + reg + "\n" +
+                          kGap,
+                      true, 8, 95, Owe::All, d);
+            // store DATA: rs2 of an sd, read back through a settled base
+            checkCase(dir, std::string(p.what) + " -> sd " + reg + ", 0(t6)",
+                      common + integerConsumerSetup(p.index, 90) + "    addi t6, x0, 1664\n" +
+                          kGap + "    " + p.text + "\n" + nops(d) + "    sd " + reg +
+                          ", 0(t6)\n" + kGap + "    ld s0, 0(t6)\n" + kGap,
+                      true, 8, 90, Owe::All, d);
+            // BASE of a load: the sentinel is an address holding 1234
+            checkCase(dir, std::string(p.what) + " -> ld s0, 0(" + reg + ")",
+                      common + integerConsumerSetup(p.index, 1728) +
+                          "    addi s1, x0, 1234\n" + kGap + "    sd s1, 0(" + reg + ")\n" +
+                          kGap + "    " + p.text + "\n" + nops(d) + "    ld s0, 0(" + reg +
+                          ")\n" + kGap,
+                      true, 8, 1234, Owe::All, d);
+            // a branch operand: s0 stays 0 only if the comparison sees 90
+            checkCase(dir, std::string(p.what) + " -> beq " + reg + ", t5, taken",
+                      common + integerConsumerSetup(p.index, 90) + "    addi t5, x0, 90\n" +
+                          kGap + "    addi s0, x0, 7\n" + kGap + "    " + p.text + "\n" +
+                          nops(d) + "    beq " + reg + ", t5, skip\n" + kGap +
+                          "    addi s0, x0, 99\n" + kGap + "skip:\n" + kGap,
+                      true, 8, 7, Owe::All, d);
+        }
+    }
+}
+
+TEST(FpIntSourceHazard, FpProducersThatWriteAGprStillForward)
+{
+    // The guard must not be too strict. These three FP instructions do
+    // write an integer register, and their results must reach an
+    // ordinary integer consumer exactly as any other producer's would.
+    QTemporaryDir dir;
+    ASSERT_TRUE(dir.isValid());
+    const std::string setup = loadDouble(1, kThreeD, 11) + loadDouble(2, kThreeD, 12) +
+                              loadDouble(6, kSevenD, 13);
+    for (int d : {0, 1})
+    {
+        checkCase(dir, "feq.d t0,f1,f2 -> addi t1, t0, 1",
+                  setup + "    feq.d t0, f1, f2\n" + nops(d) + "    addi t1, t0, 1\n" + kGap,
+                  true, 6, 2, Owe::All, d);
+        checkCase(dir, "fcvt.l.d t0,f6 -> add t1, t0, t0",
+                  setup + "    fcvt.l.d t0, f6\n" + nops(d) + "    add t1, t0, t0\n" + kGap,
+                  true, 6, 14, Owe::All, d);
+        checkCase(dir, "fmv.x.d t0,f1 -> sd t0, 0(t6)",
+                  setup + "    addi t6, x0, 1792\n" + kGap + "    fmv.x.d t0, f1\n" + nops(d) +
+                      "    sd t0, 0(t6)\n" + kGap + "    ld s0, 0(t6)\n" + kGap,
+                  true, 8, kThreeD, Owe::All, d);
+    }
+}
+
 // ───────── (g) the program from the report ─────────────────────────────
 
 TEST(FpIntSourceHazard, TheReportedProgram)

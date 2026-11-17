@@ -245,7 +245,14 @@ void RV5StageProcessorNHF::pipeline_execute()
 
         // **Priority 1: EX/MEM (Data available from current instruction in MEM)**
         // Covers R->R, R->Branch, R->MemAddr, R->Store (Cases 1, 5, 7, 3)
-        if (ex_mem_reg_.reg_write && (ex_mem_reg_.rd != 0))
+        //
+        // producerWritesGpr, not reg_write: the control unit sets
+        // reg_write for every OP-FP instruction and rd carries the same
+        // five bits as frd, so `fadd.d f5, …` would otherwise forward
+        // its floating-point result into an ordinary `addi` reading x5
+        // (known_issues 79).
+        if (producerWritesGpr(ex_mem_reg_.instruction, ex_mem_reg_.reg_write) &&
+            (ex_mem_reg_.rd != 0))
         {
             if (ex_mem_reg_.rd == id_ex_reg_.rs1)
             {
@@ -259,7 +266,8 @@ void RV5StageProcessorNHF::pipeline_execute()
 
         // **Priority 2: MEM/WB (Data available from current instruction in WB)**
         // Used for dependencies two cycles ago, and to forward Load data after the 1 NOP delay.
-        if (mem_wb_reg_.prev_reg_write && (mem_wb_reg_.prev_rd != 0))
+        if (producerWritesGpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_reg_write) &&
+            (mem_wb_reg_.prev_rd != 0))
         {
             // Forward A from MEM/WB unless EX/MEM is forwarding to the same register (Priority)
             if (mem_wb_reg_.prev_rd == id_ex_reg_.rs1 && forward_a != 2)

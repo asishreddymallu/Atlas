@@ -304,7 +304,14 @@ void RV5StageProcessorHF::pipeline_execute()
         uint8_t forward_b = 0;
 
         // **Priority 1: EX/MEM Forward** (R-R, R-Store hazard solved)
-        if (ex_mem_reg_.reg_write && (ex_mem_reg_.rd != 0))
+        //
+        // producerWritesGpr, not reg_write: the control unit sets
+        // reg_write for every OP-FP instruction and rd carries the same
+        // five bits as frd, so `fadd.d f5, …` would otherwise forward
+        // its floating-point result into an ordinary `addi` reading x5
+        // (known_issues 79).
+        if (producerWritesGpr(ex_mem_reg_.instruction, ex_mem_reg_.reg_write) &&
+            (ex_mem_reg_.rd != 0))
         {
             if (ex_mem_reg_.rd == id_ex_reg_.rs1)
                 forward_a = 2;
@@ -313,7 +320,8 @@ void RV5StageProcessorHF::pipeline_execute()
         }
 
         // **Priority 2: MEM/WB Forward** (R-R, L-Store hazard solved)
-        if (mem_wb_reg_.prev_reg_write && (mem_wb_reg_.prev_rd != 0))
+        if (producerWritesGpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_reg_write) &&
+            (mem_wb_reg_.prev_rd != 0))
         {
             // Forward A from MEM/WB unless EX/MEM is already forwarding
             if (mem_wb_reg_.prev_rd == id_ex_reg_.rs1 && forward_a != 2)
