@@ -3257,3 +3257,136 @@ this behaviour.
 
 Not fixed: it is a value defect in an op the canonical-NaN stage only
 passed through, and it deserves its own red test and control.
+
+---
+
+## 76. FIXED: an FP instruction's integer source did not see the instruction before it
+
+`fcvt.{s,d}.{w,wu,l,lu}`, `fmv.{w,d}.x` and the base address of
+`flw`/`fld`/`fsw`/`fsd` read an **x** register. On the two forwarding
+variants that read was taken straight from the architectural register
+file in the execute stage, so a producer still in the pipeline was not
+seen:
+
+```
+    li t0, 3
+    fcvt.d.l f1, t0
+    fmadd.d f4, f1, f1, f1
+```
+
+| model | f1 before | f4 before | after |
+|---|---|---|---|
+| rvss | `0x4008000000000000` | `0x4028000000000000` | unchanged ✓ |
+| rv5-h-nf | `0x4008000000000000` | `0x4028000000000000` | unchanged ✓ |
+| **rv5-h-f** | **`0x0`** | **`0x0`** | `0x4008…` / `0x4028…` |
+| **rv5-nh-f** | **`0x0`** | **`0x0`** | `0x4008…` / `0x4028…` |
+| rv5-nh-nf | `0x0` | `0x0` | still `0x0` — by design, see 77 |
+
+Measured identically through a bare processor and through
+`ProcessorManager::run()`, which is the path `MainWindow` drives. Padding
+every dependent pair with four `nop`s made all five models correct, which
+is what identified it as a hazard rather than an arithmetic fault.
+
+Fixed in `6912b0c`, with the tests in `9ce7f61`
+(`test/fp_int_source_hazard_test.cpp`, every case at producer distance 0,
+1, 2 and 3 on all five models).
+
+### Three defects, one root
+
+Five bits of an instruction are read as both an x index and an f index,
+and the datapath decided which one it meant by comparing `funct7` against
+bare constants.
+
+**1. The read bypassed forwarding, twice.** The FP execute path read
+`registers_.ReadGpr(rs1)` before the forwarding mux and then **again
+after it**, under a comment that called the second one a "re-apply
+GPR-read override" — so a forwarded value would have been discarded even
+if one had existed. And with forwarding enabled the hazard unit returns
+`STALL_NONE` for everything but load-use (`rv5s_hdu.cpp`: *"All other
+hazards … are solved by the forwarding unit"*), so the stall that makes
+`h_nf` correct was deliberately suppressed. The override is gone; the
+read now goes through `forwardedIntegerSource()`, which is the integer
+path's own rule — EX/MEM, then MEM/WB, then the register file, with the
+`rd != 0` guard — in one shared place so the two cannot drift.
+
+**2. An R4-type is not a funct7, and this hit every model.** `fmadd`,
+`fmsub`, `fnmadd` and `fnmsub` carry `rs3 << 2 | fmt` in bits 31:25. So
+`rs3 = f26` reads `0b1101000`/`0b1101001` and `rs3 = f30` reads
+`0b1111000`/`0b1111001` — exactly the four patterns that meant "this
+instruction's rs1 is an integer register":
+
+| | before | after | correct |
+|---|---|---|---|
+| `fmadd.d f4, f1, f2, f26` with 3, 5, 7 | **`0x401C000000000000`** (7.0, the value of f26) | `0x4036000000000000` | 22.0 |
+| `fmadd.s f4, f1, f2, f30` with 3, 5, 7 | **`0x40E00000`** (7.0f) | `0x41B00000` | 22.0f |
+
+It returned the addend because rs1 was replaced by `x[1]`, which was 0,
+and `0*5+7 = 7`. **rvss, `h_nf` and `nh_nf` were wrong here too** — four
+failing assertions each in the red run — so this half is not a pipeline
+bug at all. The named predicate
+`instruction_set::readsIntegerSource()` requires opcode `0b1010011`
+before looking at funct7, and replaces all fourteen hand-written copies
+(`rvss_processor.cpp`, `rv5s_processor_base.cpp`, and all four variants).
+Same family as the writeback collision in 61, at the other end of the
+datapath.
+
+**3. Neither write-enable flag says which register file.** The control
+unit sets `reg_write` for every OP-FP instruction and `freg_write` for
+every F/D instruction, while `rd` and `frd` carry the same five bits. So:
+
+| | before | after |
+|---|---|---|
+| `fcvt.d.l f5, t1` then a consumer reading **x5** | **`0x43D0070000000000`** — f5's bit pattern converted as an integer | `0x4008000000000000` |
+| `fcvt.l.d t0, f6` (writes x5) then a consumer reading **f5** | **wrong** | correct |
+
+`producerWritesGpr()` and `producerWritesFpr()` ask the instruction
+instead, mirroring the writeback decision, and the FPR mux skips rs1
+entirely when rs1 is an integer register.
+
+`MEM_WB_Register` gained `prev_instruction` for this: at that stage
+`prev_reg_write` and `prev_freg_write` are both set for an F/D
+instruction, so the flags alone cannot tell the classes apart.
+
+### What was deliberately not changed
+
+`h_nf` and `nh_nf` keep reading the architectural register file, which is
+correct for their contract — `h_nf` stalls until the value is
+architectural, `nh_nf` has no hazard handling by design — and took only
+the predicate change. Five controls, each reverting one part of the fix,
+fail a different named test; the full set is in the stage report.
+
+---
+
+## 77. `li` of a large constant is a dependent chain, and the no-hazard variants run it anyway
+
+`li` is a pseudo-instruction. For anything outside a 12-bit signed
+immediate the assembler expands it into a chain of `lui`, `slli` and
+`addi` (`src/assembler/parse_formats/pseudo_formats.cpp`, the `li` arm),
+each step depending on the previous, **with no `nop`s between them**.
+
+`rv5-nh-nf` and `rv5-nh-f` have no hazard detection. Measured:
+
+| | rvss | rv5-h-nf | rv5-h-f | **rv5-nh-nf** | **rv5-nh-f** |
+|---|---|---|---|---|---|
+| `li x5, 0x3FF0000000000000` then read x5 | `0x3FF0…` | `0x3FF0…` | `0x3FF0…` | **`0x0`** | **`0x0`** |
+| `li t0, 3` (one `addi`) | 3 | 3 | 3 | 3 | 3 |
+
+So a one-instruction `li` is fine and a multi-instruction one silently
+produces garbage — on the two models a student is most likely to pick
+when asked to see what a pipeline without interlocks does.
+
+**This is the variants behaving as designed.** A processor with no hazard
+detection does not interlock, and the contract says the programmer
+inserts the `nop`s. The defect is that nothing says so: the assembler
+expands `li` into a chain the chosen processor cannot execute, and
+neither the editor nor the run reports anything. Every float test in this
+repository builds its constants one byte at a time with four `nop`s
+between dependent pairs for exactly this reason
+(`test/float_test_support.h`).
+
+Suggested, not implemented: a warning from the assembler when a
+pseudo-instruction expands to more than one instruction and the selected
+processor has no hazard detection — the expansion already knows how many
+instructions it emitted, and `ProcessorManager` already knows the model.
+Not done here: it crosses from the assembler into the UI's notion of the
+current processor, and it needs its own design.
