@@ -2704,3 +2704,111 @@ declines it and it still goes through `StopAndReset()` — it still
 resets, exactly as it did at `995d7ea`. Nothing in `src/ui/` or `cli/`
 depended on the `ecall` path resetting; anything that comes to depend
 on it must call `reset()` explicitly.
+
+---
+
+## 68. `test/CMakeLists.txt` re-globs the whole filesystem on every build
+
+`test/CMakeLists.txt:7` is
+
+```cmake
+file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "*.cpp")
+```
+
+The pattern is **relative and unanchored**. The glob itself resolves
+against the current source directory and picks up the right 50 files, but
+the `CONFIGURE_DEPENDS` verification step does not: CMake writes it into
+`build-tests/CMakeFiles/VerifyGlobs.cmake:64` as
+
+```cmake
+file(GLOB_RECURSE NEW_GLOB LIST_DIRECTORIES false "/*.cpp")
+```
+
+— rooted at `/`. Every `cmake --build build-tests` therefore walks the
+entire filesystem looking for `.cpp` files, and **any** `.cpp` appearing
+anywhere on the machine counts as a change to the test sources.
+
+**Measured.** Building an unrelated out-of-tree copy under `/tmp` made the
+next in-tree build print
+
+```
+-- GLOB mismatch!
+The following files were added:
+  +/tmp/.../scratchpad/p10/base/build/Kites_autogen/mocs_compilation.cpp
+  +/tmp/.../scratchpad/p10/base/build/kites_core_autogen/.../moc_editor_tab.cpp
+  ... (218 paths)
+-- Re-running CMake...
+```
+
+and re-configure the project. `build/CMakeFiles/VerifyGlobs.cmake` has the
+same line; the other four globs in the two files are absolute
+(`${SRC_DIR}/*.cpp` and friends) and are fine.
+
+**What it does NOT do: it does not compile those files.** Checked, because
+that would be far worse than a slow build: `kites_test` has 51 objects,
+the repository's 50 `test/*.cpp` plus `kites_test_autogen/mocs_compilation.cpp`.
+Nothing foreign has ever entered the binary, and the test count
+reconciles by name.
+
+So the cost is a full-filesystem walk per build plus a spurious
+re-configure, not a correctness problem. The fix is one line:
+
+```cmake
+file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+```
+
+Not fixed here: the float-literal branch is `src/`-only, and a build-system
+change deserves its own commit and its own before/after timing.
+
+---
+
+## 69. `assemble(std::istream&)` reports every parse error as "Could not open the file."
+
+The in-memory overload (`src/assembler/assembler.cpp:104`) exists so the
+editor and tests can assemble without touching disk. It lexes and parses
+correctly — but the moment the parser records a *second-tier* error, the
+real diagnostic is replaced by an I/O message.
+
+**Mechanism.** Every `errors::*` constructor is handed
+`GetLineFromFile(filename_, line)` so the error can quote the offending
+line. The stream overload has no file: `lexer->getFilename()` is a
+placeholder, `GetLineFromFile` cannot open it, and it throws. The throw
+escapes `assemble()` in place of the diagnostic the parser had just
+recorded.
+
+**Measured**, assembling one directive per run through the stream
+overload. Every one of these is a different mistake, and every one
+arrives as the same message:
+
+| source | what comes out |
+|---|---|
+| `.double +1.5` | `Could not open the file.: iostream error` |
+| `.double 1.` | `Could not open the file.: iostream error` |
+| `.word 1.5` | `Could not open the file.: iostream error` |
+| `.float 1e400` | `Could not open the file.: iostream error` |
+| `.double nan` | `Could not open the file.: iostream error` |
+
+**The file-path overload is unaffected** (`assemble(const std::string&)`,
+`assembler.cpp:60`): it has a real file, `GetLineFromFile` reads it, and
+the diagnostic survives with its line, column and category. The same
+`.float 1e-400` that produces the message above produces this through the
+file path:
+
+```json
+{ "line": 2, "column": 16, "endColumn": 22, "severity": "error",
+  "category": "Assembler",
+  "message": "Float literal '1e-400' is out of range for a 64-bit double" }
+```
+
+Who is exposed: nothing in the shipped app today. `MainWindow` writes the
+editor text to `temporary_assembly_file_path` and calls the file overload
+(`main_window.cpp:867`), and `getDiagnostics()` is the commented-out stub
+of AGENTS.md known issue 3. It bites tests and harnesses that assemble
+from a stream, which is why `test/float_literal_test.cpp` uses the file
+overload throughout.
+
+The fix is to stop making the error text depend on re-reading the source:
+either pass the line text the lexer already has, or let `GetLineFromFile`
+return an empty string instead of throwing when the file cannot be
+opened. Not done here — it touches every error construction site in the
+parser.
