@@ -24,6 +24,11 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(SRC_DIR "src")
 set(EXTERNAL_DIR "external")
+# TEST_DIR was never set, so the TEST_FILES glob below expanded to the
+# pattern "/*.cpp" - an ABSOLUTE path - and both the configure step and
+# every CONFIGURE_DEPENDS re-check walked the whole filesystem. See
+# docs/audit/known_issues.md 68.
+set(TEST_DIR "test")
 
 set(CMAKE_AUTOUIC_SEARCH_PATHS  ${SRC_DIR}/ui)
 
