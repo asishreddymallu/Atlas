@@ -1105,11 +1105,20 @@ bool isFInstruction(const uint32_t &instruction)
         {
             if (funct7 == 0b0100000)
             {
-                return false; // fcvt.s.d
+                return false; // fcvt.s.d - a D-extension instruction
             }
             return true;
         }
+        break;
     }
+    // R4-type fused multiply-add. Bits 31:25 are rs3<<2 | fmt, NOT a
+    // funct7, so the width is the fmt field alone: 00 single, 01 double
+    // (known_issues 61).
+    case 0b1000011: // FMADD
+    case 0b1000111: // FMSUB
+    case 0b1001011: // FNMSUB
+    case 0b1001111: // FNMADD
+        return ((instruction >> 25) & 0b11) == 0b00;
     default:
         break;
     }
@@ -1142,9 +1151,15 @@ bool isDInstruction(const uint32_t &instruction)
         }
         else if (funct7 == 0b0100000)
         {
-            return true; // fcvt.s.d
+            return true; // fcvt.s.d - reads a double, so it executes here
         }
+        break;
     }
+    case 0b1000011: // FMADD
+    case 0b1000111: // FMSUB
+    case 0b1001011: // FNMSUB
+    case 0b1001111: // FNMADD
+        return ((instruction >> 25) & 0b11) == 0b01; // fmt 01 = double
     default:
         break;
     }

@@ -665,7 +665,14 @@ void RV5StageVM_Base::pipeline_writeback_float()
     uint64_t new_reg = 0;
 
     // write to GPR
-    if (funct7 == 0b1010000 || funct7 == 0b1100000 || funct7 == 0b1110000)
+    // The funct7 test below only means anything for opcode
+    // 0b1010011. An R4-type FMA's bits 31:25 are rs3<<2 | fmt, so
+    // `fmadd.s fd, f1, f2, f20` reads 0b1010000 and would send the
+    // result to the INTEGER register x[rd]; rs3 = 24 and 28 collide
+    // the same way, and .d collides with the ...0001 row
+    // (known_issues 61).
+    if (opcode == 0b1010011 &&
+        (funct7 == 0b1010000 || funct7 == 0b1100000 || funct7 == 0b1110000))
     { // f(eq|lt|le).s, fcvt.(w|wu|l|lu).s
         old_reg = registers_.ReadGpr(rd);
         registers_.WriteGpr(rd, mem_wb_reg_.alu_result);
@@ -707,7 +714,14 @@ void RV5StageVM_Base::pipeline_writeback_double()
     uint64_t new_reg = 0;
 
     // write to GPR
-    if (funct7 == 0b1010001 || funct7 == 0b1100001 || funct7 == 0b1110001)
+    // The funct7 test below only means anything for opcode
+    // 0b1010011. An R4-type FMA's bits 31:25 are rs3<<2 | fmt, so
+    // `fmadd.s fd, f1, f2, f20` reads 0b1010000 and would send the
+    // result to the INTEGER register x[rd]; rs3 = 24 and 28 collide
+    // the same way, and .d collides with the ...0001 row
+    // (known_issues 61).
+    if (opcode == 0b1010011 &&
+        (funct7 == 0b1010001 || funct7 == 0b1100001 || funct7 == 0b1110001))
     { // f(eq|lt|le).d, fcvt.(w|wu|l|lu).d
         old_reg = registers_.ReadGpr(rd);
         registers_.WriteGpr(rd, mem_wb_reg_.alu_result);
