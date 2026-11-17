@@ -2707,58 +2707,91 @@ on it must call `reset()` explicitly.
 
 ---
 
-## 68. `test/CMakeLists.txt` re-globs the whole filesystem on every build
+## 68. FIXED: a glob scanned the whole filesystem on every build (and not from the file this entry first blamed)
 
-`test/CMakeLists.txt:7` is
+Fixed in `52e202a`, one line. **The first version of this entry named the
+wrong file**, and the correction is the interesting part, so both are kept.
+
+### What it blamed, and why that was wrong
+
+`test/CMakeLists.txt:7` globs a relative, unanchored pattern:
 
 ```cmake
 file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "*.cpp")
 ```
 
-The pattern is **relative and unanchored**. The glob itself resolves
-against the current source directory and picks up the right 50 files, but
-the `CONFIGURE_DEPENDS` verification step does not: CMake writes it into
-`build-tests/CMakeFiles/VerifyGlobs.cmake:64` as
+That *looks* like the culprit, and this entry said it was. It is not.
+CMake resolves a relative pattern against the current source directory in
+the `CONFIGURE_DEPENDS` verification step as well as in the glob itself,
+and it was always recorded correctly, as
+`.../Atlas/test/*.cpp`. Measured: that pattern is still in
+`VerifyGlobs.cmake` after the fix, unchanged and absolute.
+
+### What it actually was
+
+`CMakeLists.txt:47`, in the **root** file:
 
 ```cmake
+file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "${TEST_DIR}/*.cpp")
+```
+
+`SRC_DIR` and `EXTERNAL_DIR` are set at `CMakeLists.txt:25-26`.
+**`TEST_DIR` was never set anywhere in the project** — `grep -n TEST_DIR`
+over every `CMakeLists.txt` and `*.cmake` returned that one line and
+nothing else. So the pattern expanded to `"/*.cpp"`, an absolute path
+rooted at `/`, and CMake recorded it in both build directories:
+
+```cmake
+# build-tests/CMakeFiles/VerifyGlobs.cmake:64   (before)
 file(GLOB_RECURSE NEW_GLOB LIST_DIRECTORIES false "/*.cpp")
 ```
 
-— rooted at `/`. Every `cmake --build build-tests` therefore walks the
-entire filesystem looking for `.cpp` files, and **any** `.cpp` appearing
-anywhere on the machine counts as a change to the test sources.
+It is in `build/CMakeFiles/VerifyGlobs.cmake` too, at the same line, which
+is the tell: `build/` is configured without `ENABLE_TESTS` and never reads
+`test/CMakeLists.txt` at all.
 
-**Measured.** Building an unrelated out-of-tree copy under `/tmp` made the
-next in-tree build print
+The variable it defines is **dead**: the only readers of `TEST_FILES` are
+`test/CMakeLists.txt:10` and `:56`, and line 7 of that file has already
+re-set it in the subdirectory scope before either is reached. So the
+project walked the filesystem twice per build to compute a list nobody
+read.
+
+### Measured, before and after
+
+| | before | after |
+|---|---|---|
+| no-op `cmake --build build-tests`, best of 3 | **7.41 s** | **0.06 s** |
+| `-- Configuring done` | 7.8 s | 0.5 s |
+| a `.cpp` created under `/tmp`, outside the repo | `GLOB mismatch!`, `Re-running CMake...`, **22.93 s** | no mismatch, no re-configure, 0.06 s |
+| `/*.cpp` in `VerifyGlobs.cmake` | line 64 of both build dirs | **gone**; all five recorded globs are absolute paths inside the checkout |
+
+The stray-file reproduction, verbatim:
 
 ```
+[0/2] Re-checking globbed directories...
 -- GLOB mismatch!
-The following files were added:
-  +/tmp/.../scratchpad/p10/base/build/Kites_autogen/mocs_compilation.cpp
-  +/tmp/.../scratchpad/p10/base/build/kites_core_autogen/.../moc_editor_tab.cpp
-  ... (218 paths)
--- Re-running CMake...
+  +/tmp/.../scratchpad/p11/stray_glob_probe.cpp
+[1/2] Re-running CMake...
+-- Configuring done (7.8s)
 ```
 
-and re-configure the project. `build/CMakeFiles/VerifyGlobs.cmake` has the
-same line; the other four globs in the two files are absolute
-(`${SRC_DIR}/*.cpp` and friends) and are fine.
+### The fix, and what it did not change
 
-**What it does NOT do: it does not compile those files.** Checked, because
-that would be far worse than a slow build: `kites_test` has 51 objects,
-the repository's 50 `test/*.cpp` plus `kites_test_autogen/mocs_compilation.cpp`.
-Nothing foreign has ever entered the binary, and the test count
-reconciles by name.
+One line beside the other two: `set(TEST_DIR "test")`. Deleting the dead
+glob would work equally well and is the obvious follow-up; defining the
+variable keeps the root file's evident intent and is the smaller change.
 
-So the cost is a full-filesystem walk per build plus a spurious
-re-configure, not a correctness problem. The fix is one line:
+`kites_test` still compiles **exactly the same 51 objects** — the 50
+`test/*.cpp` plus `kites_test_autogen/mocs_compilation.cpp` — diffed
+before and after. `CONFIGURE_DEPENDS` still works, checked both ways: a
+new `test/zz_glob_probe_test.cpp` was picked up by a plain
+`cmake --build`, with no manual cmake run, and registered as test #608;
+deleting it took the count back to 607. Suite 607/607, reconciled by name
+against the base: no test added, none removed.
 
-```cmake
-file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-```
-
-Not fixed here: the float-literal branch is `src/`-only, and a build-system
-change deserves its own commit and its own before/after timing.
+As the first version of this entry said and still holds: the bad glob
+never *compiled* anything foreign. The cost was a filesystem walk per
+build and a spurious re-configure, not a correctness problem.
 
 ---
 
