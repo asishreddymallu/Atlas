@@ -95,7 +95,7 @@ inline std::string hex(uint64_t value, int digits)
 
 /// Four nops: enough for a result to reach writeback before the next
 /// instruction decodes, on the variants with no hazard detection.
-inline const char *kGap = "    nop\n    nop\n    nop\n    nop\n";
+inline const std::string kGap = "    nop\n    nop\n    nop\n    nop\n";
 
 /**
  * @brief Puts an exact 64-bit pattern in a GPR, one byte at a time.
