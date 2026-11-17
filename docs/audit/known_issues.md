@@ -3055,15 +3055,36 @@ enumerating every `return` in both functions:
   `flw`/`fsw`/`fld`/`fsd` are not ALU ops at all.
 
 The fix canonicalizes at those two points, driven by an **allow-list of
-the 26 producers** rather than a list of exemptions. Forty ops reach the
-float exit; exactly 26 were measured producing a NaN. The other fourteen
-are the six `fsgnj`/`fsgnjn`/`fsgnjx`, which must keep an operand's
+the 24 producers** rather than a list of exemptions. Counted from the
+switch labels, the two functions carry 60 between them — 29 in
+`fpexecute`, 31 in `dfpexecute`:
+
+| exit | labels |
+|---|---|
+| the shared tail's float packing | 37 |
+| the tail's `is_int_result` return | 7 |
+| an early return, reaching neither point | 16 |
+
+So **44 reach the tail, 24 canonicalize** — 23 at the float exit plus
+`FCVT_S_D` at the `is_int_result` exit — and 20 do not: at the float
+exit the six `fsgnj`/`fsgnjn`/`fsgnjx`, which must keep an operand's
 payload and sign, and the eight integer-to-float conversions, which
-cannot produce a NaN. Naming the producers means an op added to the tail
-later canonicalizes nothing until someone decides it should; the other
-way round it would silently start rewriting results. The
-`is_int_result` point tests for `FCVT_S_D` by name, so `feq`/`flt`/`fle`
-cannot be caught by it.
+cannot produce a NaN; at the `is_int_result` exit the six
+`feq`/`flt`/`fle`, whose results are integers. The 16 early returns are
+the eight `fcvt.w/wu/l/lu`, the two `fclass`, the four `fmv` forms, and
+the two `ADD` labels the address path reuses.
+
+Naming the producers means an op added to the tail later canonicalizes
+nothing until someone decides it should; the other way round it would
+silently start rewriting results. The `is_int_result` point tests for
+`FCVT_S_D` by name, so `feq`/`flt`/`fle` cannot be caught by it.
+
+*(An earlier version of this entry, of the commit message for `ad36904`
+and of the stage report said "40 reach the tail, 26 canonicalize, 14 do
+not". The 14 was right, for the float exit; the other two were a
+miscount. The list in the code has always held these same 24 ops —
+nothing about the behaviour changed, only the arithmetic describing
+it.)*
 
 A canonical single is returned in the low 32 bits, zero-extended — this
 simulator's convention for every single, not the spec's. See 71.

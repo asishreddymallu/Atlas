@@ -301,23 +301,36 @@ bool isNaNBits64(uint64_t bits)
 /**
  * @brief The ops whose NaN result must be the canonical NaN.
  *
- * An ALLOW-list, not an exempt list, and the difference matters. Forty
- * ops reach the shared tail of fpexecute/dfpexecute; a measured sweep of
- * 306 NaN cases on five models found that exactly these 26 ever produce
- * a NaN. The other fourteen are the six fsgnj/fsgnjn/fsgnjx - which must
- * keep an operand's payload and sign, and are the reason an exempt list
- * would be fragile - and the eight integer-to-float conversions, which
- * cannot produce a NaN at all.
+ * An ALLOW-list, not an exempt list, and the difference matters. The two
+ * functions carry 60 case labels between them (29 in fpexecute, 31 in
+ * dfpexecute), which leave by three exits:
+ *
+ *     37  the shared tail's float packing
+ *      7  the tail's is_int_result return
+ *     16  an early return, reaching neither point
+ *
+ * So 44 ops reach the tail. **These 24 canonicalize**: 23 of them at the
+ * float exit, plus FCVT_S_D at the is_int_result exit, where it goes
+ * because its result is a 32-bit single rather than a double. A measured
+ * sweep of 306 NaN cases on five models found these are exactly the ops
+ * that ever produce a NaN.
+ *
+ * The 20 that reach the tail and do NOT canonicalize are, at the float
+ * exit, the six fsgnj/fsgnjn/fsgnjx - which must keep an operand's
+ * payload and sign, and are the reason an exempt list would be fragile -
+ * and the eight integer-to-float conversions, which cannot produce a NaN
+ * at all; and at the is_int_result exit, the six feq/flt/fle, whose
+ * results are integers.
  *
  * Naming the producers means a new op added to the tail canonicalizes
  * nothing until someone decides it should. The other way round, it would
  * silently start rewriting results.
  *
- * Not here, and not by accident: feq/flt/fle leave through the tail's
- * `is_int_result` return, and fcvt.w/wu/l/lu, fclass and the fmv pair
- * leave through early returns. None of them is in this list, and the
- * one place that canonicalizes an `is_int_result` value tests for
- * FCVT_S_D explicitly.
+ * Not here, and not by accident: the 16 early returns are fcvt.w/wu/l/lu
+ * (eight), fclass (two), the four fmv forms, and the two ADD labels the
+ * address path reuses. None of them is in this list, and the one place
+ * that canonicalizes an is_int_result value tests for FCVT_S_D
+ * explicitly, so feq/flt/fle cannot be caught by it.
  */
 bool canonicalizesNaN(AluOp op)
 {
