@@ -1803,7 +1803,7 @@ cites has a heading here.
 
 ---
 
-## 58. Float literals lose precision in the lexer
+## 58. FIXED: float literals lost precision, the locale, and sometimes threw
 
 `.double` and `.float` store non-representable decimal fractions to
 about six decimal places. Measured by loading each literal back with
@@ -1837,6 +1837,104 @@ more than one place.
 **Nothing documents this**, so it is not a disagreement with a summary —
 it is a finding. A teaching simulator that stores `0.1` as `0.100001`
 will confuse anyone writing a floating-point exercise.
+
+### Re-measured, and it was worse than this
+
+Fixed in `8e1dbc7`, with the tests in `f3666e8`. Re-measuring first, on
+GCC 16 / Fedora 44, through `assemble()` and out of
+`AssembledProgram::data_buffer`, found three things the entry above does
+not say. Every "correct" column below was computed outside the code under
+test, in Python, two ways that agree: `struct.pack`, and an exact
+`Fraction`/`Decimal` round-half-to-even converter.
+
+**1. Small magnitudes did not lose precision — they became ZERO.**
+`std::to_string(double)` is `%f`: six digits after the point, and nothing
+else.
+
+| literal | before | after | correct |
+|---|---|---|---|
+| `.double 1e-7` | **`0x0000000000000000`** | `0x3E7AD7F29ABCAF48` | `0x3E7AD7F29ABCAF48` |
+| `.double 1e-30` | **`0x0000000000000000`** | `0x39B4484BFEEBC2A0` | `0x39B4484BFEEBC2A0` |
+| `.float 1e-7` | **`0x00000000`** | `0x33D6BF95` | `0x33D6BF95` |
+| `.double 3.14159265358979` | `0x400921FB82C2BD7F` | `0x400921FB54442D11` | `0x400921FB54442D11` |
+| `.double 2.718281828459045` | `0x4005BF0AA21A719B` | `0x4005BF0A8B145769` | `0x4005BF0A8B145769` |
+| `.double 123456789.123456789` | `0x419D6F34547E6B83` | `0x419D6F34547E6B75` | `0x419D6F34547E6B75` |
+| `.float 3.14159265358979` | `0x40490FDC` | `0x40490FDB` | `0x40490FDB` |
+| `.double 0.1`, `0.5`, `1e0`, `-0.0` | exact | exact | exact |
+
+Note the last row against the original table above: on this toolchain
+`.double 0.1` was already exact, because `"0.100000"` and `"0.1"` are the
+same decimal. The `0x3FB999AA60913A50` recorded above is the double
+nearest `0.100001`, so that row measured a literal with a 1 in it, not
+`0.1`. The shape of the finding stands; that one row did not.
+
+**2. It followed the C locale, and the app changes the C locale.**
+Nothing in `src/`, `cli/` or `test/` calls `setlocale` — but
+**`QApplication`'s constructor does**, `setlocale(LC_ALL, "")`. Measured
+across the constructor: `LC_NUMERIC` goes `C` → the user's, and
+`std::to_string(0.1)` goes `0.100000` → `0,100000`. `std::stod` then
+stops at the comma.
+
+| under `LC_ALL=de_DE.utf8` | before | after |
+|---|---|---|
+| `.double 0.1` | **`0x0000000000000000`** (0.0) | `0x3FB999999999999A` |
+| `.double 3.14159265358979` | **`0x4008000000000000`** (3.0) | `0x400921FB54442D11` |
+| `.float 0.1` | **`0x00000000`** | `0x3DCCCCCD` |
+
+So a German- or French-locale user writing `.double 0.1` got zero. Pinned
+by `FloatLiteral.ParsingDoesNotDependOnTheCLocale`, which sets
+`LC_NUMERIC` itself and skips if `de_DE.utf8` is not installed.
+
+**3. Some valid literals threw, out of the lexer and out of
+`assemble()`.** `std::stod` throws `std::out_of_range` on a subnormal
+result as well as on overflow. `main_window.cpp` catches it and shows a
+`QMessageBox` whose entire text is **"stod"** — no line, no column.
+
+| literal | before | after |
+|---|---|---|
+| `.double 5e-324` (a valid subnormal) | **threw `std::out_of_range("stod")`** | `0x0000000000000001` |
+| `.double 1e-320` (a valid subnormal) | **threw** | `0x00000000000007E8` |
+| `.float 1e300` | **threw `std::out_of_range("stof")`** | a located parse error |
+| `.double 1e400`, `.double 1e-400` | **threw** | a located parse error |
+
+The error is now an ordinary diagnostic, the same shape the `.zero`
+directive already used:
+
+```json
+{ "line": 2, "column": 16, "endColumn": 22, "severity": "error",
+  "category": "Assembler",
+  "message": "Float literal '1e-400' is out of range for a 64-bit double" }
+```
+
+### The fix
+
+`lexer.cpp` passes the literal's TEXT through in the token instead of
+`std::to_string(std::stod(value))`, and `parser.cpp` converts it once,
+where it is used, with **`std::from_chars`** — locale-independent by
+specification, correctly rounded, and it *reports* an out-of-range value
+rather than throwing. `.float` converts from the text rather than
+narrowing an already-rounded double, because two roundings can land one
+ulp away: measured on `6748.838134765625000000000000001`, `0x45D2E6B5`
+correctly rounded against `0x45D2E6B4` via a double. Integer literals are
+untouched.
+
+Six tests in `test/float_literal_test.cpp`; five were red before the fix.
+Four controls, each reverting one hunk, each red again and named in the
+stage report.
+
+### Still rejected, deliberately not touched here
+
+Two literal shapes never reach the float path at all, so neither is a
+precision bug, and both are left alone:
+
+| literal | lexed as | why |
+|---|---|---|
+| `.5` | `DIRECTIVE('')` `NUM('5')` | the directive scanner claims a leading `.` before the number scanner sees it, even though `float_regex` would accept `[0-9]*\.[0-9]+` |
+| `1.` | `INVALID` | `float_regex` requires at least one digit after the point |
+| `inf`, `nan`, `-inf`, `NaN` | `INVALID` | no numeric regex admits them; there is no spelling for a non-finite literal |
+
+Accepting `.5` means changing directive lexing and accepting `1.` means
+changing the regex; both deserve their own change and their own controls.
 
 ---
 
