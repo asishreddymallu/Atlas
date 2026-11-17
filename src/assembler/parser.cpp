@@ -45,15 +45,27 @@ namespace
  * 6748.838134765625000000000000001: 0x45D2E6B5 correct, 0x45D2E6B4 via a
  * double).
  *
+ * @param outOfRange set when the text IS a number but does not fit in T,
+ *        as opposed to not being a number at all. The two get different
+ *        diagnostics, because they are different mistakes.
  * @return the value, or nullopt if the text is not a number at all or
  *         does not fit in T.
  */
-template <typename T> std::optional<T> parseFloatLiteral(const std::string &text)
+template <typename T>
+std::optional<T> parseFloatLiteral(const std::string &text, bool &outOfRange)
 {
+    outOfRange        = false;
     T          value{};
     const auto first  = text.data();
     const auto last   = text.data() + text.size();
     const auto result = std::from_chars(first, last, value);
+    if (result.ec == std::errc::result_out_of_range)
+    {
+        outOfRange = true;
+        return std::nullopt;
+    }
+    // Trailing text is a rejection, not a silent truncation: `0x10` parses
+    // as 0 and stops at the 'x', and `1.5xyz` as 1.5 and stops at the 'x'.
     if (result.ec != std::errc{} || result.ptr != last)
         return std::nullopt;
     return value;
@@ -123,15 +135,19 @@ void Parser::parseDataDirective()
     // the program, and is reported like any other: through recordError,
     // with a line and a column, the same shape the .zero directive uses
     // below. It used to escape as std::out_of_range from std::stod.
-    auto recordFloatLiteralOutOfRange = [&](const Token &token, const char *width)
+    auto recordBadFloatLiteral = [&](const Token &token, const char *width, bool outOfRange)
     {
         const std::string message =
-            "Float literal '" + token.value + "' is out of range for a " + width;
+            outOfRange
+                ? "Float literal '" + token.value + "' is out of range for a " + width
+                : "Float literal '" + token.value + "' is not a floating-point number";
+        const std::string detail = outOfRange
+                                       ? std::string("Expected a value representable as a ") + width
+                                       : std::string("Expected a decimal floating-point literal");
         recordError(ParseError(token.line_number, token.column_number, token.end_column, message,
                                DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
         errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
-            message, std::string("Expected a value representable as a ") + width, filename_,
-            token.line_number, token.column_number,
+            message, detail, filename_, token.line_number, token.column_number,
             GetLineFromFile(filename_, token.line_number)));
     };
     while (currentToken().value != "text" && currentToken().value != "data" &&
@@ -266,7 +282,8 @@ void Parser::parseDataDirective()
             {
                 if (currentToken().type == TokenType::FLOAT)
                 {
-                    if (const auto value = parseFloatLiteral<float>(currentToken().value))
+                    bool outOfRange = false;
+                    if (const auto value = parseFloatLiteral<float>(currentToken().value, outOfRange))
                     {
                         align(4);
                         data_buffer_.emplace_back(*value);
@@ -274,7 +291,7 @@ void Parser::parseDataDirective()
                     }
                     else
                     {
-                        recordFloatLiteralOutOfRange(currentToken(), "32-bit float");
+                        recordBadFloatLiteral(currentToken(), "32-bit float", outOfRange);
                     }
                 }
                 nextToken();
@@ -289,7 +306,8 @@ void Parser::parseDataDirective()
             {
                 if (currentToken().type == TokenType::FLOAT)
                 {
-                    if (const auto value = parseFloatLiteral<double>(currentToken().value))
+                    bool outOfRange = false;
+                    if (const auto value = parseFloatLiteral<double>(currentToken().value, outOfRange))
                     {
                         align(8);
                         data_buffer_.emplace_back(*value);
@@ -297,7 +315,7 @@ void Parser::parseDataDirective()
                     }
                     else
                     {
-                        recordFloatLiteralOutOfRange(currentToken(), "64-bit double");
+                        recordBadFloatLiteral(currentToken(), "64-bit double", outOfRange);
                     }
                 }
                 nextToken();

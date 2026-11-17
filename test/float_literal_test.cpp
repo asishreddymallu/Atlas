@@ -16,6 +16,8 @@
  * `ProcessorBase::LoadProgram` memcpys into memory unchanged.
  */
 #include "assembler/assembler.h"
+#include "assembler/parser.h"
+#include "assembler/tokens.h"
 #include "common/assembled_program.h"
 #include "config/config.h"
 #include "processor/rvss/rvss_processor.h"
@@ -134,6 +136,54 @@ const FloatCase kFloatCases[] = {
     {"1.1754943508222875e-38", 0x00800000U}, // the smallest normal float
     {"1.4e-45", 0x00000001U},                // the smallest subnormal float
 };
+/**
+ * @brief Sets LC_NUMERIC for its lifetime and puts it back, on EVERY exit.
+ *
+ * It has to be RAII. A plain restore at the end of the test is skipped by
+ * a failing ASSERT_*, which returns from the function - and the locale is
+ * process-wide, so every test that ran afterwards would have run under a
+ * comma-decimal locale, in whatever order gtest happened to pick. A
+ * leaked locale is exactly the kind of cross-test coupling that makes a
+ * suite fail differently when shuffled.
+ */
+class ScopedNumericLocale
+{
+  public:
+    explicit ScopedNumericLocale(const char *wanted)
+    {
+        const char *const current = std::setlocale(LC_NUMERIC, nullptr);
+        saved_   = current ? current : "C";
+        applied_ = std::setlocale(LC_NUMERIC, wanted);
+    }
+    ~ScopedNumericLocale() { std::setlocale(LC_NUMERIC, saved_.c_str()); }
+    ScopedNumericLocale(const ScopedNumericLocale &)            = delete;
+    ScopedNumericLocale &operator=(const ScopedNumericLocale &) = delete;
+
+    /// nullptr when the locale is not installed; nothing was changed.
+    const char *applied() const { return applied_; }
+
+  private:
+    std::string saved_;
+    const char *applied_ = nullptr;
+};
+
+/// Builds a Parser directly from a token list, bypassing the Lexer.
+/// `source` is written to a real file because the error constructors call
+/// GetLineFromFile() and throw when they cannot read it.
+std::vector<ParseError> parseTokens(const QTemporaryDir &dir, const std::string &source,
+                                    std::vector<Token> tokens, std::size_t *dataEntries)
+{
+    const std::string path = dir.path().toStdString() + "/tokens.s";
+    {
+        std::ofstream out(path);
+        out << source;
+    }
+    Parser parser(path, std::move(tokens));
+    parser.parse();
+    if (dataEntries)
+        *dataEntries = parser.getDataBuffer().size();
+    return parser.getErrors();
+}
 } // namespace
 
 TEST(FloatLiteral, DoubleDirectiveStoresTheCorrectlyRoundedIeeeBits)
@@ -231,18 +281,17 @@ TEST(FloatLiteral, ParsingDoesNotDependOnTheCLocale)
     // QApplication's constructor calls setlocale(LC_ALL, ""), so the C
     // locale in a running Kites is the USER's, not "C". Under a
     // comma-decimal locale a printf/scanf-based conversion reads 0.1 as 0.
-    const char *const previous = std::setlocale(LC_NUMERIC, nullptr);
-    const std::string saved    = previous ? previous : "C";
-    const char *const applied  = std::setlocale(LC_NUMERIC, "de_DE.utf8");
-    if (applied == nullptr)
+    const ScopedNumericLocale locale("de_DE.utf8");
+    if (locale.applied() == nullptr)
     {
-        std::cerr << "    [ info ] de_DE.utf8 is not installed; locale check skipped\n";
-        GTEST_SKIP() << "de_DE.utf8 not available";
+        std::cerr << "    [ info ] de_DE.utf8 is not installed; this check was SKIPPED, "
+                     "not passed\n";
+        GTEST_SKIP() << "de_DE.utf8 is not installed, so the locale check did not run";
     }
-    std::cerr << "    [ info ] LC_NUMERIC for this test: " << applied << "\n";
+    std::cerr << "    [ info ] LC_NUMERIC for this test: " << locale.applied() << "\n";
 
     QTemporaryDir dir;
-    ASSERT_TRUE(dir.isValid());
+    ASSERT_TRUE(dir.isValid()); // safe now: the guard restores on this path too
     uint64_t doubleBits = 0, floatBits = 0;
     bool     haveDouble = false, haveFloat = false;
     try
@@ -254,7 +303,6 @@ TEST(FloatLiteral, ParsingDoesNotDependOnTheCLocale)
     {
         ADD_FAILURE() << "0.1 did not assemble under a comma-decimal locale: " << e.what();
     }
-    std::setlocale(LC_NUMERIC, saved.c_str());
 
     EXPECT_TRUE(haveDouble) << ".double 0.1 emitted no data under de_DE.utf8";
     EXPECT_TRUE(haveFloat) << ".float 0.1 emitted no data under de_DE.utf8";
@@ -296,6 +344,49 @@ TEST(FloatLiteral, AnOutOfRangeLiteralIsReportedNotThrown)
         catch (const std::runtime_error &)
         {
             SUCCEED(); // "Failed to parse file": the normal error path
+        }
+    }
+}
+
+TEST(FloatLiteral, ANonNumericFloatTokenIsAParseErrorNotZeroBits)
+{
+    // The Lexer cannot produce this: float_regex gates every FLOAT token,
+    // and std::from_chars accepts everything that regex admits. So the
+    // parser's "not a number" branch is reached only by handing it a token
+    // list directly, which is what this does. It must behave like any
+    // other bad operand - a located diagnostic, nothing in the data
+    // buffer - and it must not say "out of range", which is a different
+    // mistake.
+    QTemporaryDir dir;
+    ASSERT_TRUE(dir.isValid());
+    const char *const texts[] = {"banana", "", "1.5xyz", "--3", "1e", "0x10"};
+    for (const char *directive : {"float", "double"})
+    {
+        for (const char *text : texts)
+        {
+            const std::string source =
+                std::string(".data\n.") + directive + " " + text + "\n";
+            std::vector<Token> tokens{
+                {TokenType::DIRECTIVE, "data", 1, 1, 5},
+                {TokenType::DIRECTIVE, directive, 2, 1, 1 + unsigned(std::strlen(directive))},
+                {TokenType::FLOAT, text, 2, 9, 9 + unsigned(std::strlen(text))},
+                {TokenType::EOF_, "", 3, 1, 1},
+            };
+            std::size_t             entries = 0;
+            std::vector<ParseError> errors;
+            ASSERT_NO_THROW(errors = parseTokens(dir, source, tokens, &entries))
+                << "." << directive << " '" << text << "' threw";
+            EXPECT_EQ(entries, 0u)
+                << "." << directive << " '" << text << "' put something in the data buffer";
+            ASSERT_EQ(errors.size(), 1u)
+                << "." << directive << " '" << text << "' recorded " << errors.size()
+                << " diagnostics, expected exactly 1";
+            EXPECT_EQ(errors.front().line, 2u);
+            EXPECT_EQ(errors.front().column, 9u);
+            EXPECT_EQ(errors.front().category, DiagnosticCategory::Assembler);
+            EXPECT_NE(errors.front().message.find("is not a floating-point number"),
+                      std::string::npos)
+                << "." << directive << " '" << text << "' said: " << errors.front().message;
         }
     }
 }
