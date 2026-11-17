@@ -3428,10 +3428,26 @@ raises `fpr_hazard` and stalls.
 | FP destination **f5**, consumer reads **x5** | **32 cycles** | 30 cycles |
 | FP destination f9, consumer reads x5 | 30 cycles | 30 cycles |
 
-So the bare index match costs **two cycles** on `h_nf`. `h_f` is
-unaffected because with forwarding enabled the unit returns
-`STALL_NONE` for everything but load-use, so the false positive has no
-path to a stall.
+So the bare index match costs **two cycles** on `h_nf`.
+
+**`h_f` is affected too, and an earlier version of this entry said it was
+not.** The claim was that forwarding mode returns `STALL_NONE` for
+everything but load-use, so the false positive has no path to a stall.
+It has one: a float **load** sets `id_ex_reg_.mem_read`, which is the
+load-use branch, and `fpr_load_use` there compares `id_ex_reg_.frd`
+against `if_id_frs1` — which for an integer consumer is simply its rs1
+bits. Measured, `fld`/`flw` into fN followed by `addi s0, t0, 1` where
+t0 is x5:
+
+| | rv5-h-f | rv5-h-nf |
+|---|---|---|
+| `fld f5` — index 5 collides with rs1 | **21 cycles** | **22 cycles** |
+| `fld f9` — no collision | 20 | 20 |
+| `flw f5` | **21** | **22** |
+| `flw f9` | 20 | 20 |
+
+One cycle on `h_f`, two on `h_nf`, for a dependency that does not exist.
+`s0` is `0x5B` (91) in all eight runs.
 
 **It is a performance artefact, not a correctness one**: `s0` is
 `0x5B` (91) in all four runs. A program's results do not change, only
@@ -3510,3 +3526,114 @@ both forwarding variants (`rv5s_processor_h_f.cpp:128,145` and
 `rv5s_processor_nh_f.cpp:121,140`) tests `reg_write && rd != 0` the same
 way, so the circuit diagram lights a forwarding wire that is not
 forwarding. Cosmetic; no result depends on it.
+
+---
+
+## 80. `stall_cycles_` is a countdown, not a total, and the UI calls it "StallCycles"
+
+`stall_cycles_` (`src/processor/processor_base.h:183`) is used by the
+rv5s variants as the **number of stall cycles still owed**, not as a
+running total. `RV5StageProcessorHF::Step` sets it to `stalls_needed - 1`
+when a hazard starts (`rv5s_processor_h_f.cpp:231`) and decrements it
+while the stall is being served (`:220`), so once the pipeline catches up
+it is back to **0**.
+
+Measured, the two programs from 78 and from the load-use measurement:
+every run that provably stalled — `h_nf` taking 32 cycles where 30 would
+do, `h_f` taking 21 where 20 would do — finished with
+`stall_cycles_ == 0`. The cycle count is the only evidence a stall
+happened.
+
+Who reads it:
+
+* `ProcessorManager::getStallCycles()` (`processor_manager.cpp:404`)
+  returns it straight through;
+* the processor tab shows it in the VM state table under the key
+  **`StallCycles`** (`src/ui/processor_tab/vm_state_table_model.cpp:40`,
+  `:92-93`);
+* `ProcessorBase::DumpState` writes it to `vm_state.json` as
+  `"stall_cycles"` (`processor_base.cpp:557`).
+
+So a student watching that row sees 0 almost always, and a small number
+only in the instant a stall is being served. The name promises a total.
+
+Not fixed, and worth saying why it is not a one-liner: `Undo`/`Redo`
+save and restore it (`rv5s_processor_base.cpp:897`, `:958`) as part of
+the step delta, so changing its meaning changes what those replay. A
+cumulative counter would want to be a second field.
+
+---
+
+## 81. The circuit view can light a forwarding wire that is not forwarding
+
+`SetActiveWireNames()` decides which forwarding wires to highlight with
+the same bare test the datapath used before 79:
+
+```cpp
+if (ex_mem_reg_.reg_write && ex_mem_reg_.rd != 0)      // h_f.cpp:128
+if (mem_wb_reg_.prev_reg_write && mem_wb_reg_.prev_rd != 0)  // h_f.cpp:145
+```
+
+and the same two in `rv5s_processor_nh_f.cpp:121,140`. `reg_write` is
+set for every OP-FP instruction and `rd` carries the same five bits as
+`frd`, so `fadd.d f5, …` followed by any instruction reading x5 lights
+`P2_to_FDU_rs1`, `P4EB_to_FWD_unit`, `FDU_to_FMUX1_cntrl` and
+`FDU_to_fMUX2` — the forwarding path — although after 79 nothing is
+forwarded along it.
+
+**Read, not run.** The datapath consequence is fixed and tested; this is
+the diagram beside it, and I did not launch the GUI to watch the wires
+light. The assertion here is that the condition is the one 79 replaced,
+at the four line numbers above, and that `SetActiveWireNames` feeds
+`active_wires_` which is what the circuit scene draws
+(`rv5s_processor_base.cpp` emits `updateCircuitStateSignal(active_wires_)`).
+
+The fix is the same one-line substitution 79 made: ask
+`producerWritesGpr()` instead of `reg_write`. It is left open because no
+test covers the circuit view and a wire-highlighting change should be
+seen before it is shipped.
+
+---
+
+## 82. Undo into the middle of a program, then continue, loses every register write
+
+Found while testing that `MEM_WB_Register::prev_instruction` survives an
+Undo. It does. This is a different defect, and it is **older than the
+forwarding work**: measured identical at `47ff007`, before any commit on
+the branch that added the field.
+
+```
+    li t0, 3
+    fcvt.d.l f1, t0
+    fmadd.d f4, f1, f1, f1        # 7 cycles straight
+```
+
+| run | pc | cycles | retired | x5 | f1 | f4 |
+|---|---|---|---|---|---|---|
+| straight, 10 steps | 40 | 10 | 3 | **3** | `0x4008…` | `0x4028…` |
+| step 3, **undo 1**, step 8 | 40 | 10 | 3 | **0** | **0** | **0** |
+| step 3, undo 3 (back to cycle 0), step 10 | 40 | 10 | 3 | 3 | `0x4008…` | `0x4028…` |
+| step 7, undo 1/2/3, replay | 28 | 7 | 3 | 3 | `0x4008…` | `0x4028…` |
+
+So undoing **to the start** replays correctly, and undoing the **last**
+few cycles replays correctly, but an Undo that lands in the middle and
+is then continued finishes with the right PC, the right cycle count and
+the right retired count — and **nothing written to any architectural
+register**. On `rv5-h-f` and `rv5-nh-f` alike.
+
+The restore itself looks complete: `Undo` assigns all four pipeline
+registers back by whole struct
+(`rv5s_processor_base.cpp:900-903`) from a snapshot taken the same way
+(`:131-134`), and the architectural registers are rolled back from
+`register_changes`. What has not been established is why the replayed
+cycles then commit nothing — that needs its own investigation, which is
+why this is a record and not a fix.
+
+`test/rv5s_undo_pipeline_test.cpp` covers the two families that do
+replay correctly and names this one in a comment as deliberately not
+asserted, so nothing in the suite pins the broken behaviour.
+
+Note for whoever picks it up: the existing `rv5s_undo_redo_test.cpp`
+always does Step → Undo → **Redo**, never Step → Undo → *Step*, which is
+why a defect this visible has gone unnoticed. The UI offers exactly that
+sequence: undo a cycle, then press Step.
