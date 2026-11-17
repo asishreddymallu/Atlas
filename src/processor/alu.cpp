@@ -1001,14 +1001,31 @@ namespace alu
     }
     case AluOp::FCVT_D_S:
     {
-        auto fa = static_cast<float>(ina);
+        // The SOURCE is a single, in the low 32 bits of the register.
+        // static_cast<float>(ina) converted the bit pattern as an
+        // integer - 1.5f, 0x3FC00000, became 1067450368.0 (known_issues
+        // 57). `a` is no use either: it is `ina` read as a double.
+        auto     bits = static_cast<uint32_t>(ina & 0xFFFFFFFF);
+        float    fa   = 0.0F;
+        std::memcpy(&fa, &bits, sizeof(fa));
         result = static_cast<double>(fa);
         break;
     }
     case AluOp::FCVT_S_D:
     {
-        auto da = static_cast<double>(ina);
-        result = static_cast<float>(da);
+        // The SOURCE is a double - that is `a`, which the function
+        // already memcpy'd - and the RESULT is a single, so it cannot
+        // fall through to the shared tail, which memcpy's eight bytes of
+        // `double`. A single occupies the low 32 bits of an f register,
+        // zero-extended, exactly as Alu::fpexecute returns it.
+        const float fr   = static_cast<float>(a);
+        uint32_t    bits = 0;
+        std::memcpy(&bits, &fr, sizeof(bits));
+        // Through int_result, not an early return, so the shared tail
+        // still collects the inexact/overflow/underflow flags this
+        // conversion can raise and still restores the rounding mode.
+        int_result    = static_cast<uint64_t>(bits);
+        is_int_result = true;
         break;
     }
     case AluOp::FMV_D_X:

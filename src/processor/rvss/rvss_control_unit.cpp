@@ -868,6 +868,14 @@ alu::AluOp RVSSControlUnit::GetAluSignal(uint32_t instruction, bool ALUOp)
             }
             break;
         }
+        case 0b0100000:
+        { // FCVT.S.D - the only funct7 0b0100000 F-type op
+            return alu::AluOp::FCVT_S_D;
+        }
+        case 0b0100001:
+        { // FCVT.D.S
+            return alu::AluOp::FCVT_D_S;
+        }
         case 0b1000011:
         { // FMADD.S, FMADD.D
             switch (funct2)
