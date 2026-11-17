@@ -3347,7 +3347,13 @@ entirely when rs1 is an integer register.
 `prev_reg_write` and `prev_freg_write` are both set for an F/D
 instruction, so the flags alone cannot tell the classes apart.
 
-### What was deliberately not changed
+### Its mirror, and what was deliberately not changed
+
+This entry fixed the FP side: an FP instruction reading an x register.
+The integer side had the same hole in the other direction - an ordinary
+integer instruction reading an x register whose index matched a pending
+f destination - and it was not found until the follow-up stage widened
+the test matrix. See **79**, fixed in `f8870d5`.
 
 `h_nf` and `nh_nf` keep reading the architectural register file, which is
 correct for their contract — `h_nf` stalls until the value is
@@ -3390,3 +3396,117 @@ processor has no hazard detection — the expansion already knows how many
 instructions it emitted, and `ProcessorManager` already knows the model.
 Not done here: it crosses from the assembler into the UI's notion of the
 current processor, and it needs its own design.
+
+---
+
+## 78. The hazard unit reads every instruction's rs1 as an f index too, and stalls on a bare index match
+
+`check_data_hazard` (`src/processor/rv5s/rv5s_hdu.cpp:39-46`) pulls both
+readings out of the same five bits, for every instruction, whatever its
+class:
+
+```cpp
+uint8_t if_id_rs1  = (instruction >> 15) & 0x1F;   // GPR reading
+uint8_t if_id_frs1 = (instruction >> 15) & 0x1F;   // FPR reading, same bits
+```
+
+The GPR half is right, and is why `h_nf` was correct throughout 76 — it
+sees an FP instruction's integer source and stalls for it. The FPR half
+has no such excuse: it compares an **integer** instruction's rs1/rs2
+against a pending FP destination, so an index match with no dependency
+raises `fpr_hazard` and stalls.
+
+**Measured**, two programs identical but for one register number:
+
+```
+    fadd.d f5, f1, f2        # or f9
+    addi   s0, t0, 1         # t0 is x5: index 5
+```
+
+| | rv5-h-nf | rv5-h-f |
+|---|---|---|
+| FP destination **f5**, consumer reads **x5** | **32 cycles** | 30 cycles |
+| FP destination f9, consumer reads x5 | 30 cycles | 30 cycles |
+
+So the bare index match costs **two cycles** on `h_nf`. `h_f` is
+unaffected because with forwarding enabled the unit returns
+`STALL_NONE` for everything but load-use, so the false positive has no
+path to a stall.
+
+**It is a performance artefact, not a correctness one**: `s0` is
+`0x5B` (91) in all four runs. A program's results do not change, only
+its cycle count — which matters here, because cycle counts are the thing
+this simulator exists to teach.
+
+The fix is the same shape as 76 and 79: ask what the consumer reads
+rather than matching an index. `instruction_set::readsIntegerSource()`
+already exists for the rs1 half, and the FPR comparisons should apply
+only to instructions that read F registers at those positions.
+
+Not fixed: this stage was told to measure it and leave it. Note that
+`stall_cycles_` reads 0 in all four runs, so the counter does not track
+these stalls; the cycle count is the measurement.
+
+---
+
+## 79. FIXED: an FP result reached a plain integer consumer
+
+The mirror of 76, in the **integer** forwarding block. 76 fixed the FP
+side — an FP instruction reading an x register. This is an ordinary
+integer instruction reading an x register whose index happens to match a
+pending **f** destination.
+
+`ex_mem_reg_.alu_result` is latched for every instruction
+(`rv5s_processor_h_f.cpp`, the EX/MEM latch), the control unit sets
+`reg_write` for every OP-FP instruction
+(`rv5s_control_unit.cpp:91-93`), and `rd` carries the same five bits as
+`frd`. The integer forwarding block asked only `reg_write && rd != 0`,
+so an FP producer writing `f5` forwarded its floating-point result into
+any consumer reading `x5`.
+
+**Measured** before the fix, in a clean worktree at `424b41d` with only
+the test added: **60 failing assertions on rv5-h-f and 60 on rv5-nh-f,
+zero on rvss, rv5-h-nf and rv5-nh-nf.** Every producer reached every
+consumer kind, at producer distance 0 and 1:
+
+| consumer | role of the colliding register |
+|---|---|
+| `addi s0, t0, 1` | rs1 |
+| `add s0, t5, t0` | rs2 |
+| `sd t0, 0(t6)` | store data |
+| `ld s0, 0(t0)` | load base |
+| `beq t0, t5, skip` | branch operand |
+
+with producers `fadd.d f5`, `fadd.d f10`, `fcvt.d.l f5`, `fmadd.d f10`,
+`fld f10` and `flw f5`.
+
+Fixed in `f8870d5`: the two integer forwarding guards in each forwarding
+variant now ask `producerWritesGpr()` — the helper 76 already added —
+instead of `reg_write` alone. Store-data forwarding reuses `forward_b`,
+so the same two guards cover it.
+
+**The guard is not too strict, and that is asserted rather than
+assumed.** `FpProducersThatWriteAGprStillForward` covers the three FP
+instructions that really do write an integer register — `feq.d` then
+`addi`, `fcvt.l.d` then `add`, `fmv.x.d` then `sd` — all of which must
+still forward, at distance 0 and 1, and do.
+
+Five controls, one mutation each, each failing exactly one named test:
+dropping the guard at the integer EX/MEM or MEM/WB site fails
+`FpProducerDoesNotReachAPlainIntegerConsumer`; dropping it at either FP
+site, or inside `forwardedIntegerSource`, fails
+`AnIndexIsNotARegisterClass`.
+
+Those same controls answer a question 76 left open — whether the
+`fcvt.l.d` → `f5` alias passes at distance 2 and 3 because a guard works
+or because the producer has gone. Dropping the FP EX/MEM guard fails
+**distance 0 only**; dropping the FP MEM/WB guard fails **distance 1
+only**. Neither control touches distances 2 and 3, so those pass
+because the producer has left the pipeline and the consumer reads the
+architectural register file, not because anything guards them.
+
+**Not fixed, and not covered by any test:** `SetActiveWireNames()` in
+both forwarding variants (`rv5s_processor_h_f.cpp:128,145` and
+`rv5s_processor_nh_f.cpp:121,140`) tests `reg_write && rd != 0` the same
+way, so the circuit diagram lights a forwarding wire that is not
+forwarding. Cosmetic; no result depends on it.
