@@ -859,7 +859,7 @@ namespace alu
         result = static_cast<double>(la);
         break;
     }
-    case AluOp::FCVT_S_LU:
+    case AluOp::FCVT_D_LU:
     {
         auto ula = static_cast<uint64_t>(ina);
         result = static_cast<double>(ula);
