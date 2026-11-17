@@ -288,6 +288,13 @@ TEST(FpIntSourceHazard, AnIndexIsNotARegisterClass)
                   loadDouble(5, kThreeD, 6) + "    addi t0, x0, 7\n" + nops(d) +
                       "    fadd.d f1, f5, f5\n" + kGap,
                   false, 1, kSixD, Owe::All, d);
+        // The same, with the sharper producer: fcvt.l.d writes a GPR but
+        // is an F/D instruction, so freg_write is set and frd carries the
+        // x index. Nothing may forward that into f5.
+        checkCase(dir, "fcvt.l.d t0,f6 (writes x5) -> consumer reads f5",
+                  loadDouble(5, kThreeD, 7) + loadDouble(6, kSevenD, 8) +
+                      "    fcvt.l.d t0, f6\n" + nops(d) + "    fadd.d f1, f5, f5\n" + kGap,
+                  false, 1, kSixD, Owe::All, d);
         // x0 is hardwired: a write to it forwards nothing.
         checkCase(dir, "addi x0,x0,5 -> fcvt.d.l f1, x0 must read 0",
                   program("", "addi x0, x0, 5", d, "fcvt.d.l f1, x0"), false, 1, 0, Owe::All, d);

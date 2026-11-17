@@ -319,9 +319,7 @@ void RVSSProcessor::Execute()
 
 void RVSSProcessor::ExecuteFloat()
 {
-    uint8_t opcode = current_instruction_ & 0b1111111;
     uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
-    uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
     uint8_t rm = funct3;
     uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
     uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
@@ -340,7 +338,7 @@ void RVSSProcessor::ExecuteFloat()
     uint64_t reg2_value = registers_.ReadFpr(rs2);
     uint64_t reg3_value = registers_.ReadFpr(rs3);
 
-    if (funct7 == 0b1101000 || funct7 == 0b1111000 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(current_instruction_))
     {
         reg1_value = registers_.ReadGpr(rs1);
     }
@@ -360,9 +358,7 @@ void RVSSProcessor::ExecuteFloat()
 
 void RVSSProcessor::ExecuteDouble()
 {
-    uint8_t opcode = current_instruction_ & 0b1111111;
     uint8_t funct3 = (current_instruction_ >> 12) & 0b111;
-    uint8_t funct7 = (current_instruction_ >> 25) & 0b1111111;
     uint8_t rm = funct3;
     uint8_t rs1 = (current_instruction_ >> 15) & 0b11111;
     uint8_t rs2 = (current_instruction_ >> 20) & 0b11111;
@@ -376,7 +372,7 @@ void RVSSProcessor::ExecuteDouble()
     uint64_t reg2_value = registers_.ReadFpr(rs2);
     uint64_t reg3_value = registers_.ReadFpr(rs3);
 
-    if (funct7 == 0b1101001 || funct7 == 0b1111001 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(current_instruction_))
     {
         reg1_value = registers_.ReadGpr(rs1);
     }

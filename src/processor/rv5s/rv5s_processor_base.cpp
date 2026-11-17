@@ -442,6 +442,7 @@ void RV5StageVM_Base::pipeline_memory()
     mem_wb_reg_.prev_mem_to_reg  = mem_wb_reg_.mem_to_reg;
     mem_wb_reg_.prev_reg_write   = mem_wb_reg_.reg_write;
     mem_wb_reg_.prev_memory_data = mem_wb_reg_.memory_data;
+    mem_wb_reg_.prev_instruction = mem_wb_reg_.instruction;
     // Save FPR prev fields for forwarding (mirrors GPR prev fields above)
     mem_wb_reg_.prev_frd           = mem_wb_reg_.frd;
     mem_wb_reg_.prev_f_alu_result  = mem_wb_reg_.f_alu_result;
@@ -753,9 +754,7 @@ void RV5StageVM_Base::pipeline_writeback_double()
 uint64_t RV5StageVM_Base::execute_float()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -770,7 +769,7 @@ uint64_t RV5StageVM_Base::execute_float()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101000 || funct7 == 0b1111000 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
         reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
     }
@@ -791,9 +790,7 @@ uint64_t RV5StageVM_Base::execute_float()
 uint64_t RV5StageVM_Base::execute_double()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -808,7 +805,7 @@ uint64_t RV5StageVM_Base::execute_double()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101001 || funct7 == 0b1111001 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
         reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
     }

@@ -514,6 +514,22 @@ bool isValidFDSTypeInstruction(const std::string &instruction);
 bool isFInstruction(const uint32_t &instruction);
 bool isDInstruction(const uint32_t &instruction);
 
+/**
+ * @brief True when this instruction reads an INTEGER register as rs1.
+ *
+ * The F/D instructions whose rs1 is an x register and not an f register:
+ * `fcvt.{s,d}.{w,wu,l,lu}` (funct7 0b110100x), `fmv.{w,d}.x` (0b111100x),
+ * and the base address of `flw`/`fld`/`fsw`/`fsd`.
+ *
+ * The opcode test is not decoration. An R4-type's bits 31:25 are
+ * `rs3 << 2 | fmt`, not a funct7, so `rs3 = f26` reads 0b1101000 and
+ * `rs3 = f30` reads 0b1111000 - and without the opcode check an FMA
+ * with one of those two registers as rs3 would have its rs1 read from
+ * the integer file. Measured: `fmadd.d f4, f1, f2, f26` returned 7.0,
+ * the value of f26, on every processor model (known_issues 76).
+ */
+bool readsIntegerSource(const uint32_t &instruction);
+
 std::string getExpectedSyntaxes(const std::string &opcode);
 
 /**

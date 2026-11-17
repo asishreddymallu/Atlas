@@ -161,6 +161,10 @@ struct MEM_WB_Register
     uint64_t prev_memory_data {0};  // Previous Memory data (for forwarding)
     uint8_t  prev_rd          {0};  // Previous GPR Destination register index
     uint64_t prev_alu_result  {0};  // Previous ALU result
+    // The previous instruction itself. prev_reg_write and prev_freg_write
+    // are both set for an F/D instruction, so neither flag says WHICH file
+    // it writes; forwarding has to ask the instruction.
+    uint32_t prev_instruction {NOP};
     // --- FPR Results ---
     uint64_t f_memory_data {0};  // FPR Write Data (Data read from memory in FLW/FLD)
     uint64_t f_alu_result  {0};  // FPR Write Data (F-ALU result)
@@ -189,6 +193,7 @@ struct MEM_WB_Register
         prev_memory_data = 0;
         prev_rd          = 0;
         prev_alu_result  = 0;
+        prev_instruction = NOP;
 
         f_memory_data = 0;
         f_alu_result  = 0;

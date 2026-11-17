@@ -8,6 +8,7 @@
  * * Control Hazards (JAL/JALR, B-Type) are AUTOMATICALLY handled by flush/redirect.
  * @author Atharva and Harshit
  */
+#include "processor/rv5s/rv5s_forwarding.h"
 #include "processor/rv5s/rv5s_processor_h_f.h" // Assuming this header now defines RV5StageProcessorHF
 #include "common/instructions.h"
 #include "config/config.h"
@@ -472,9 +473,7 @@ void RV5StageProcessorHF::handle_syscall()
 uint64_t RV5StageProcessorHF::pipeline_execute_float()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -489,9 +488,14 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101000 || funct7 == 0b1111000 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
-        reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
+        // The integer source, forwarded by the same rule the integer
+        // path uses for its own rs1. It used to be a bare ReadGpr here,
+        // and a second one after the forwarding mux that would have
+        // discarded a forwarded value (known_issues 76).
+        reg1_value = forwardedIntegerSource(id_ex_reg_.rs1, ex_mem_reg_, mem_wb_reg_,
+                                            registers_.ReadGpr(id_ex_reg_.rs1));
     }
 
     if (id_ex_reg_.alu_src)
@@ -505,7 +509,8 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
     uint8_t fwd_c = 0;
 
     // EX/MEM forwarding (highest priority)
-    if (ex_mem_reg_.freg_write && (ex_mem_reg_.frd != 0))
+    if (producerWritesFpr(ex_mem_reg_.instruction, ex_mem_reg_.freg_write) &&
+        (ex_mem_reg_.frd != 0))
     {
         if (ex_mem_reg_.frd == id_ex_reg_.frs1)
             fwd_a = 2;
@@ -516,7 +521,8 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
     }
 
     // MEM/WB forwarding (lower priority)
-    if (mem_wb_reg_.prev_freg_write && (mem_wb_reg_.prev_frd != 0))
+    if (producerWritesFpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_freg_write) &&
+        (mem_wb_reg_.prev_frd != 0))
     {
         if (mem_wb_reg_.prev_frd == id_ex_reg_.frs1 && fwd_a != 2)
             fwd_a = 1;
@@ -526,12 +532,21 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
             fwd_c = 1;
     }
 
-    // Apply forwarding to source values
-    if (fwd_a == 2)
-        reg1_value = ex_mem_reg_.f_alu_result;
-    else if (fwd_a == 1)
-        reg1_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
-                                                 : mem_wb_reg_.prev_f_alu_result;
+    // Apply forwarding to source values.
+    //
+    // fwd_a is skipped when rs1 is an INTEGER register: frs1 and rs1 are
+    // the same five bits, so an f register with that index would
+    // otherwise forward its value into x[rs1]. Measured:
+    // `fcvt.d.l f5, t1` then `fcvt.d.l f1, t0` with t0 = x5 converted
+    // f5's bit pattern as an integer (known_issues 76).
+    if (!instruction_set::readsIntegerSource(instruction))
+    {
+        if (fwd_a == 2)
+            reg1_value = ex_mem_reg_.f_alu_result;
+        else if (fwd_a == 1)
+            reg1_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
+                                                     : mem_wb_reg_.prev_f_alu_result;
+    }
 
     if (fwd_b == 2)
         reg2_value = ex_mem_reg_.f_alu_result;
@@ -545,12 +560,6 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
         reg3_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
                                                  : mem_wb_reg_.prev_f_alu_result;
 
-    // Re-apply GPR-read override (for conversion ops) after forwarding decision: if instruction
-    // requires GPR, use it.
-    if (funct7 == 0b1101000 || funct7 == 0b1111000 || opcode == 0b0000111 || opcode == 0b0100111)
-    {
-        reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
-    }
 
     // Re-apply immediate if ALUSrc was set (immediates take precedence for reg2)
     if (id_ex_reg_.alu_src)
@@ -580,9 +589,7 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
 uint64_t RV5StageProcessorHF::pipeline_execute_double()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -597,9 +604,14 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101001 || funct7 == 0b1111001 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
-        reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
+        // The integer source, forwarded by the same rule the integer
+        // path uses for its own rs1. It used to be a bare ReadGpr here,
+        // and a second one after the forwarding mux that would have
+        // discarded a forwarded value (known_issues 76).
+        reg1_value = forwardedIntegerSource(id_ex_reg_.rs1, ex_mem_reg_, mem_wb_reg_,
+                                            registers_.ReadGpr(id_ex_reg_.rs1));
     }
 
     if (id_ex_reg_.alu_src)
@@ -612,7 +624,8 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
     uint8_t fwd_b = 0;
     uint8_t fwd_c = 0;
 
-    if (ex_mem_reg_.freg_write && (ex_mem_reg_.frd != 0))
+    if (producerWritesFpr(ex_mem_reg_.instruction, ex_mem_reg_.freg_write) &&
+        (ex_mem_reg_.frd != 0))
     {
         if (ex_mem_reg_.frd == id_ex_reg_.frs1)
             fwd_a = 2;
@@ -622,7 +635,8 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
             fwd_c = 2;
     }
 
-    if (mem_wb_reg_.prev_freg_write && (mem_wb_reg_.prev_frd != 0))
+    if (producerWritesFpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_freg_write) &&
+        (mem_wb_reg_.prev_frd != 0))
     {
         if (mem_wb_reg_.prev_frd == id_ex_reg_.frs1 && fwd_a != 2)
             fwd_a = 1;
@@ -632,11 +646,15 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
             fwd_c = 1;
     }
 
-    if (fwd_a == 2)
-        reg1_value = ex_mem_reg_.f_alu_result;
-    else if (fwd_a == 1)
-        reg1_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
-                                                 : mem_wb_reg_.prev_f_alu_result;
+    // Skipped when rs1 is an integer register; see the float path above.
+    if (!instruction_set::readsIntegerSource(instruction))
+    {
+        if (fwd_a == 2)
+            reg1_value = ex_mem_reg_.f_alu_result;
+        else if (fwd_a == 1)
+            reg1_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
+                                                     : mem_wb_reg_.prev_f_alu_result;
+    }
 
     if (fwd_b == 2)
         reg2_value = ex_mem_reg_.f_alu_result;
@@ -650,11 +668,6 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
         reg3_value = mem_wb_reg_.prev_mem_to_reg ? mem_wb_reg_.prev_f_memory_data
                                                  : mem_wb_reg_.prev_f_alu_result;
 
-    // Re-apply GPR-read override for specific instructions
-    if (funct7 == 0b1101001 || funct7 == 0b1111001 || opcode == 0b0000111 || opcode == 0b0100111)
-    {
-        reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
-    }
 
     // Re-apply immediate for reg2
     if (id_ex_reg_.alu_src)

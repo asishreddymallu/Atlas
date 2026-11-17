@@ -345,9 +345,7 @@ void RV5StageProcessorNHNF::handle_syscall()
 uint64_t RV5StageProcessorNHNF::pipeline_execute_float()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -362,7 +360,7 @@ uint64_t RV5StageProcessorNHNF::pipeline_execute_float()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101000 || funct7 == 0b1111000 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
         reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
     }
@@ -383,9 +381,7 @@ uint64_t RV5StageProcessorNHNF::pipeline_execute_float()
 uint64_t RV5StageProcessorNHNF::pipeline_execute_double()
 {
     uint32_t instruction = id_ex_reg_.instruction;
-    uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
-    uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t rm = funct3;
 
     uint8_t fcsr_status = 0;
@@ -400,7 +396,7 @@ uint64_t RV5StageProcessorNHNF::pipeline_execute_double()
     uint64_t reg2_value = id_ex_reg_.freg2_data;
     uint64_t reg3_value = id_ex_reg_.freg3_data;
 
-    if (funct7 == 0b1101001 || funct7 == 0b1111001 || opcode == 0b0000111 || opcode == 0b0100111)
+    if (instruction_set::readsIntegerSource(instruction))
     {
         reg1_value = registers_.ReadGpr(id_ex_reg_.rs1);
     }

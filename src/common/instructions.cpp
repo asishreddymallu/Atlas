@@ -1166,6 +1166,28 @@ bool isDInstruction(const uint32_t &instruction)
     return false;
 }
 
+bool readsIntegerSource(const uint32_t &instruction)
+{
+    const uint8_t opcode = instruction & 0b1111111;
+
+    // flw/fld and fsw/fsd: rs1 is the base address, always an x register.
+    if (opcode == 0b0000111 || opcode == 0b0100111)
+    {
+        return true;
+    }
+    // Only OP-FP carries a funct7 in bits 31:25. An R4-type carries
+    // rs3<<2|fmt there, which collides with the patterns below.
+    if (opcode != 0b1010011)
+    {
+        return false;
+    }
+    const uint8_t funct7 = (instruction >> 25) & 0b1111111;
+    // ~1 folds the single/double pair: 0b1101000 and 0b1101001 are
+    // fcvt.s.* and fcvt.d.* from an integer; 0b1111000/1 are fmv.w.x and
+    // fmv.d.x. The same folding the disassembler uses.
+    return (funct7 & ~1u) == 0b1101000 || (funct7 & ~1u) == 0b1111000;
+}
+
 std::string getExpectedSyntaxes(const std::string &opcode)
 {
     static const std::unordered_map<std::string, std::string> opcodeSyntaxMap = {
