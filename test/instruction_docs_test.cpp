@@ -23,6 +23,7 @@
 #include "assembler/lexer.h"
 #include "assembler/parser.h"
 #include "common/instructions.h"
+#include "processor/registers.h"
 
 #include <gtest/gtest.h>
 
@@ -31,11 +32,14 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QMap>
 #include <QRegularExpression>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QTextStream>
+#include <QtGlobal>
 
 #include <iostream>
 #include <set>
@@ -47,22 +51,53 @@ namespace
 {
 constexpr int kSummaryCap = 140;
 
-const char *kDocsPath  = "../resources/instructions/instruction_docs.json";
+const char *kDocsPathDefault = "../resources/instructions/instruction_docs.json";
 const char *kNamesPath = "../resources/instructions/instructions.json";
 
-QString readFile(const char *path)
+QString readFile(const QString &path)
 {
-    QFile f(QString::fromUtf8(path));
+    QFile f(path);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
         return {};
     return QString::fromUtf8(f.readAll());
+}
+QString readFile(const char *path) { return readFile(QString::fromUtf8(path)); }
+
+/**
+ * @brief Where instruction_docs.json is read from.
+ *
+ * The default is the repository's own file, so an ordinary run is
+ * unaffected. `KITES_DOCS_JSON` overrides it, and exists for one reason:
+ * the negative controls have to point this test at a MUTATED COPY, and
+ * the repository's JSON must not be touched to do that. When the
+ * override is set the path is printed by every test that reads it, so a
+ * run against a copy can never be mistaken for a run against the real
+ * file.
+ */
+QString docsPath()
+{
+    static const QString path = []
+    {
+        const QByteArray fromEnv = qgetenv("KITES_DOCS_JSON");
+        return fromEnv.isEmpty() ? QString::fromUtf8(kDocsPathDefault)
+                                 : QString::fromUtf8(fromEnv);
+    }();
+    return path;
+}
+
+/// Prints the docs path when, and only when, it is not the real one.
+void announceDocsPathIfOverridden()
+{
+    if (docsPath() != QString::fromUtf8(kDocsPathDefault))
+        std::cerr << "    [ info ] KITES_DOCS_JSON overrides the docs path: "
+                  << docsPath().toStdString() << "\n";
 }
 
 QJsonObject docsRoot()
 {
     QJsonParseError error{};
     const QJsonDocument document =
-        QJsonDocument::fromJson(readFile(kDocsPath).toUtf8(), &error);
+        QJsonDocument::fromJson(readFile(docsPath()).toUtf8(), &error);
     EXPECT_EQ(error.error, QJsonParseError::NoError)
         << "instruction_docs.json is not valid JSON: "
         << error.errorString().toStdString();
@@ -286,8 +321,8 @@ bool isUnsupported(const QJsonObject &entry)
 
 TEST(InstructionDocs, TheFileIsValidJsonWithTheExpectedShape)
 {
-    ASSERT_FALSE(readFile(kDocsPath).isEmpty())
-        << "instruction_docs.json could not be read from " << kDocsPath;
+    ASSERT_FALSE(readFile(docsPath()).isEmpty())
+        << "instruction_docs.json could not be read from " << docsPath().toStdString();
     const QJsonObject root = docsRoot();
     EXPECT_EQ(root.value("schema").toInt(), 2);
     EXPECT_TRUE(root.contains("entries"));
@@ -693,6 +728,474 @@ TEST(InstructionDocs, PseudoExpansionsMatchTheAssemblerIncludingFixedOperands)
         << wrongMnemonics.size() << " expansion(s) differ; names above";
     EXPECT_TRUE(wrongOperands.isEmpty())
         << wrongOperands.size() << " fixed operand(s) differ; names above";
+}
+
+// ══════════ expandsTo, every operand, in order ══════════════════════════
+//
+// The test above compares mnemonics strictly, but its operand check is a
+// MEMBERSHIP test: `parts.contains(needle)`. Its own comment records what
+// that lets through, measured - rewriting sltz's expansion to
+// `slt rd, x0, rs`, which is sgtz, the opposite comparison, passed 12 of
+// 12. Aliases are skipped there as placeholders, position is not checked,
+// and multiplicity is not checked.
+//
+// This one closes that. For every supported entry with a non-empty
+// `expandsTo` it binds the entry's placeholders by aligning `format` with
+// `example` positionally, substitutes them into each clause, resolves
+// aliases through the assembler's own table, and compares EVERY operand
+// POSITIONALLY against what the assembler really emitted.
+//
+// What "really emitted" means here is the same mechanism the test above
+// uses: assembleExample(), i.e. Lexer -> Parser ->
+// parser.getIntermediateCode(). Operands arrive in ICUnit field order -
+// rd, rs1, rs2, then imm - with registers already normalised to xN/fN by
+// the parser and labels already back-patched to a numeric offset.
+//
+// Nothing here is silent. Every entry is either compared or reported as a
+// skip with its reason, and the two counts are printed.
+
+namespace
+{
+/// `imm(rs1)`: the offset is capture 1, the base register capture 2.
+const QRegularExpression &memoryOperandPattern()
+{
+    static const QRegularExpression re(QStringLiteral("^([^()\\s]+)\\(([^()\\s]+)\\)$"));
+    return re;
+}
+
+/**
+ * @brief A trailing prose note, as in
+ *        `addi rd, x0, imm (or lui + addi for large values)`.
+ *
+ * Deliberately narrow: the parenthesis must open with "or", so that a
+ * real memory operand - `jalr x0, 0(ra)` also ends in `)` - can never be
+ * mistaken for prose and silently truncated. Every strip is counted and
+ * printed.
+ */
+const QRegularExpression &proseNotePattern()
+{
+    static const QRegularExpression re(QStringLiteral("\\s*\\(\\s*or\\b[^()]*\\)\\s*$"),
+                                       QRegularExpression::CaseInsensitiveOption);
+    return re;
+}
+
+// ── alias resolution: THE assembler's table, not a copy of it ───────────
+//
+// `reg_alias_to_name` (src/processor/registers.h) is what every
+// src/assembler/parse_formats/*.cpp file resolves its operands through -
+// `reg_alias_to_name.at(peekToken(1).value)`, ~90 call sites. It is
+// therefore the table, not an equivalent of it. src/common/register_names.h
+// is NOT used here: nothing in src/assembler/ includes it, and it has no
+// `fp` row, which this one does (fp -> x8).
+
+bool isRegisterToken(const QString &token)
+{
+    return reg_alias_to_name.find(token.toStdString()) != reg_alias_to_name.end();
+}
+
+QString canonicalRegister(const QString &token)
+{
+    const auto it = reg_alias_to_name.find(token.toStdString());
+    return it == reg_alias_to_name.end() ? token : QString::fromStdString(it->second);
+}
+
+/// Base 0, so `42`, `-1` and `0x10` all parse and compare numerically.
+bool asInteger(const QString &token, qlonglong *value)
+{
+    bool ok = false;
+    const qlonglong parsed = token.toLongLong(&ok, 0);
+    if (ok && value)
+        *value = parsed;
+    return ok;
+}
+bool isIntegerToken(const QString &token) { return asInteger(token, nullptr); }
+
+/// Neither a register nor a number: a label, once it has been bound.
+bool isLabelToken(const QString &token)
+{
+    return !isRegisterToken(token) && !isIntegerToken(token);
+}
+
+bool sameOperand(const QString &a, const QString &b)
+{
+    qlonglong x = 0, y = 0;
+    if (asInteger(a, &x) && asInteger(b, &y))
+        return x == y;
+    return a == b;
+}
+
+/**
+ * @brief Stores are the one shape where source order and field order differ.
+ *
+ * `sw rs2, imm(rs1)` writes the SOURCE register first, but the
+ * intermediate code carries rs1 (the base) before rs2. Every other shape
+ * in the instruction set writes its operands in field order. Rather than
+ * silently compare a store in the wrong order, a clause with one of these
+ * mnemonics is skipped and said so. No expansion in the file is a store
+ * today; the count is printed so that stays visible if one appears.
+ */
+bool isStoreMnemonic(const QString &mnemonic)
+{
+    static const QSet<QString> stores{QStringLiteral("sb"),  QStringLiteral("sh"),
+                                      QStringLiteral("sw"),  QStringLiteral("sd"),
+                                      QStringLiteral("fsw"), QStringLiteral("fsd")};
+    return stores.contains(mnemonic);
+}
+
+/// One clause of an expansion, both ways round.
+struct ClauseShape
+{
+    QString     mnemonic;
+    QStringList fieldOrder;  ///< as the intermediate code orders them
+    QStringList sourceOrder; ///< as written, so the clause can be re-assembled
+    QString     problem;     ///< non-empty: do not compare this entry
+};
+
+ClauseShape shapeOf(const QString &rawClause, bool *proseStripped)
+{
+    ClauseShape shape;
+    QString clause = rawClause.trimmed();
+    if (proseNotePattern().match(clause).hasMatch())
+    {
+        clause.remove(proseNotePattern());
+        if (proseStripped)
+            *proseStripped = true;
+    }
+    shape.mnemonic    = mnemonicOf(clause);
+    shape.sourceOrder = operandsOf(clause);
+
+    QString pendingOffset;
+    for (const QString &token : shape.sourceOrder)
+    {
+        const auto memory = memoryOperandPattern().match(token);
+        if (!memory.hasMatch())
+        {
+            shape.fieldOrder << token;
+            continue;
+        }
+        if (!pendingOffset.isEmpty())
+        {
+            shape.problem = QStringLiteral("clause '%1' has two memory operands").arg(clause);
+            return shape;
+        }
+        // The base goes where the operand stood; the offset is the imm,
+        // and the imm is last in the intermediate code.
+        shape.fieldOrder << memory.captured(2);
+        pendingOffset = memory.captured(1);
+    }
+    if (!pendingOffset.isEmpty())
+        shape.fieldOrder << pendingOffset;
+    if (isStoreMnemonic(shape.mnemonic))
+        shape.problem = QStringLiteral("clause '%1' is a store: its source order is "
+                                       "rs2 before rs1, the opposite of the field order")
+                            .arg(clause);
+    return shape;
+}
+
+/// One operand atom (no parentheses) with the entry's bindings applied.
+QString substituteAtom(const QString &atom, const QMap<QString, QString> &binding,
+                       QStringList *unbound)
+{
+    const auto it = binding.constFind(atom);
+    if (it != binding.constEnd())
+        return it.value();
+    if (!isRegisterToken(atom) && !isIntegerToken(atom) && unbound)
+        *unbound << atom;
+    return atom;
+}
+
+/// The same, for a whole operand, `imm(rs1)` included.
+QString substituteOperand(const QString &token, const QMap<QString, QString> &binding,
+                          QStringList *unbound)
+{
+    const auto memory = memoryOperandPattern().match(token);
+    if (!memory.hasMatch())
+        return substituteAtom(token, binding, unbound);
+    return QStringLiteral("%1(%2)")
+        .arg(substituteAtom(memory.captured(1), binding, unbound),
+             substituteAtom(memory.captured(2), binding, unbound));
+}
+} // namespace
+
+TEST(InstructionDocs, ExpansionOperandsMatchTheAssemblerPositionally)
+{
+    announceDocsPathIfOverridden();
+    QTemporaryDir dir;
+    ASSERT_TRUE(dir.isValid());
+    const QJsonObject docs = entries();
+
+    int inScope = 0, checked = 0, labelOperandsChecked = 0, proseStrips = 0;
+    QStringList skipped, failures;
+
+    for (const QString &name : docs.keys())
+    {
+        const QJsonObject entry = docs.value(name).toObject();
+        const QString expansion = entry.value("expandsTo").toString().trimmed();
+        if (expansion.isEmpty() || isUnsupported(entry))
+            continue; // out of scope: no expansion documented, or not supported
+        ++inScope;
+
+        const QString format  = entry.value("format").toString().trimmed();
+        const QString example = entry.value("example").toString().trimmed();
+        if (format.isEmpty() || example.isEmpty())
+        {
+            skipped << QStringLiteral("%1: the entry has no %2")
+                           .arg(name, format.isEmpty() ? QStringLiteral("format")
+                                                       : QStringLiteral("example"));
+            continue;
+        }
+
+        // ── (a) bind the placeholders, format against example, by position ──
+        const QStringList formatOperands  = operandsOf(format);
+        const QStringList exampleOperands = operandsOf(example);
+        if (formatOperands.size() != exampleOperands.size())
+        {
+            skipped << QStringLiteral("%1: format has %2 operand(s), example has %3")
+                           .arg(name)
+                           .arg(formatOperands.size())
+                           .arg(exampleOperands.size());
+            continue;
+        }
+
+        QMap<QString, QString> binding;
+        QString bindProblem;
+        const auto bindOne = [&](const QString &placeholder, const QString &value)
+        {
+            if (!bindProblem.isEmpty())
+                return;
+            // A format operand that is itself a register or a number is
+            // not a placeholder: it is a constant the example must match.
+            if (isRegisterToken(placeholder) || isIntegerToken(placeholder))
+            {
+                if (!sameOperand(canonicalRegister(placeholder), canonicalRegister(value)))
+                    bindProblem = QStringLiteral("format fixes '%1' where the example has '%2'")
+                                      .arg(placeholder, value);
+                return;
+            }
+            const auto existing = binding.constFind(placeholder);
+            if (existing != binding.constEnd() && existing.value() != value)
+            {
+                bindProblem = QStringLiteral("'%1' is bound twice, to '%2' and '%3'")
+                                  .arg(placeholder, existing.value(), value);
+                return;
+            }
+            binding.insert(placeholder, value);
+        };
+
+        for (int i = 0; i < formatOperands.size(); ++i)
+        {
+            const auto formatMemory  = memoryOperandPattern().match(formatOperands.at(i));
+            const auto exampleMemory = memoryOperandPattern().match(exampleOperands.at(i));
+            if (formatMemory.hasMatch() != exampleMemory.hasMatch())
+            {
+                bindProblem = QStringLiteral("operand %1 is '%2' in the format and '%3' in "
+                                             "the example; one is a memory operand and one is not")
+                                  .arg(i)
+                                  .arg(formatOperands.at(i), exampleOperands.at(i));
+                break;
+            }
+            if (formatMemory.hasMatch())
+            {
+                bindOne(formatMemory.captured(1), exampleMemory.captured(1)); // the offset
+                bindOne(formatMemory.captured(2), exampleMemory.captured(2)); // the base
+            }
+            else
+            {
+                bindOne(formatOperands.at(i), exampleOperands.at(i));
+            }
+        }
+        if (!bindProblem.isEmpty())
+        {
+            skipped << QStringLiteral("%1: %2").arg(name, bindProblem);
+            continue;
+        }
+
+        // ── (b) substitute into every ';'-separated clause ──
+        const QStringList clauses = expansion.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+        QStringList         documentedMnemonics;
+        QList<QStringList>  documentedOperands;  // field order, aliases resolved
+        QStringList         substitutedLines;    // source order, for re-assembly
+        QString             clauseProblem;
+        for (const QString &clause : clauses)
+        {
+            bool stripped = false;
+            const ClauseShape shape = shapeOf(clause, &stripped);
+            if (stripped)
+                ++proseStrips;
+            if (!shape.problem.isEmpty())
+            {
+                clauseProblem = shape.problem;
+                break;
+            }
+            QStringList unbound;
+            QStringList resolved;
+            for (const QString &atom : shape.fieldOrder)
+            {
+                // (c) every register alias through the assembler's table.
+                resolved << canonicalRegister(substituteAtom(atom, binding, &unbound));
+            }
+            QStringList sourceTokens;
+            for (const QString &token : shape.sourceOrder)
+                sourceTokens << substituteOperand(token, binding, &unbound);
+            if (!unbound.isEmpty())
+            {
+                unbound.removeDuplicates();
+                clauseProblem =
+                    QStringLiteral("the expansion names %1, which '%2' does not declare")
+                        .arg(unbound.join(QStringLiteral(", ")), format);
+                break;
+            }
+            documentedMnemonics << shape.mnemonic;
+            documentedOperands << resolved;
+            substitutedLines << (sourceTokens.isEmpty()
+                                     ? shape.mnemonic
+                                     : shape.mnemonic + QLatin1Char(' ') +
+                                           sourceTokens.join(QStringLiteral(", ")));
+        }
+        if (!clauseProblem.isEmpty())
+        {
+            skipped << QStringLiteral("%1: %2").arg(name, clauseProblem);
+            continue;
+        }
+
+        // ── (d) what the assembler really produced for the example ──
+        const Assembled real = assembleExample(example, dir.path());
+        if (!real.ok())
+        {
+            failures << QStringLiteral("%1: the example '%2' did not assemble (%3)")
+                            .arg(name, example, real.complaints.join(QStringLiteral(" | ")));
+            continue;
+        }
+        if (real.mnemonics.size() != documentedMnemonics.size())
+        {
+            failures << QStringLiteral("%1 [%2]: documented %3 clause(s) [%4], the assembler "
+                                       "produced %5 [%6]")
+                            .arg(name, example)
+                            .arg(documentedMnemonics.size())
+                            .arg(substitutedLines.join(QStringLiteral("; ")))
+                            .arg(real.mnemonics.size())
+                            .arg(real.mnemonics.join(QStringLiteral(" ")));
+            continue;
+        }
+
+        // A documented label cannot be compared against a back-patched
+        // offset textually, so the expected value for that one operand is
+        // the assembler's OWN resolution of the documented label: the
+        // substituted expansion, assembled in the same wrapper at the same
+        // instruction index. Computed once per entry, and only if needed.
+        Assembled labelOracle;
+        bool      oracleBuilt = false, oracleUsable = false;
+        QString   oracleProblem;
+        const auto oracle = [&]() -> const Assembled &
+        {
+            if (!oracleBuilt)
+            {
+                oracleBuilt = true;
+                labelOracle = assembleText(wrap(substitutedLines.join(QLatin1Char('\n'))),
+                                           dir.path(),
+                                           QStringLiteral("sub%1").arg(fileCounter++));
+                oracleUsable = labelOracle.ok() &&
+                               labelOracle.operands.size() == documentedOperands.size();
+                if (!oracleUsable)
+                    oracleProblem = labelOracle.ok()
+                                        ? QStringLiteral("it produced %1 unit(s), not %2")
+                                              .arg(labelOracle.operands.size())
+                                              .arg(documentedOperands.size())
+                                        : labelOracle.complaints.join(QStringLiteral(" | "));
+            }
+            return labelOracle;
+        };
+
+        bool entrySkipped = false;
+        for (int i = 0; i < documentedMnemonics.size() && !entrySkipped; ++i)
+        {
+            if (documentedMnemonics.at(i) != real.mnemonics.at(i))
+            {
+                failures << QStringLiteral("%1 [%2] clause %3: documented '%4', the assembler "
+                                           "produced '%5'")
+                                .arg(name, example)
+                                .arg(i)
+                                .arg(documentedMnemonics.at(i), real.mnemonics.at(i));
+                continue;
+            }
+            const QStringList realOperands =
+                real.operands.at(i).split(QLatin1Char(','), Qt::SkipEmptyParts);
+            const QStringList &claimed = documentedOperands.at(i);
+            if (claimed.size() != realOperands.size())
+            {
+                failures << QStringLiteral("%1 [%2] clause %3: documented %4 operand(s) [%5], "
+                                           "the assembler produced %6 [%7]")
+                                .arg(name, example)
+                                .arg(i)
+                                .arg(claimed.size())
+                                .arg(claimed.join(QStringLiteral(", ")))
+                                .arg(realOperands.size())
+                                .arg(realOperands.join(QStringLiteral(", ")));
+                continue;
+            }
+            for (int j = 0; j < claimed.size(); ++j)
+            {
+                QString expected = claimed.at(j);
+                if (isLabelToken(expected))
+                {
+                    if (!oracle().ok() || !oracleUsable)
+                    {
+                        skipped << QStringLiteral("%1: the substituted expansion '%2' does not "
+                                                  "assemble, so the label operand cannot be "
+                                                  "compared (%3)")
+                                       .arg(name,
+                                            substitutedLines.join(QStringLiteral("; ")),
+                                            oracleProblem);
+                        entrySkipped = true;
+                        break;
+                    }
+                    const QStringList oracleOperands =
+                        labelOracle.operands.at(i).split(QLatin1Char(','), Qt::SkipEmptyParts);
+                    if (j >= oracleOperands.size())
+                    {
+                        skipped << QStringLiteral("%1: the substituted expansion has no operand "
+                                                  "%2 in clause %3")
+                                       .arg(name).arg(j).arg(i);
+                        entrySkipped = true;
+                        break;
+                    }
+                    expected = oracleOperands.at(j);
+                    ++labelOperandsChecked;
+                }
+                if (!sameOperand(expected, realOperands.at(j)))
+                    failures << QStringLiteral("%1 [%2] clause %3 operand %4: documented '%5', "
+                                               "the assembler produced '%6'  "
+                                               "[documented: %7] [assembler: %8]")
+                                    .arg(name, example)
+                                    .arg(i)
+                                    .arg(j)
+                                    .arg(expected, realOperands.at(j),
+                                         substitutedLines.join(QStringLiteral("; ")),
+                                         real.mnemonics.at(i) + QLatin1Char(' ') +
+                                             realOperands.join(QStringLiteral(", ")));
+            }
+        }
+        if (!entrySkipped)
+            ++checked;
+    }
+
+    std::cerr << "    [ info ] supported entries with a non-empty expandsTo " << inScope << "\n";
+    std::cerr << "    [ info ] checked " << checked << ", skipped " << skipped.size() << "\n";
+    std::cerr << "    [ info ] label operands compared through the assembler's own "
+                 "back-patching "
+              << labelOperandsChecked << "\n";
+    std::cerr << "    [ info ] trailing prose notes stripped from a clause " << proseStrips << "\n";
+    for (const QString &s : skipped)
+        std::cerr << "    [ skip ] " << s.toStdString() << "\n";
+    for (const QString &f : failures)
+        std::cerr << "    [ FAIL  ] " << f.toStdString() << "\n";
+
+    EXPECT_GT(checked, 0) << "no expansion was compared";
+    EXPECT_EQ(checked + skipped.size(), inScope)
+        << "every in-scope entry must be either compared or skipped with a reason";
+    EXPECT_TRUE(failures.isEmpty())
+        << failures.size() << " operand mismatch(es); names above. The JSON is NOT to be "
+                              "edited to make this pass without a decision.";
 }
 
 // ══════ instructions.json is exactly the supported set, both ways ═══════
