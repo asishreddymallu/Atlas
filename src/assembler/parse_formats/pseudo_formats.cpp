@@ -137,6 +137,19 @@ bool Parser::parse_pseudo()
                 instruction_number_line_number_mapping_[instruction_index_++] = addiBlock.getLineNumber();
             };
 
+            auto emitAddiw = [&](const std::string &rd, int64_t imm)
+            {
+                ICUnit addiwBlock;
+                addiwBlock.setLineNumber(currentToken().line_number);
+                addiwBlock.setInstructionIndex(instruction_index_);
+                addiwBlock.setOpcode("addiw");
+                addiwBlock.setRd(rd);
+                addiwBlock.setRs1(rd);
+                addiwBlock.setImm(std::to_string(imm));
+                intermediate_code_.emplace_back(addiwBlock, true);
+                instruction_number_line_number_mapping_[instruction_index_++] = addiwBlock.getLineNumber();
+            };
+
             auto emitLui = [&](const std::string &rd, int64_t top20)
             {
                 ICUnit luiBlock;
@@ -182,8 +195,15 @@ bool Parser::parse_pseudo()
                 int64_t upper = (signedValue + 2048) >> 12;
                 int64_t lower = signedValue - (upper << 12);
                 emitLui(rd, upper);
+                // addiw, not addi: the standard RV64 sequence. For a value
+                // in 0x7FFFF800..0x7FFFFFFF the rounding makes upper 0x80000,
+                // which lui sign-extends to 0xFFFFFFFF80000000; addi kept
+                // that upper half (known_issues 110). addiw adds in 32 bits
+                // and sign-extends the 32-bit result, which is the value.
+                // For every other 32-bit value the two give the same result,
+                // and the instruction count does not change.
                 if (lower != 0)
-                    emitAddi(rd, lower);
+                    emitAddiw(rd, lower);
             };
 
             auto countTrailingZeros64 = [](uint64_t v) -> int
