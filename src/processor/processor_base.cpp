@@ -18,6 +18,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <thread>
 
 namespace Kites
@@ -189,15 +190,16 @@ bool ProcessorBase::StopFromRunLoop()
 
 void ProcessorBase::RequestStop()
 {
-    // Two callers, two threads:
-    //   * ProcessorManager::step(), on the UI thread, when the program
-    //     ran out while the user was stepping. That one wants the full
-    //     stop-and-reset.
-    //   * RV5StageProcessorNHNF::handle_syscall(), on the WORKER thread,
-    //     from inside Run(), on ecall. That one cannot wait for itself to
-    //     leave Run() - it would burn the whole timeout every time, which
-    //     measured at 3016 ms per ecall - and must not Reset() under its
-    //     own feet.
+    // The caller is ProcessorManager::step(), on the UI thread, when the
+    // program ran out while the user was stepping. That one wants the
+    // full stop-and-reset.
+    //
+    // A caller on the WORKER thread, inside Run(), cannot wait for itself
+    // to leave Run() - it would burn the whole timeout every time, which
+    // measured at 3016 ms per ecall - and must not Reset() under its own
+    // feet. That used to be RV5StageProcessorNHNF::handle_syscall(); the
+    // exit service now calls StopForProgramExit() instead (known_issues
+    // 66, 102), but the guard stays for any future run-loop caller.
     if (StopFromRunLoop())
         return;
 
@@ -516,6 +518,255 @@ void ProcessorBase::RemoveBreakpoint(uint64_t val, bool is_line)
 bool ProcessorBase::CheckBreakpoint(uint64_t address)
 {
     return std::find(breakpoints_.begin(), breakpoints_.end(), address) != breakpoints_.end();
+}
+
+// The system-call service every model shares (known_issues 66). Moved here
+// verbatim from RVSSProcessor::HandleSyscall, so the five models cannot
+// drift apart; the only change is the exit service (see SYSCALL_EXIT).
+// The caller decides WHEN this runs - rvss in Execute, the pipelines when
+// the ecall reaches writeback - and passes the delta the step records into.
+bool ProcessorBase::ServeSyscall(StepDelta &delta)
+{
+    uint64_t syscall_number = registers_.ReadGpr(17);
+    switch (syscall_number)
+    {
+    case SYSCALL_PRINT_INT:
+    {
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "[Syscall output: ";
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_START";
+        }
+        std::cout << static_cast<int64_t>(registers_.ReadGpr(10)); // Print signed integer
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "]" << std::endl;
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_END" << std::endl;
+        }
+        break;
+    }
+    case SYSCALL_PRINT_FLOAT:
+    { // print float
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "[Syscall output: ";
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_START";
+        }
+        float float_value;
+        uint64_t raw = registers_.ReadGpr(10);
+        std::memcpy(&float_value, &raw, sizeof(float_value));
+        std::cout << std::setprecision(std::numeric_limits<float>::max_digits10) << float_value;
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "]" << std::endl;
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_END" << std::endl;
+        }
+        break;
+    }
+    case SYSCALL_PRINT_DOUBLE:
+    { // print double
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "[Syscall output: ";
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_START";
+        }
+        double double_value;
+        uint64_t raw = registers_.ReadGpr(10);
+        std::memcpy(&double_value, &raw, sizeof(double_value));
+        std::cout << std::setprecision(std::numeric_limits<double>::max_digits10) << double_value;
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "]" << std::endl;
+        }
+        else
+        {
+            std::cout << "VM_STDOUT_END" << std::endl;
+        }
+        break;
+    }
+    case SYSCALL_PRINT_STRING:
+    {
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "[Syscall output: ";
+        }
+        PrintString(registers_.ReadGpr(10)); // Print string
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "]" << std::endl;
+        }
+        break;
+    }
+    case SYSCALL_EXIT:
+    {
+        if (!globals::vm_as_backend)
+        {
+            std::cout << "VM_EXIT" << std::endl;
+        }
+        output_status_ = "VM_EXIT";
+        std::cout << "Exited with exit code: " << registers_.ReadGpr(10) << std::endl;
+        // Was exit(0), which ended the whole process - the GUI, kites-cli
+        // before it dumped its registers, and the test binary - instead
+        // of the simulated program (known_issues 101). Stop the program
+        // and keep its state, the behaviour known_issues 67 settled on.
+        StopForProgramExit();
+        return true;
+    }
+    case SYSCALL_READ:
+    { // Read
+        uint64_t file_descriptor = registers_.ReadGpr(10);
+        uint64_t buffer_address = registers_.ReadGpr(11);
+        uint64_t length = registers_.ReadGpr(12);
+
+        if (file_descriptor == 0)
+        {
+            // Read from stdin
+            std::string input;
+            {
+                std::cout << "VM_STDIN_START" << std::endl;
+                output_status_ = "VM_STDIN_START";
+                std::unique_lock<std::mutex> lock(input_mutex_);
+                // Also wakes on stop: without this a program blocked in an
+                // ecall read could never be stopped, and StopAndReset would
+                // sit out its whole timeout.
+                input_cv_.wait(lock,
+                               [this]()
+                               { return !input_queue_.empty() || stop_requested_; });
+                if (input_queue_.empty())
+                    return false; // stopped while waiting for input
+                output_status_ = "VM_STDIN_END";
+                std::cout << "VM_STDIN_END" << std::endl;
+
+                input = input_queue_.front();
+                input_queue_.pop();
+            }
+
+            std::vector<uint8_t> old_bytes_vec(length, 0);
+            std::vector<uint8_t> new_bytes_vec(length, 0);
+
+            for (size_t i = 0; i < length; ++i)
+            {
+                old_bytes_vec[i] = memory_controller_.peekByte(buffer_address + i);
+            }
+
+            for (size_t i = 0; i < input.size() && i < length; ++i)
+            {
+                memory_controller_.writeByte(buffer_address + i, static_cast<uint8_t>(input[i]));
+            }
+            if (input.size() < length)
+            {
+                memory_controller_.writeByte(buffer_address + input.size(), '\0');
+            }
+
+            for (size_t i = 0; i < length; ++i)
+            {
+                new_bytes_vec[i] = memory_controller_.peekByte(buffer_address + i);
+            }
+
+            delta.memory_changes.push_back({buffer_address, old_bytes_vec, new_bytes_vec});
+
+            uint64_t old_reg = registers_.ReadGpr(10);
+            unsigned int reg_index = 10;
+            unsigned int reg_type = 0; // 0 for GPR, 1 for CSR, 2 for FPR
+            uint64_t new_reg =
+                std::min(static_cast<uint64_t>(length), static_cast<uint64_t>(input.size()));
+            registers_.WriteGpr(10, new_reg);
+            if (old_reg != new_reg)
+            {
+                delta.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
+            }
+        }
+        else
+        {
+            std::cerr << "Unsupported file descriptor: " << file_descriptor << std::endl;
+        }
+        break;
+    }
+    case SYSCALL_WRITE:
+    { // Write
+        uint64_t file_descriptor = registers_.ReadGpr(10);
+        uint64_t buffer_address = registers_.ReadGpr(11);
+        uint64_t length = registers_.ReadGpr(12);
+
+        if (file_descriptor == 1)
+        { // stdout
+            std::cout << "VM_STDOUT_START";
+            output_status_ = "VM_STDOUT_START";
+            uint64_t bytes_printed = 0;
+            for (uint64_t i = 0; i < length; ++i)
+            {
+                char c = memory_controller_.readByte(buffer_address + i);
+                // if (c == '\0') {
+                //     break;
+                // }
+                std::cout << c;
+                bytes_printed++;
+            }
+            std::cout << std::flush;
+            output_status_ = "VM_STDOUT_END";
+            std::cout << "VM_STDOUT_END" << std::endl;
+
+            uint64_t old_reg = registers_.ReadGpr(10);
+            unsigned int reg_index = 10;
+            unsigned int reg_type = 0; // 0 for GPR, 1 for CSR, 2 for FPR
+            uint64_t new_reg = std::min(static_cast<uint64_t>(length), bytes_printed);
+            registers_.WriteGpr(10, new_reg);
+            if (old_reg != new_reg)
+            {
+                delta.register_changes.push_back({reg_index, reg_type, old_reg, new_reg});
+            }
+        }
+        else
+        {
+            std::cerr << "Unsupported file descriptor: " << file_descriptor << std::endl;
+        }
+        break;
+    }
+    default:
+    {
+        std::cerr << "Unknown syscall number: " << syscall_number << std::endl;
+        break;
+    }
+    }
+    return false;
+}
+
+void ProcessorBase::StopForProgramExit()
+{
+    // On the run thread - Run() or DebugRun(), the worker in the GUI -
+    // publish the stop and let the loop leave; nothing is reset (67).
+    if (StopFromRunLoop())
+        return;
+    // Anywhere else this is a manual step: ProcessorManager::step() on the
+    // UI thread, inside StepAndNotify(), which holds step_mutex_. It must
+    // NOT go through RequestStop(): StopAndReset() takes step_mutex_ again
+    // and a QMutex is not recursive - that was a self-deadlock on rv5-nh-nf
+    // (known_issues 102). Record the exit; StepAndNotify() reports the end
+    // of the program, and the caller takes the same path as a program
+    // that ran off its last instruction.
+    program_exited_ = true;
+}
+
+bool ProcessorBase::TakeProgramExit()
+{
+    const bool exited = program_exited_;
+    program_exited_ = false;
+    return exited;
 }
 
 void ProcessorBase::PrintString(uint64_t address)

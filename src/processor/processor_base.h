@@ -162,6 +162,11 @@ class ProcessorBase : public QObject
     // re-assert loop that had been hiding it was removed.
     int stop_in_progress_{0};
 
+    // Set by StopForProgramExit() when a manual step - not a Run() loop -
+    // executed an exit. Written and read only by the thread stepping,
+    // under step_mutex_ (StepAndNotify), so a plain bool.
+    bool program_exited_{false};
+
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
     std::queue<std::string> input_queue_;
@@ -272,8 +277,8 @@ class ProcessorBase : public QObject
 
     /**@brief The stop path for a caller that IS the run loop.
      *
-     * RV5StageProcessorNHNF::handle_syscall() calls RequestStop() from
-     * inside Run(), on the worker's own thread. Waiting for that thread
+     * The exit service (StopForProgramExit) calls this from inside
+     * Run(), on the worker's own thread. Waiting for that thread
      * to leave Run() can only time out - measured at 3016 ms per ecall -
      * and resetting under it would wipe the program mid-run. This
      * publishes the stop and wakes the waits, and does nothing else.
@@ -282,6 +287,35 @@ class ProcessorBase : public QObject
      * nothing was done and the caller should use StopAndReset().
      */
     bool StopFromRunLoop();
+
+    /**@brief Serves the ecall in flight: a7 picks the service, a0-a2 are
+     * its arguments, exactly as rvss always has (print int/float/double/
+     * string, exit, read with its input wait, write).
+     *
+     * One implementation for all five models (known_issues 66). Reads the
+     * ARCHITECTURAL registers, so the caller must call it at a point where
+     * every older instruction has written back: rvss's Execute, the
+     * pipelines' writeback stage.
+     *
+     * @param delta the step's undo record; a read's memory and a0 changes
+     *              go into it.
+     * @return true if the program exited (StopForProgramExit has run).
+     */
+    bool ServeSyscall(StepDelta &delta);
+
+    /**@brief The exit service's stop: StopFromRunLoop() on the run thread;
+     * otherwise (a manual step) it only records the exit for
+     * TakeProgramExit(). It never calls StopAndReset(), which would take
+     * step_mutex_ a second time from inside StepAndNotify()
+     * (known_issues 102).
+     */
+    void StopForProgramExit();
+
+    /**@brief True once after an exit reached by a manual step; clears it.
+     * StepAndNotify() returns false on it, so ProcessorManager::step()
+     * treats the exit as the end of the program.
+     */
+    bool TakeProgramExit();
 
     /// RAII marker for a Run()/DebugRun() loop body.
     struct RunScope

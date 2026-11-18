@@ -77,7 +77,10 @@ bool RV5StageVM_Base::StepAndNotify()
     setProcessorState();
     emitCircuitState();
     emit processorClockedSignal(processor_state_);
-    return program_counter_ < program_size_ || !is_pipeline_drained();
+    // An exit service reached by this manual step ends the program here,
+    // whatever is left in flight (known_issues 66 / 102).
+    const bool exited = TakeProgramExit();
+    return !exited && (program_counter_ < program_size_ || !is_pipeline_drained());
 }
 
 void RV5StageVM_Base::DebugRun()
