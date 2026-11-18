@@ -165,6 +165,15 @@ TEST(StageTags, UndoThenRedoRestoresTheSameStagedList)
                 break;
         }
         ASSERT_GE(after.size(), 6u) << name(model);
+        // Restoring an all-unstaged list would pass trivially, so the
+        // recorded lists must carry stages for this to mean anything.
+        bool anyStaged = false;
+        for (const std::string &list : after)
+            anyStaged = anyStaged || list.find(":ID") != std::string::npos ||
+                        list.find(":EX") != std::string::npos ||
+                        list.find(":MEM") != std::string::npos ||
+                        list.find(":WB") != std::string::npos;
+        EXPECT_TRUE(anyStaged) << name(model) << ": no wire carried a stage in any cycle";
 
         // Walk back to the first step, then forward to the last.
         for (size_t k = after.size() - 1; k >= 1; --k)
