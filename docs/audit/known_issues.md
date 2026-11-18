@@ -3637,3 +3637,311 @@ Note for whoever picks it up: the existing `rv5s_undo_redo_test.cpp`
 always does Step → Undo → **Redo**, never Step → Undo → *Step*, which is
 why a defect this visible has gone unnoticed. The UI offers exactly that
 sequence: undo a cycle, then press Step.
+
+---
+
+*(83 is deliberately skipped here. `fix/undo-continue`, which branched
+from the same commit, uses it for the cache's unused undo history; this
+branch starts at 84 so the two do not collide when they meet.)*
+
+## 84. FIXED: the processor chooser matched its own rows by text, and preselected by enum order
+
+The chooser was a `QTreeWidget` with five rows of literal text declared
+in `src/ui/dialogs/processor_dialog.ui`, and the selection was turned
+back into a `ProcessorType` by comparing the **selected row's text**
+against five string literals in the `.cpp`:
+
+```cpp
+QString processorType = selectedItem->text(0);
+if (processorType == "Single cycle processor")                       // :27
+    emit vmSelected(ProcessorType::RVSS);
+else if (processorType == "5 statge Processor w/o hazard detection w/o forwarding")
+    emit vmSelected(ProcessorType::RV5Stage_NH_NF);                  // :33
+...
+```
+
+Two faults, neither of which could bite a test, because nothing tested
+the dialog:
+
+1. **The strings are the API.** Rewording a row, fixing its spelling, or
+   translating it makes the chain fall through every arm and emit
+   nothing at all - the dialog closes, `vmSelected` never fires, and the
+   processor silently does not change. Three of the five rows read
+   "5 **statge**", so the typo could not be corrected without breaking
+   the dialog.
+2. **The preselect assumed the .ui's row order was the enum's.**
+
+```cpp
+ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(static_cast<int>(currentVMType)));
+```
+
+   Reordering the rows in Designer, or inserting a model into
+   `ProcessorType` anywhere but the end, would open the dialog showing a
+   different processor from the one that is loaded. Nothing asserted the
+   two orders agreed.
+
+**Fixed.** The tree is gone. Two radio buttons and two checkboxes
+describe the processor by what it HAS, and the relation between three
+check marks and five models is four free functions with no Qt in them,
+`src/processor/processor_choice.{h,cpp}`:
+
+```cpp
+ProcessorType   processorTypeFor(bool pipeline, bool hazard, bool forwarding);
+ProcessorChoice processorChoiceFor(ProcessorType type);
+const char     *processorDescription(ProcessorType type);
+const char     *processorNote(bool pipeline, bool hazard, bool forwarding);
+```
+
+`test/processor_choice_test.cpp` pins all eight combinations and the
+round trip for all five types without constructing a widget;
+`test/processor_dialog_test.cpp` drives the dialog offscreen. There is no
+string comparison and no `static_cast<int>` preselect left anywhere.
+
+Controls, on patched copies out of tree at the fix commit:
+
+| control | red tests, of 25 |
+|---|---|
+| (a) `(pipeline, hazard, no forwarding)` returns `NH_NF` instead of `H_NF` | **4** - `ProcessorChoice.EveryCombinationOfTheThreeControlsMapsToOneModel`, `.TheInverseRoundTripsForEveryProcessorType`, `ProcessorChooserDialog.TheRoundTripThroughSingleCycleKeepsTheModel`, `.OkEmitsTheModelTheControlsSpellOut` |
+| (b) the check boxes ignore the radio state and stay live | **2** - `ProcessorChooserDialog.ItOpensShowingTheProcessorThatIsLoaded`, `.SingleCycleGreysTheBoxesWithoutClearingThem` |
+| (c) the status label is not refreshed on a change | **2** - `ProcessorStatusLabel.ItFollowsEveryProcessorChange`, `.TheFiveLabelsAreAllDifferent` |
+
+The two checkboxes are greyed, not cleared, when Single-cycle is
+selected, so Pipeline -> Single-cycle -> Pipeline returns the same model.
+Opened on Single-cycle they are greyed but **ticked**: ticking Pipeline
+then lands on hazard detection + forwarding rather than on
+`RV5Stage_NH_NF`, the variant that silently evaluates a dependent chain
+to zero (entry 77).
+
+The note under the controls is entry 77's "suggested, not implemented"
+warning in its cheapest form - not an assembler diagnostic, just a line
+in the chooser saying what the chosen combination costs. Each clause is
+this code's behaviour: with forwarding the hazard unit stalls only on a
+load-use (`src/processor/rv5s/rv5s_hdu.cpp:82-104`); without it, until
+the producer has written back (`:106-117`); and
+`rv5s_processor_nh_nf.cpp` and `rv5s_processor_nh_f.cpp` never call
+`check_data_hazard` at all.
+
+---
+
+## 85. The Profiler's own counters are dead: one is never written, one only grows, and nothing resets either
+
+`Profiler` (`src/profiler/profiler.h`) keeps three maps and a count
+array. Two of the four are not maintained.
+
+**`getLineExecutionCount()` always returns 0.** It reads
+`m_lineNumberToExecutionCounts` (`src/profiler/profiler.h:52`), and that
+member is only ever cleared (`src/profiler/profiler.cpp:15`) and read
+(`:47-48`). Nothing in `src/` writes it. The counting happens on the far
+side of the signal, in a member of the same name belonging to a
+different class:
+
+```cpp
+void ProfilerEditor::incrementLineExecutionCountSlot(int lineNumber)
+{
+    m_lineNumberToExecutionCounts[lineNumber]++;   // profiler_editor.cpp:113
+}
+```
+
+read back by the gutter at
+`src/ui/profiler_tab/execution_count_gutter_column.h:39-40`. So the
+numbers exist, but only inside the widget that draws them; the Profiler's
+public accessor for them is a constant zero. Measured during this stage:
+`test/processor_switch_profiler_test.cpp` had to count signal emissions
+instead, because the accessor could not distinguish "profiling works"
+from "profiling is unplugged".
+
+**`m_instructionTypeCounts` accumulates across loads.**
+`setLineNumberToInstructionTypeMapping` clears
+`m_lineNumberToinstructionType` but not the count array, then increments
+into it (`profiler.cpp:57-69`). `ProcessorManager::loadProgram` calls it
+on every load (`processor_manager.cpp:86`), so loading the same program
+twice reports every instruction type twice. The commented-out
+`setInstructionTypeCounts` just above it (`profiler.cpp:25-38`) did start
+with `m_instructionTypeCounts.fill(0)`.
+
+**Nothing clears either.** `Profiler::Reset()` (`profiler.cpp:13-18`) is
+the function that would, and it has **no callers** anywhere in `src/` or
+`test/`. `ProfilerTab` connects `profilerReset` to
+`ProfilerTab::resetProfilerView`, whose body is empty
+(`profiler_tab.cpp:68-71`).
+
+**`updateInstructionTypeCountsSignal` has a connection and no emitter.**
+`ProfilerTab` connects it to the table model
+(`profiler_tab.cpp:37-38`); the only `emit` of it in the tree is inside
+the commented-out block at `profiler.cpp:37`. The instruction-type table
+is therefore filled once at construction
+(`profiler_tab.cpp:26-28`) and never updated.
+
+**Read, not run**, except for the first point, which the stage's test
+exercised directly. Not fixed here: this is a UI-stage branch and the
+profiler is its own piece of work. The shape of the fix is to make
+`Profiler` the one that counts - have `processorClockedSlot` increment
+its own map before emitting - and to call `Reset()` from `loadProgram`.
+
+Separately, `processorClockedSlot` subscripts with `operator[]`:
+
+```cpp
+int executedLine = m_instructionNumberToLineNumber
+[static_cast<unsigned int>(processorState.lastExecutedPC / 4)];   // profiler.cpp:75-76
+```
+
+so a PC with no mapping - `INVALID_PC / 4` on any pipeline bubble -
+inserts a new entry and reports line 0 rather than being skipped.
+
+---
+
+## 86. A pipelined `Run()` stops dead on a breakpoint `LoadProgram` planted, and the GUI only escapes it by accident
+
+`ProcessorBase::LoadProgram` ends every load by planting a breakpoint at
+the address one past the last instruction:
+
+```cpp
+program_size_ = counter;
+AddBreakpoint(program_size_, false); // address      // processor_base.cpp:256-257
+```
+
+`RVSSProcessor::Run()` never reaches it: its loop is
+`while (!stop_requested_ && program_counter_ < program_size_)`
+(`rvss_processor.cpp:117`), so it exits the moment the PC gets there.
+
+`RV5StageVM_Base::Run()` keeps going while the pipeline drains:
+
+```cpp
+while (!stop_requested_ && (program_counter_ < program_size_ || !is_pipeline_drained()))
+```
+(`rv5s_processor_base.cpp:11`). Those drain cycles run with
+`program_counter_ == program_size_`, which **is** the planted
+breakpoint, so the loop sets `pause_requested_`, emits
+`processorPausedAtBreakpointSignal` and waits on
+`pause_wait_condition_` (`:20-33`) with nobody to resume it.
+
+**Measured.** A test that called `ProcessorManager::run()` after
+`loadProgram` hung on every rv5s model; four `gdb` backtraces taken five
+seconds apart were identical, all parked in
+`QWaitCondition::wait` inside `Kites::RV5StageVM_Base::Run()`. RVSS
+completed the same program in 0.04 s.
+
+**The GUI does not hit this, for a reason that is not the breakpoint's.**
+`MainWindow::tryParseAndLoadProgram` calls
+`setBreakpoints(editor->getBreakpoints())` immediately after
+`loadProgram` (`main_window.cpp:896-897`), and
+`ProcessorBase::SetBreakpoints` **clears the list first**
+(`processor_base.cpp:428-435`). So the planted breakpoint is wiped on
+every load, by a call made for an unrelated purpose. Remove or reorder
+that one line and every pipelined Run in the window stops at the end of
+the program instead of finishing.
+
+**`kites-cli` would hit it, and cannot be used to show it.** `ExecuteLoad`
+calls `manager.loadProgram` and then clears only its own
+`state.breakpoints` (`command_handler.cpp:188-191`); nothing pushes an
+empty list down to the processor, and `CommandType::RUN` calls
+`manager.run()` directly (`:277`). So `load <file> --vm rv5-h-f` then
+`run` has nothing to wipe the planted breakpoint with. That is **read,
+not run**: the REPL never gets that far, because it segmentation-faults
+during startup - see entry 87.
+
+Not fixed here. Two candidate fixes, neither obviously right without
+knowing what the planted breakpoint is for: stop planting it and let the
+loop condition end the run, or have the rv5s loop ignore a breakpoint at
+`program_size_` while draining.
+
+---
+
+## 87. `kites-cli` segmentation-faults on startup: a QCoreApplication cannot hold a QGraphicsScene
+
+`cli/main.cpp` constructs a **`QCoreApplication`**
+(`cli/main.cpp:51`, included at `:14`), not a `QGuiApplication`. `ProcessorManager`'s
+constructor builds a processor (`processor_manager.cpp:40`), every
+processor's constructor builds its circuit scene
+(`rvss_processor.cpp:34` and the four rv5s equivalents), and
+`CircuitScene` derives from `QGraphicsScene`
+(`src/ui/processor_tab/circuit_scene.h:15`), which requires a
+`QGuiApplication`.
+
+Measured, under `run_hermetic.sh`, piping `load examples/ex_mem_fwd.s
+--vm rvss` / `run` / `exit` into it: exit status **139** (SIGSEGV) with
+no output at all, i.e. before a single command is read. The backtrace:
+
+```
+#0  QtPrivate::QPodArrayOps<QGraphicsScene*>::emplace<...>   libQt6Widgets
+#1  QGraphicsScenePrivate::init()                            libQt6Widgets
+#2  Kites::CircuitScene::CircuitScene(QObject*)
+#3  Kites::RVSSCircuitScene::RVSSCircuitScene(QObject*)
+#5  Kites::RVSSProcessor::RVSSProcessor()
+#7  Kites::ProcessorFactory::RegisterVM<Kites::RVSSProcessor>(...)::{lambda()#1}
+```
+
+This is the same root cause that `AGENTS.md` records for the test
+harness - "constructing any RVSS/RV5S processor builds a QGraphicsScene,
+which crashed with SIGSEGV when uninitialized in headless environments" -
+fixed there by giving `test/test_main.cpp` an offscreen `QApplication`
+(`test_main.cpp:75-76, 104`), and never fixed in `cli/main.cpp`.
+
+`kites_cli` is built with `-DDISABLE_GUI` (`CMakeLists.txt:140`), but
+`DISABLE_GUI` does not guard the circuit scene: `processor_base.h:199`
+holds a `std::unique_ptr<CircuitScene>` unconditionally.
+
+**Pre-existing**, not introduced by any recent branch: the same input
+gives exit 139 on `experiments/post-ribbon` as well. Not fixed here -
+the cheap fix is an offscreen `QApplication` in `cli/main.cpp`, the
+honest fix is to stop making the simulator own a widget.
+
+---
+
+## 88. Every theme fills a Disabled palette group that the stylesheet makes unreachable
+
+`ThemeManager` builds a `QPalette` for each theme and fills the
+`QPalette::Disabled` group deliberately:
+
+```cpp
+p.setColor(QPalette::Disabled, QPalette::WindowText, mutedForeground);  // theme_manager.cpp:338
+p.setColor(QPalette::Disabled, QPalette::Text,       mutedForeground);  // :340
+p.setColor(QPalette::Disabled, QPalette::ButtonText, mutedForeground);  // :342
+```
+
+and then the theme stylesheet opens with
+
+```qss
+QWidget {
+    background-color: {{background}};
+    color: {{foreground}};        /* template.qss:11-17 */
+    ...
+}
+```
+
+A Qt stylesheet `color` applies to the widget in **every** state. Once
+`QWidget { color: … }` is set, the Disabled palette entry above is never
+consulted for any widget that does not have an explicit `:disabled` rule
+of its own. The buttons do have one (`template.qss:112`, `:143`, `:362`,
+`:454`, `:525`, numbered after the rule added below), which is why a
+disabled ribbon command visibly recedes.
+Nothing else does.
+
+**Measured.** Offscreen grabs of the processor chooser with the two
+option check boxes disabled and then enabled, cropped to the same
+rectangle around the two rows, mean luminance:
+
+| theme | before: disabled / enabled | after: disabled / enabled |
+|---|---|---|
+| kites-dark | 45.2 / 45.2 (delta **0.0**) | 38.9 / 44.1 (delta -5.1) |
+| kites-light | 231.1 / 225.5 (delta +5.6) | 235.4 / 226.9 (delta +8.5) |
+
+A dimmer disabled row means a lower number on the dark background and a
+higher one on the light. Before the fix the dark theme rendered the two
+states **identically**; the light theme's small residual difference is
+the indicator alone, which Fusion draws from the palette rather than
+from the stylesheet. The label - the part a reader actually sees - did
+not change in either.
+
+Partly addressed: `QCheckBox:disabled { color: {{mutedForeground}}; }`
+was added at `template.qss:31` for this stage, because the processor
+chooser greys two check boxes and that has to be visible. The
+**indicator** is still drawn at full contrast - adding a
+`QCheckBox::indicator` rule would replace Fusion's drawing of the box
+and the tick entirely, which is a theme job and not this one's.
+
+Still unreachable for `QRadioButton`, `QLabel`, `QLineEdit`,
+`QComboBox`, `QTableView` and every other class without a `:disabled`
+rule. The general fix is one block listing the classes, or dropping
+`color` from the blanket `QWidget` rule and letting the palette do its
+job - the second is correct and the larger change.
