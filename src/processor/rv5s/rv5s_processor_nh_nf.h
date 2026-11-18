@@ -72,8 +72,5 @@ class RV5StageProcessorNHNF : public RV5StageVM_Base
     // uint64_t execute_double();
     // void memory_float();
 
-    // --- Specialized handler functions (called from pipeline stages) ---
-
-    void handle_syscall() override;
 };
 }//namespace Kites

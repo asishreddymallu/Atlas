@@ -674,6 +674,15 @@ void RV5StageVM_Base::pipeline_writeback()
         instructions_retired_++;
     }
 
+    // ecall and ebreak (SYSTEM, funct3 0 - the same test rvss uses). They
+    // write no register; the service is the whole of what they do.
+    if ((mem_wb_reg_.instruction & 0b1111111) == 0b1110011 &&
+        ((mem_wb_reg_.instruction >> 12) & 0b111) == 0b000)
+    {
+        serve_syscall_at_writeback();
+        return;
+    }
+
     if (!mem_wb_reg_.reg_write)
     {
         return;
@@ -743,6 +752,38 @@ void RV5StageVM_Base::pipeline_writeback()
             break;
         }
     }
+}
+
+void RV5StageVM_Base::serve_syscall_at_writeback()
+{
+    // Served at WRITEBACK, not where the ecall reads its operands in a
+    // textbook pipeline, on all four variants alike (known_issues 66):
+    //
+    //  - Everything older has already retired - WB runs first in Step() -
+    //    so a0..a2 and a7 are read from the register file and are right on
+    //    every variant, with no forwarding path and no stall for them. The
+    //    hazard unit and the forwarding units never learn that an ecall
+    //    reads those registers (its rs1/rs2 fields are 0), so serving it
+    //    any earlier would need both taught.
+    //  - An exit therefore drains by construction: the instruction just
+    //    before it has written back, and a store before it has written
+    //    memory, before the stop.
+    //  - Everything younger is flushed and refetched from ecall + 4, as a
+    //    trap would. A read's a0 and memory writes, and an exit, then
+    //    cannot be overtaken by an instruction that was already in flight.
+    //    This is done before MEM and EX run in this Step(), so the flushed
+    //    instructions leave no memory or register effect. (A younger FP op
+    //    that was in EX in the previous cycle has already written fcsr;
+    //    that write is not undone - see known_issues 72.)
+    //
+    // The cost is the flush: three bubbles per ecall.
+    ServeSyscall(current_delta_);
+
+    if_id_reg_.reset();
+    id_ex_reg_.reset();
+    ex_mem_reg_.reset();
+    stall_cycles_ = 0; // a stall counting down was for a flushed instruction
+    redirect_pc(mem_wb_reg_.pc + 4);
 }
 
 void RV5StageVM_Base::pipeline_writeback_float()

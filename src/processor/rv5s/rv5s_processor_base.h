@@ -128,7 +128,8 @@ class RV5StageVM_Base : public ProcessorBase
     void pipeline_writeback_float();
     void pipeline_writeback_double();
 
-    // --- Specialized handler functions (called from pipeline stages) ---
-    virtual void handle_syscall() = 0;
+    /// An ecall/ebreak has reached writeback: serve it, then flush and
+    /// refetch everything younger (known_issues 66).
+    void serve_syscall_at_writeback();
 };
 }//namespace Kites

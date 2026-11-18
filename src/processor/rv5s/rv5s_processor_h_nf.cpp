@@ -330,15 +330,6 @@ void RV5StageProcessorHNF::pipeline_execute()
     }
 }
 
-void RV5StageProcessorHNF::handle_syscall()
-{
-    if ((id_ex_reg_.instruction & 0x7F) == 0b1110011 &&
-        ((id_ex_reg_.instruction >> 12) & 0x7) == 0b000)
-    {
-        RequestStop();
-        output_status_ = "ECALL_EXIT";
-    }
-}
 
 uint64_t RV5StageProcessorHNF::pipeline_execute_float()
 {

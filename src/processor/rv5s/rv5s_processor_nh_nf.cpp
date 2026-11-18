@@ -207,13 +207,13 @@ void RV5StageProcessorNHNF::pipeline_execute()
     uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0x7;
 
-    if (opcode == 0b1110011 && funct3 == 0b000)
-    {
-        handle_syscall();
-        return;
-    }
-
-    if (opcode == 0b1110011)
+    // An ecall/ebreak is not served here but in writeback, once everything
+    // older has retired (RV5StageVM_Base::serve_syscall_at_writeback). It
+    // used to stop the run from this stage, before EX/MEM was latched, so
+    // the instruction just before it never wrote back (known_issues 66).
+    // Now it flows down the pipe like on the other three variants: decoded
+    // as an I-type with rd = x0, it executes as a no-op.
+    if (opcode == 0b1110011 && funct3 != 0b000)
     {
         execute_csr();
         return;
@@ -337,16 +337,6 @@ void RV5StageProcessorNHNF::pipeline_execute()
 
 // --- Undo/Redo Implementations ---
 
-void RV5StageProcessorNHNF::handle_syscall()
-{
-    if ((id_ex_reg_.instruction & 0x7F) == 0b1110011 &&
-        ((id_ex_reg_.instruction >> 12) & 0x7) == 0b000)
-    {
-        RequestStop();
-        output_status_ = "ECALL_EXIT";
-        DumpState("vm_state.json");
-    }
-}
 
 // --- FP Execute Handlers ---
 
