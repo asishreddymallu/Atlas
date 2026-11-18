@@ -4384,7 +4384,7 @@ which file is authoritative.
 
 ---
 
-## 95. The MEM/WB forwarding wires light one instruction too late
+## 95. FIXED: the MEM/WB forwarding wires light one instruction too late - and so did most of the diagram
 
 Separate from 81, and found by the test written for it.
 
@@ -4423,9 +4423,109 @@ leaving the datapath's use of `prev_*` alone - but that is a change to
 what the diagram draws and wants its own evidence, which this stage did
 not gather.
 
+### The fix (`83aef6c`)
+
+**The semantic, decided for this stage.** After each Step,
+`active_wires_` describes exactly one cycle: the one whose instructions
+the editor labels IF, ID, EX, MEM, WB. Those labels come from
+`setProcessorState` (`rv5s_processor_base.cpp:158-165` as of this fix), so ID =
+`if_id_reg_`, EX = `id_ex_reg_`, MEM = `ex_mem_reg_` and WB =
+`mem_wb_reg_`. A conditional wire belonging to stage S is lit if and
+only if the instruction labelled S uses it. The backbone is unchanged.
+
+**The audit found far more than the MEM/WB arm.** `Step()` runs WB → MEM → EX → ID → IF.
+- `pipeline_memory` copies `mem_wb` into `mem_wb.prev_*` before
+  overwriting it (`base.cpp:517-527`).
+- Each model's `pipeline_execute` does the same for `ex_mem.prev_*`
+  (`h_f.cpp:418-437`, `h_nf.cpp:261-280`, `nh_f.cpp:360-379`,
+  `nh_nf.cpp:254-273`).
+
+So after the step:
+- `ex_mem.prev_*` is the instruction labelled **WB**;
+- `mem_wb.prev_*` is the one that has **already retired**.
+
+Every condition that read a `prev_*` field was one generation stale:
+- h_f's memory-read and writeback wires (`prev ‖ current`, so lit one
+  cycle too long);
+- nh_f's memory-read, writeback and branch wires (`prev` alone, so dark in
+  the right cycle and lit in the next);
+- all of nh_nf's MEM and WB wires;
+- the MEM/WB forwarding arm on h_f and nh_f.
+
+Three other groups were stale for the same underlying reason:
+- `Imm_to_P2` and nh_f's `Control_to_P2_*` are **ID**-stage wires but read
+  `id_ex_reg_`.
+- The hazard-unit wires read `stall_fetch_and_decode_`, which says that
+  the step **just run** stalled. They were therefore lit in the bubble's
+  cycle, not in the cycle where the hazard is detected.
+- nh_nf's branch wires read `ex_mem` and `mem_wb` (one stage late), and
+  its `mem_wb` opcode test used an **8-bit** mask, `0b11111111`, which
+  includes bit 7. A branch whose imm[11] is set never matched.
+
+**What changed** (only `SetActiveWireNames`, plus const queries on `RV5StageVM_Base`):
+- Every `prev_*` read now reads the current register. For the MEM/WB
+  arm, `mem_wb_reg_`'s `instruction`, `reg_write` and `rd` are exactly
+  what `pipeline_memory` copies into `prev_*` at the start of the next
+  step, which is what EX then forwards from. The datapath's own use of
+  `prev_*` is untouched.
+- ID-stage wires decode `if_id_reg_` on a **fresh** `RV5SControlUnit`
+  (`idStageControl()`). A NOP decodes to all false, as `pipeline_decode`
+  treats it. `control_unit_` is never touched.
+- The hazard-unit wires ask whether the **next** step stalls
+  (`hazardUnitWillStall`). It is the same `check_data_hazard` call
+  `Step()` makes, on the IF/ID, ID/EX and EX/MEM values those stages will
+  have left by the time it runs. That covers a flush resetting IF/ID, and
+  EX moving ID/EX into EX/MEM with the old fields as `prev_*`.
+- `ALU_zerores_to_P3` is an EX wire, lit for a branch in EX whether or
+  not it will be taken.
+- The PC-mux wires follow what the mux selects:
+  - the AND-gate path when a taken B-type is in MEM (the condition
+    `pipeline_memory` redirects on);
+  - PC+4 otherwise;
+  - **neither** in a jump's EX cycle. A JAL/JALR redirects from EX, and no
+    drawing has that path.
+
+  On h_f, h_nf and nh_f, `ANDGate_lower_entry` stays grouped with the
+  taken case, as the code had it. nh_nf keeps its own split (lower entry
+  and target for any branch in MEM, the AND output for a taken one).
+
+**Evidence:**
+- `ForwardingWires.TheMemWbGuardFiresExactlyWhenTheMachineForwards`
+  replaces the pinning test: the wires are lit at 0 and 1 nops, dark at 2
+  and 3, on h_f and nh_f. The three tests that reached the MEM/WB arm at
+  two nops now reach it at one.
+- `test/wire_timing_test.cpp` has two tests:
+  - **Trace:** add, lw, sw, a taken beq, a not-taken bne, jal and fadd.d,
+    each alone in nops on h_f. Each cycle's conditional set is compared
+    with a written per-stage rule table. It proves the wires follow this
+    register-timing rule for those instructions on that model. It is the
+    same code reading written down twice, so it cannot prove that the
+    rule is the textbook's or that a name matches the line it is drawn
+    as.
+  - **Cross-checks:** on all four pipelined models and four programs, what
+    the diagram shows after step k is compared with what the machine does
+    in step k+1. The hazard-unit wires are lit ⇔ the PC holds. The AND
+    output is lit ⇔ a misprediction is counted. `ALU1_to_PCMuxUp` is lit
+    ⇔ no redirect. `mem_wb` after k equals `mem_wb.prev_*` after k+1.
+- Mutation controls: restoring the old hazard-unit condition fails the
+  cross-check, and restoring the old `ALU_zerores_to_P3` condition fails
+  the trace.
+- The processor is unchanged:
+  - the action transcript md5 is identical
+    (`a2c336b34fd64cf5b810af16a9603d66`);
+  - livesweep (10,295 lines) and modelsweep (281,138 lines) are identical
+    before and after;
+  - the Undo-continue matrix is 0 differing over 6,550 cells (four
+    programs × five models).
+
+**What the code does that this stage recorded but did not change.** The
+control unit sets `reg_write` for every OP-FP instruction, so h_f's
+writeback wires light for `fadd.d`, an FP write. On h_nf most of this is
+invisible anyway: 24 of its 36 names have no drawn wire (94).
+
 ---
 
-## 96. `RVSSProcessor::SetActiveWireNames` never truncates, so Undo and Redo leave stale wires lit
+## 96. FIXED: `RVSSProcessor::SetActiveWireNames` never truncates, so Undo and Redo leave stale wires lit
 
 Every model is supposed to start each cycle from the constructor's
 always-active backbone and add this cycle's wires to it. The four
@@ -4464,3 +4564,78 @@ Not fixed here. The fix is one line - the same `erase` the four
 pipelined models already do - but it changes what the diagram draws on
 every Undo, and the right stage for that is the one that looks at the
 circuit view with a window open.
+
+### The fix (`68aaa3e`)
+
+`RVSSProcessor::SetActiveWireNames` now erases back to
+`always_active_wires_count_` at the top, as the pipelined models do. The
+erase after the emit in `StepAndNotify` is still there and is now
+redundant.
+
+`test/rvss_wire_list_test.cpp` has one test per emitting path:
+- StepAndNotify after an Undo;
+- DebugRun, which must not keep a load's `Control_to_MemRead` lit in the
+  next instruction's cycle;
+- Undo twice;
+- Redo twice.
+
+All four failed before the change.
+`WireNameGate.OnlyTheSingleCycleModelFailsToTruncateItsWireList` became
+`EveryModelTruncatesItsWireList`.
+
+Driving it showed something the read-only entry above could not: see 97.
+
+---
+
+## 97. RVSS Undo and Redo do not restore the control unit, so the single-cycle wires describe the wrong instruction
+
+`RVSSProcessor::Undo` and `Redo` rewind the registers, the PC and
+memory, and then call `SetActiveWireNames`
+(`rvss_processor.cpp:1283, :1351`). That function reads only
+`control_unit_`'s getters (`:88-112`), which neither path restores. After
+an Undo, the conditional wires therefore show the last instruction
+**decoded**, not the state undone to.
+
+Measured, with a throwaway test against `68aaa3e`:
+- program: `lw t0, 0(x0)` then `addi t1, x0, 2`;
+- `Control_to_MemRead` is lit after the `lw` step and dark after the
+  `addi` step, as it should be;
+- it is **still dark after Undo** back to the `lw` state (pc 4).
+
+Not fixed here. The pipelined models do not have this problem: their
+wires read the pipeline registers, which Undo restores, and those
+registers carry the control bits. The single-cycle model keeps no
+per-step copy of its control signals.
+Re-decoding the instruction at `program_counter_ - 4` on Undo/Redo, or
+adding the control bits to the step delta, are both possible. Either one
+changes what Undo draws, which wants its own stage.
+
+---
+
+## 98. Several "conditional" wires are also in the backbone, so their conditions never show
+
+Each model's constructor appends an always-on backbone, and
+`SetActiveWireNames` appends conditional names on top. Some names are in
+both lists, so the drawing shows them lit every cycle whatever the
+condition says:
+- h_f, 7 of its 26 distinct conditional names: `P2_to_P3_MEMControl`,
+  `P2_to_P3_WBcontrol`, `P3ALUres_to_DMup`, `RdP4_to_FU`,
+  `P4EB_to_FWD_unit`, `P2_to_FDU_rs1`, `P2_to_FDU_RS2`;
+- h_nf, 3 of 21: `P2_to_P3_MEMControl`, `P2_to_P3_WBcontrol`,
+  `P3ALUres_to_DMup`;
+- nh_f, 5 of 22: `P3ALUres_to_DMup`, `RdP4_to_FU`, `P4EB_to_FWD_unit`,
+  `P2_to_FDU_rs1`, `P2_to_FDU_RS2`;
+- nh_nf, 0 of 22.
+
+The counts come from the same extraction as `wire_name_gate_test.cpp`.
+
+So on h_f the EX-stage control wires into EX/MEM, and the forwarding
+unit's inputs, look permanently busy. The forwarding tests already rely
+on this: they assert only on the three FDU outputs because the inputs
+are backbone (`forwarding_wire_test.cpp`,
+`TheBackboneWiresAreOnWhateverTheGuardDecides`).
+
+Not changed. Removing a name from the backbone changes what every cycle
+draws, and it is a question about the drawing: should an idle control
+wire be dark? That belongs with the frame review, not with the timing
+fix.
