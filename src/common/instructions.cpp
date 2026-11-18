@@ -772,6 +772,19 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"slt", {SyntaxType::O_GPR_C_GPR_C_GPR}},
     {"sltu", {SyntaxType::O_GPR_C_GPR_C_GPR}},
 
+    // The base RV64 W forms. Their encodings and both executors were in
+    // place; without these rows the parser rejected all nine (known_issues
+    // 109). The M-extension W forms are listed with the M extension below.
+    {"addw", {SyntaxType::O_GPR_C_GPR_C_GPR}},
+    {"subw", {SyntaxType::O_GPR_C_GPR_C_GPR}},
+    {"sllw", {SyntaxType::O_GPR_C_GPR_C_GPR}},
+    {"srlw", {SyntaxType::O_GPR_C_GPR_C_GPR}},
+    {"sraw", {SyntaxType::O_GPR_C_GPR_C_GPR}},
+    {"addiw", {SyntaxType::O_GPR_C_GPR_C_I}},
+    {"slliw", {SyntaxType::O_GPR_C_GPR_C_I}},
+    {"srliw", {SyntaxType::O_GPR_C_GPR_C_I}},
+    {"sraiw", {SyntaxType::O_GPR_C_GPR_C_I}},
+
     {"addi", {SyntaxType::O_GPR_C_GPR_C_I}},
     {"xori", {SyntaxType::O_GPR_C_GPR_C_I}},
     {"ori", {SyntaxType::O_GPR_C_GPR_C_I}},

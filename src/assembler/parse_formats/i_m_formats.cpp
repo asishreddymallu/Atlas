@@ -99,7 +99,12 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
 
             if (instruction_set::isValidI2TypeInstruction(block.getOpcode()))
             {
-                if (0 <= imm && imm <= 63)
+                // RV64: shamt is 6 bits for slli/srli/srai, 5 bits for the
+                // W forms, whose shamt[5] = 1 encodings are reserved.
+                const std::string &op = block.getOpcode();
+                const bool word = op == "slliw" || op == "srliw" || op == "sraiw";
+                const int64_t max_shamt = word ? 31 : 63;
+                if (0 <= imm && imm <= max_shamt)
                 {
                     block.setImm(std::to_string(imm));
                 }
@@ -108,7 +113,8 @@ bool Parser::parse_O_GPR_C_GPR_C_I()
                     recordError(
                         ParseError(peekToken(5).line_number, peekToken(5).column_number, peekToken(5).end_column, "Immediate value out of range", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                     errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
-                        "Immediate value out of range", "Expected: 0 <= imm <= 63", filename_,
+                        "Immediate value out of range",
+                        word ? "Expected: 0 <= imm <= 31" : "Expected: 0 <= imm <= 63", filename_,
                         peekToken(5).line_number, peekToken(5).column_number,
                         GetLineFromFile(filename_, peekToken(5).line_number)));
                     skipCurrentLine();

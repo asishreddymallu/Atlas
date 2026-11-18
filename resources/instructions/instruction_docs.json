@@ -318,81 +318,63 @@
       "category": "arithmetic",
       "format": "addiw rd, rs1, imm",
       "summary": "32-bit add of rs1 and imm, result sign-extended to 64 bits",
-      "example": "addiw x5, x6, 1",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "addiw x5, x6, 1"
     },
     "slliw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "slliw rd, rs1, shamt",
       "summary": "32-bit shift left by a constant, result sign-extended to 64 bits",
-      "example": "slliw x5, x6, 3",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "slliw x5, x6, 3"
     },
     "srliw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "srliw rd, rs1, shamt",
       "summary": "32-bit logical shift right by a constant, result sign-extended",
-      "example": "srliw x5, x6, 3",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "srliw x5, x6, 3"
     },
     "sraiw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sraiw rd, rs1, shamt",
       "summary": "32-bit arithmetic shift right by a constant, result sign-extended",
-      "example": "sraiw x5, x6, 3",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "sraiw x5, x6, 3"
     },
     "addw": {
       "ext": "RV64I",
       "category": "arithmetic",
       "format": "addw rd, rs1, rs2",
       "summary": "32-bit add, result sign-extended to 64 bits",
-      "example": "addw x5, x6, x7",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "addw x5, x6, x7"
     },
     "subw": {
       "ext": "RV64I",
       "category": "arithmetic",
       "format": "subw rd, rs1, rs2",
       "summary": "32-bit subtract, result sign-extended to 64 bits",
-      "example": "subw x5, x6, x7",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "subw x5, x6, x7"
     },
     "sllw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sllw rd, rs1, rs2",
       "summary": "32-bit shift left by the low 5 bits of rs2, result sign-extended",
-      "example": "sllw x5, x6, x7",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "sllw x5, x6, x7"
     },
     "srlw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "srlw rd, rs1, rs2",
       "summary": "32-bit logical shift right by the low 5 bits of rs2, result sign-extended",
-      "example": "srlw x5, x6, x7",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "srlw x5, x6, x7"
     },
     "sraw": {
       "ext": "RV64I",
       "category": "shift",
       "format": "sraw rd, rs1, rs2",
       "summary": "32-bit arithmetic shift right by the low 5 bits of rs2, result sign-extended",
-      "example": "sraw x5, x6, x7",
-      "support": "unsupported",
-      "reason": "Listed in instructions.json and encoded, but the parser has no syntax entry for it, so the assembler reports an invalid-syntax error."
+      "example": "sraw x5, x6, x7"
     },
     "mul": {
       "ext": "M",
