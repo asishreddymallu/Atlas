@@ -56,6 +56,13 @@ MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
     // every column is numeric, so the headers read right too
     applyDataTableStyle(ui->memoryTableView, Qt::AlignRight | Qt::AlignVCenter);
     ui->memoryTableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    // The Double Word header now names the byte order, and "Double Word (LE)"
+    // does not fit in an equal tenth of the table - it rendered clipped, as
+    // "...Word (LE)", which is exactly the ambiguity the suffix is there to
+    // remove. One section sized to its contents, the same per-section
+    // override the register tables use (register_container.cpp:113-116).
+    ui->memoryTableView->horizontalHeader()->setSectionResizeMode(
+        1, QHeaderView::ResizeToContents);
 
     QRegularExpression re("0x[0-9a-fA-F]+$");
     QRegularExpressionValidator *validator = new QRegularExpressionValidator(re, this);

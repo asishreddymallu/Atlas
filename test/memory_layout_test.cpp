@@ -43,6 +43,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QFontMetrics>
+#include <QHeaderView>
 #include <QTableView>
 #include <QToolButton>
 #include <QWidget>
@@ -228,6 +230,35 @@ TEST(MemoryPanelLayout, TheByteOrderComboDrivesTheModel)
     order->setCurrentText(QStringLiteral("Little"));
     EXPECT_EQ(ui.memory->byteOrder(), ByteOrder::Little);
     EXPECT_EQ(header(), "Double Word (LE)");
+}
+
+TEST(MemoryPanelLayout, TheDoubleWordHeaderIsWideEnoughToReadInBothOrders)
+{
+    // The suffix exists so the order on screen is never ambiguous, which
+    // it cannot do if it is clipped. The first after-screenshot of this
+    // stage showed exactly that: ten equal-width columns, and a header
+    // reading "...Word (LE)".
+    Window ui;
+    ASSERT_TRUE(ui.complete());
+
+    auto *table = ui.memory->findChild<QTableView *>("memoryTableView");
+    ASSERT_NE(table, nullptr);
+    ASSERT_NE(table->model(), nullptr);
+    QHeaderView *header = table->horizontalHeader();
+    ASSERT_NE(header, nullptr);
+
+    for (ByteOrder order : {ByteOrder::Little, ByteOrder::Big})
+    {
+        ui.memory->setByteOrder(order);
+        QApplication::processEvents();
+
+        const QString text =
+            table->model()->headerData(1, Qt::Horizontal, Qt::DisplayRole).toString();
+        const int needed = QFontMetrics(header->font()).horizontalAdvance(text);
+        EXPECT_GE(header->sectionSize(1), needed)
+            << "'" << text.toStdString() << "' is clipped: the section is "
+            << header->sectionSize(1) << "px and the text needs " << needed << "px";
+    }
 }
 
 TEST(MemoryPanelLayout, TheRibbonStillDrivesTheWidgetsThatMovedToTheTop)
