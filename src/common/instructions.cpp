@@ -958,20 +958,23 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
 
     {"fclass.d", {SyntaxType::O_GPR_C_FPR}},
 
+    // The rounding-mode form's operand classes must match the plain form's
+    // (rd, then rs1). These eight rows named the opposite classes, so no
+    // explicit-rm form of them assembled (known_issues 114).
     {"fcvt.w.d",
-     {SyntaxType::O_GPR_C_FPR, SyntaxType::O_FPR_C_GPR_C_RM}}, // f64->int32, sign extends
+     {SyntaxType::O_GPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // f64->int32, sign extends
     {"fcvt.wu.d",
-     {SyntaxType::O_GPR_C_FPR, SyntaxType::O_FPR_C_GPR_C_RM}}, // f64->uint32, sign extends
-    {"fcvt.l.d", {SyntaxType::O_GPR_C_FPR, SyntaxType::O_FPR_C_GPR_C_RM}},  // f64->int64
-    {"fcvt.lu.d", {SyntaxType::O_GPR_C_FPR, SyntaxType::O_FPR_C_GPR_C_RM}}, // f64->uint64
+     {SyntaxType::O_GPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // f64->uint32, sign extends
+    {"fcvt.l.d", {SyntaxType::O_GPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}},  // f64->int64
+    {"fcvt.lu.d", {SyntaxType::O_GPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // f64->uint64
 
-    {"fcvt.d.w", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_GPR_C_FPR_C_RM}},  // int32->f64
-    {"fcvt.d.wu", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // uint32->f64
+    {"fcvt.d.w", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_FPR_C_GPR_C_RM}},  // int32->f64
+    {"fcvt.d.wu", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_FPR_C_GPR_C_RM}}, // uint32->f64
     {"fcvt.d.l", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_FPR_C_GPR_C_RM}},  // int64->f64
     {"fcvt.d.lu", {SyntaxType::O_FPR_C_GPR, SyntaxType::O_FPR_C_GPR_C_RM}}, // uint64->f64
 
-    {"fcvt.s.d", {SyntaxType::O_FPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // f64->f32
-    {"fcvt.d.s", {SyntaxType::O_FPR_C_FPR, SyntaxType::O_GPR_C_FPR_C_RM}}, // f32->f64
+    {"fcvt.s.d", {SyntaxType::O_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_RM}}, // f64->f32
+    {"fcvt.d.s", {SyntaxType::O_FPR_C_FPR, SyntaxType::O_FPR_C_FPR_C_RM}}, // f32->f64
 
     {"fmv.x.d", {SyntaxType::O_GPR_C_FPR}}, // x[n][0:63] to f[m][0:63], 64-bit floating-point value
                                             // from an f (floating-point) register into an x
