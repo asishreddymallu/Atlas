@@ -430,8 +430,11 @@ TEST_P(EcallSyscall, ExitKeepsAStoreJustBeforeItAndDropsOneAfter)
     QTemporaryDir dir;
     ASSERT_TRUE(dir.isValid());
     const std::vector<std::string> lines = {
-        "li a1, 0x10000000", "li t0, 1234", "li a0, 0",    "li a7, 10",
-        "sd t0, 0(a1)",      "ecall",       "li s3, 9",    "sd s3, 8(a1)"};
+        "li a1, 0x10000000", "li t0, 1234", "li a0, 0", "li a7, 10",
+        "sd t0, 0(a1)",      "ecall",
+        // Right after the ecall: in EX/MEM, one step from writing memory,
+        // when the ecall writes back. Only the flush keeps it out.
+        "sd t0, 8(a1)",      "li s3, 9"};
     forEachPadding(GetParam(),
         [&](Model model, bool padded)
         {
