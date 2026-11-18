@@ -269,10 +269,22 @@ TEST(MemoryPanelLayout, TheRibbonStillDrivesTheWidgetsThatMovedToTheTop)
     QObject::connect(button, &QPushButton::clicked, &ui.window, [&clicks] { ++clicks; });
     RibbonGroup *find = pageGroupNamed(ui.bar, MainWindow::MemoryTabIndex, "Find");
     ASSERT_NE(find, nullptr);
+    const QString topBefore = table->model()->index(0, 0).data().toString();
     search->setText(QStringLiteral("0x100"));
     buttonNamed(find, "Search")->click();
     EXPECT_EQ(clicks, 1) << "the ribbon stopped going through the tab's button";
-    EXPECT_EQ(table->model()->index(0, 0).data().toString().toStdString(), "0x100");
+
+    // setCentralAddress puts the address in the MIDDLE of the window, and
+    // this window is shown, so the view is many rows tall and row 0 is the
+    // highest address on screen rather than the one searched for. The
+    // check is that the address is now in view and that the view moved.
+    bool inView = false;
+    for (int r = 0; r < table->model()->rowCount(); ++r)
+        if (table->model()->index(r, 0).data().toString() == QStringLiteral("0x100"))
+            inView = true;
+    EXPECT_TRUE(inView) << "the table did not move to the searched address; the top row is "
+                        << table->model()->index(0, 0).data().toString().toStdString();
+    EXPECT_NE(table->model()->index(0, 0).data().toString(), topBefore);
 }
 
 TEST(RegisterPanelLayout, TheRibbonStillDrivesTheComboThatMovedToTheTop)
