@@ -24,6 +24,16 @@
  * counting happens in `ProfilerEditor::m_lineNumberToExecutionCounts`
  * (`profiler_editor.cpp:113`), on the far side of the signal. The
  * emission is therefore what "the profiler received a count" means here.
+ *
+ * And it drives the program with Step rather than Run. `LoadProgram`
+ * plants a breakpoint at `program_size_` (`processor_base.cpp:257`), and
+ * the rv5s loop keeps going past that address while the pipeline drains
+ * (`rv5s_processor_base.cpp:11`), so it lands on that breakpoint, sets
+ * `pause_requested_` and waits on `pause_wait_condition_` forever
+ * (`:20-33`) with nobody to resume it. Measured: this test hung in that
+ * wait on every rv5s model until it was rewritten to Step. RVSS does not,
+ * because its loop ends at `program_counter_ < program_size_`
+ * (`rvss_processor.cpp:117`) and never reaches the address.
  */
 #include "assembler/assembler.h"
 #include "processor/processor_manager.h"
@@ -78,8 +88,15 @@ std::string nameOf(ProcessorType type)
     }
 }
 
-/// Runs the program once and returns how many line-count increments the
-/// profiler was handed. `switchTo == nullptr` means "do not switch".
+/// Enough cycles for three instructions to retire on the slowest of the
+/// five, with room to spare; the loop stops as soon as they have.
+constexpr int kStepBudget = 32;
+constexpr unsigned int kInstructions = 3;
+
+/// Steps the program through the manager - the same call the toolbar's
+/// Step button makes (`main_window.cpp:400`) - and returns how many
+/// line-count increments the profiler was handed.
+/// `switchTo == nullptr` means "do not switch".
 int countsAfter(const QTemporaryDir &dir, const ProcessorType *switchTo)
 {
     ProcessorManager manager;
@@ -91,13 +108,16 @@ int countsAfter(const QTemporaryDir &dir, const ProcessorType *switchTo)
     if (switchTo)
         manager.changeProcessor(*switchTo);
 
-    // `Run()` waits step_delay_ ms after every step
-    // (`rv5s_processor_base.cpp:46`) and the default is 1000
-    // (`processor_base.h:178`). changeProcessor re-applies the manager's
-    // remembered delay, so this is set after the switch.
+    // changeProcessor re-applies the manager's remembered delay
+    // (`processor_manager.cpp:69`), which starts at 1000 ms, so this is
+    // set after the switch. Step does not wait on it, but nothing here
+    // should depend on that.
     manager.setStepDelay(0);
     manager.loadProgram(programOnDisk(dir));
-    manager.run();
+
+    for (int i = 0; i < kStepBudget && manager.getInstructionsRetired() < kInstructions; ++i)
+        manager.step();
+
     return fired;
 }
 } // namespace
