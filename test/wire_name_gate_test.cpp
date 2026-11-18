@@ -15,9 +15,9 @@
  * disk rather than asking a running processor, for two reasons: the
  * conditional branches of `SetActiveWireNames` cannot all be reached by
  * any one program, so a run-time union would under-report; and
- * `kites_test` does not link the compiled .qrc, so `:/circuit_designs/*`
- * does not resolve here (the same reason `ribbon_navigation_test.cpp`
- * sees null icons). Reading `../resources/...` also checks the file a
+ * `kites_test` does not link the compiled .qrc, so a `:/circuit_designs`
+ * resource path does not resolve here (the same reason
+ * `ribbon_navigation_test.cpp` sees null icons). Reading `../resources/...` also checks the file a
  * human edits rather than a copy baked into a binary.
  *
  * Relative paths: ctest runs this with the working directory set to
