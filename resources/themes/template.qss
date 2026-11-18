@@ -20,6 +20,18 @@ QMainWindow, QDialog {
     background-color: {{background}};
 }
 
+/* A disabled check box has to LOOK disabled. The palette says so -
+ * ThemeManager fills QPalette::Disabled with mutedForeground
+ * (theme_manager.cpp:337-342) - but the QWidget rule above sets `color`
+ * for every widget in every state, and a stylesheet colour overrides the
+ * palette, so without a rule of its own a greyed box renders exactly
+ * like a live one. The buttons already have theirs further down; this is
+ * the same thing for the one control that is enabled conditionally.
+ * Every other widget class is still affected: see known_issues 88. */
+QCheckBox:disabled {
+    color: {{mutedForeground}};
+}
+
 /* ── Sidebar / lists ───────────────────────────────────────────── */
 QListWidget {
     background-color: {{surface}};
