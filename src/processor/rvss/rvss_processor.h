@@ -83,6 +83,10 @@ class RVSSProcessor : public ProcessorBase
     void Reset() override;
 
     void SetActiveWireNames() override;
+    /// The one CI cell: the instruction just executed - the one the wires
+    /// describe (current_instruction_ at last_executed_pc_). Undo does not
+    /// restore current_instruction_; see known_issues 97.
+    QList<StageCell> stageCells() const override;
     void setProcessorState() override;
 
     void PrintType()

@@ -32,8 +32,8 @@ RVSSProcessor::RVSSProcessor() : ProcessorBase()
     DumpState(globals::vm_state_dump_file_path);
 #ifndef DISABLE_GUI
     circuit_scene_ = std::make_unique<Kites::RVSSCircuitScene>();
-    connect(this, &ProcessorBase::updateCircuitStateSignal, circuit_scene_.get(),
-            &Kites::RVSSCircuitScene::updateCircuitState, Qt::QueuedConnection);
+    connect(this, &ProcessorBase::circuitSnapshotSignal, circuit_scene_.get(),
+            &Kites::RVSSCircuitScene::updateCircuitSnapshot, Qt::QueuedConnection);
 #endif
 
     // IM_to_PC_pc and PC_to_IM_instruction used to head this list.
@@ -62,6 +62,13 @@ RVSSProcessor::RVSSProcessor() : ProcessorBase()
 }
 
 RVSSProcessor::~RVSSProcessor() = default;
+
+QList<StageCell> RVSSProcessor::stageCells() const
+{
+    if (last_executed_pc_ == INVALID_PC)
+        return {StageCell{}};
+    return {StageCell{current_instruction_, last_executed_pc_}};
+}
 
 void RVSSProcessor::SetActiveWireNames()
 {
@@ -1131,7 +1138,7 @@ void RVSSProcessor::DebugRun()
             DumpState(globals::vm_state_dump_file_path);
             // update circuit UI after the debug step
             SetActiveWireNames();
-            emit updateCircuitStateSignal(active_wires_);
+            emitCircuitState();
 
             //unsigned int delay_ms = vm_config::config.getRunStepDelay();
             // std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
@@ -1211,7 +1218,7 @@ bool RVSSProcessor::StepAndNotify()
     SetActiveWireNames();
     setProcessorState();
     emit processorClockedSignal(processor_state_);
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     active_wires_.erase(active_wires_.begin() + always_active_wires_count_,
                         active_wires_.end());
     // clear active wires after emitting signal except always active wires
@@ -1282,7 +1289,7 @@ void RVSSProcessor::Undo()
 
     SetActiveWireNames();
     setProcessorState();
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     emit processorClockedSignal(processor_state_);
     qInfo() << "Undo completed in rvss";
 }
@@ -1350,7 +1357,7 @@ void RVSSProcessor::Redo()
 
     SetActiveWireNames();
     setProcessorState();
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     emit processorClockedSignal(processor_state_);
 }
 

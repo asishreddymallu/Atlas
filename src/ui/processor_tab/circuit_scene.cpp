@@ -18,6 +18,8 @@
 #include <QLineEdit>
 #include <QTimer>
 #include <QJsonDocument>
+#include <QHash>
+#include "common/instructions.h"
 
 namespace Kites
 {
@@ -36,12 +38,8 @@ CircuitScene::CircuitScene(QObject *parent) : QGraphicsScene(parent)
             {
                 if (m_stayActive)
                     return;
-                for (QGraphicsItem *item : items())
-                {
-                    WireItem *wire = dynamic_cast<WireItem *>(item);
-                    if (wire)
-                        wire->setActive(false);
-                }
+                m_wiresShowing = false; // applyWireStates turns every wire off
+                applyWireStates();
                 update();
             });
 
@@ -155,32 +153,107 @@ void CircuitScene::mousePressEvent(QGraphicsSceneMouseEvent *mouseEvent)
 
 void CircuitScene::updateCircuitState(const QList<QString> &wireList)
 {
-    // Iterate through all items in the scene
-    // maybe i can make a different list of wires to optimize this
-
-    // some of the wires will always be active
-
-    for (QGraphicsItem *item : items())
-    {
-        // Check if the item is a WireItem
-        WireItem *wire = dynamic_cast<WireItem *>(item);
-        if (wire)
-        {
-            // Update the wire's state based on the wireList
-            if (wireList.contains(wire->getName()))
-            {
-                wire->setActive(true); // Example: set active if in the list
-            }
-            else
-            {
-                wire->setActive(false); // Otherwise, set inactive
-            }
-        }
-    }
+    // Names only, so no stages: with a stage selected every lit wire is
+    // drawn dimmed, and with none selected exactly as before.
+    m_litWires = wireList;
+    m_litStages.clear();
+    m_wiresShowing = true;
+    applyWireStates();
 
     // Request a redraw of the scene to reflect changes
     update();
     m_timer->start(); // restart the timer to turn off the wires after interval
+}
+
+void CircuitScene::updateCircuitSnapshot(const Kites::CircuitSnapshot &snapshot)
+{
+    m_cells = snapshot.cells;
+    fillInstructionTable();
+
+    m_litWires     = snapshot.wires;
+    m_litStages    = snapshot.stages;
+    m_wiresShowing = true;
+    applyWireStates();
+
+    update();
+    m_timer->start(); // restart the timer to turn off the wires after interval
+}
+
+void CircuitScene::setSelectedStages(quint8 stages)
+{
+    m_selectedStages = stages;
+    // Restyle only what is showing: once the off-timer has turned the wires
+    // off, a cursor move does not relight them.
+    if (m_wiresShowing)
+        applyWireStates();
+    fillInstructionTable();
+    update();
+}
+
+QColor CircuitScene::selectedColumnColor()
+{
+    // The lit-wire yellow, translucent, so the column reads as the same
+    // thing the emphasised wires are.
+    return QColor(255, 255, 0, 70);
+}
+
+void CircuitScene::applyWireStates()
+{
+    QHash<QString, quint8> stageOf;
+    for (qsizetype i = 0; i < m_litWires.size(); ++i)
+        stageOf[m_litWires[i]] |= (i < m_litStages.size() ? m_litStages[i] : kNoStage);
+
+    for (QGraphicsItem *item : items())
+    {
+        WireItem *wire = dynamic_cast<WireItem *>(item);
+        if (!wire)
+            continue;
+        const auto it = stageOf.constFind(wire->getName());
+        if (!m_wiresShowing || it == stageOf.constEnd())
+            wire->setState(WireItem::State::Off);
+        else if (m_selectedStages == kNoStage || (*it & m_selectedStages))
+            wire->setState(WireItem::State::Active);
+        else
+            wire->setState(WireItem::State::Dimmed);
+    }
+}
+
+void CircuitScene::fillInstructionTable()
+{
+    if (!m_instructionTable || m_instructionTable->rowCount() < 1)
+        return;
+
+    // Pipelined: columns IF/ID, ID/EX, EX/MEM, MEM/WB hold the instructions
+    // labelled ID, EX, MEM and WB. Single-cycle: one CI column, no stage.
+    const bool pipelined = m_columnKeys.size() == 4;
+    for (int column = 0; column < m_instructionTable->columnCount(); ++column)
+    {
+        const StageCell cell = column < m_cells.size() ? m_cells[column] : StageCell{};
+        auto *item = new QTableWidgetItem();
+        item->setTextAlignment(Qt::AlignCenter);
+
+        const bool hasPc = cell.pc != UINT64_MAX;
+        const QString pcText =
+            hasPc ? QStringLiteral("PC 0x%1").arg(cell.pc, 8, 16, QLatin1Char('0')) : QString();
+        if (cell.instruction == 0x00000013 || !hasPc) // NOP: a bubble, or nothing yet
+        {
+            item->setText(QStringLiteral("bubble"));
+            item->setForeground(QColor(128, 128, 128));
+            item->setToolTip(hasPc ? QStringLiteral("bubble (nop) at ") + pcText
+                                   : QStringLiteral("bubble"));
+        }
+        else
+        {
+            item->setText(QString::fromStdString(instruction_set::disassemble(cell.instruction)));
+            item->setToolTip(pcText);
+        }
+
+        const quint8 stage = pipelined ? stageBit(static_cast<WireStage>(column + 1)) : kNoStage;
+        if (stage & m_selectedStages)
+            item->setBackground(selectedColumnColor());
+
+        m_instructionTable->setItem(0, column, item);
+    }
 }
 
 void CircuitScene::loadScene(const QString &fileName)
@@ -365,5 +438,6 @@ void CircuitScene::loadScene(const QString &fileName)
     {
         fitTableToCircuit("pipeline");
     }
+    fillInstructionTable(); // every cell reads "bubble" until the first step
 }
 } // namespace Kites

@@ -96,6 +96,13 @@ class RV5StageVM_Base : public ProcessorBase
     /// fresh control unit - never control_unit_. A NOP decodes to all
     /// false, as pipeline_decode treats it.
     RV5SControlUnit idStageControl() const;
+
+  public:
+    /// The four pipeline registers, IF/ID to MEM/WB: the instructions the
+    /// ID, EX, MEM and WB labels show.
+    QList<StageCell> stageCells() const override;
+
+  protected:
     void Run() override; // run debug run adn reset are same across all rv5s vms
     bool StepAndNotify() override;
 

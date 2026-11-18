@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QMetaType>
 #include <QString>
 #include <QtGlobal>
 
@@ -34,4 +35,23 @@ constexpr quint8 stageBit(WireStage stage)
 
 /// The bitmask of a wire with no stage: backbone, or any RVSS wire.
 constexpr quint8 kNoStage = 0;
+
+/// One cell of the circuit view's stage table: the instruction a pipeline
+/// register holds, or for single-cycle the one just executed.
+struct StageCell
+{
+    uint32_t instruction = 0x00000013; // NOP (processor_constants.h)
+    uint64_t pc          = UINT64_MAX; // INVALID_PC
+};
+
+/// Everything the circuit view draws for one cycle, sent as one signal so
+/// the wires, their stages and the table can never come from two cycles.
+struct CircuitSnapshot
+{
+    QList<QString>   wires;  ///< active_wires_
+    QList<quint8>    stages; ///< active_wire_stages_, same length
+    QList<StageCell> cells;  ///< IF/ID, ID/EX, EX/MEM, MEM/WB - or the one CI cell
+};
 } // namespace Kites
+
+Q_DECLARE_METATYPE(Kites::CircuitSnapshot)

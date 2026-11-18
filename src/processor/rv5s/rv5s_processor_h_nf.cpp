@@ -30,8 +30,8 @@ RV5StageProcessorHNF::RV5StageProcessorHNF() : RV5StageVM_Base()
 {
 #ifndef DISABLE_GUI
     circuit_scene_ = std::make_unique<Kites::RV5StageVM_H_NF_CircuitScene>();
-    connect(this, &ProcessorBase::updateCircuitStateSignal, circuit_scene_.get(),
-            &Kites::RV5StageVM_H_NF_CircuitScene::updateCircuitState);
+    connect(this, &ProcessorBase::circuitSnapshotSignal, circuit_scene_.get(),
+            &Kites::RV5StageVM_H_NF_CircuitScene::updateCircuitSnapshot);
 #endif
     Reset();
 

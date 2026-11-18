@@ -584,6 +584,19 @@ void ProcessorBase::resetWiresToBackbone()
     active_wire_stages_ = QList<quint8>(backbone, kNoStage);
 }
 
+void ProcessorBase::emitCircuitState()
+{
+    CircuitSnapshot snapshot;
+    snapshot.wires  = active_wires_;
+    snapshot.stages = active_wire_stages_;
+    // RVSS appends without lightWire, so its stage list can be shorter;
+    // every wire past it is unstaged.
+    snapshot.stages.resize(snapshot.wires.size(), kNoStage);
+    snapshot.cells = stageCells();
+    emit updateCircuitStateSignal(active_wires_);
+    emit circuitSnapshotSignal(snapshot);
+}
+
 void ProcessorBase::lightWire(const QString &name, WireStage stage)
 {
     const qsizetype at = active_wires_.indexOf(name);

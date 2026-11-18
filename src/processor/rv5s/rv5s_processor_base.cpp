@@ -75,7 +75,7 @@ bool RV5StageVM_Base::StepAndNotify()
                     : 0.0f;
 
     setProcessorState();
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     emit processorClockedSignal(processor_state_);
     return program_counter_ < program_size_ || !is_pipeline_drained();
 }
@@ -230,6 +230,14 @@ bool RV5StageVM_Base::hazardUnitWillStall(bool forwarding) const
     ex_mem.mem_read          = id_ex.mem_read;
 
     return check_data_hazard(if_id, id_ex, ex_mem, forwarding) > 0;
+}
+
+QList<StageCell> RV5StageVM_Base::stageCells() const
+{
+    return {StageCell{if_id_reg_.instruction, if_id_reg_.pc},
+            StageCell{id_ex_reg_.instruction, id_ex_reg_.pc},
+            StageCell{ex_mem_reg_.instruction, ex_mem_reg_.pc},
+            StageCell{mem_wb_reg_.instruction, mem_wb_reg_.pc}};
 }
 
 RV5SControlUnit RV5StageVM_Base::idStageControl() const
@@ -988,7 +996,7 @@ void RV5StageVM_Base::Undo()
         cycle_s_ ? static_cast<float>(instructions_retired_) / static_cast<float>(cycle_s_) : 0.0f;
     setProcessorState();
     SetActiveWireNames();
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     emit processorClockedSignal(processor_state_);
 }
 
@@ -1049,7 +1057,7 @@ void RV5StageVM_Base::Redo()
         cycle_s_ ? static_cast<float>(instructions_retired_) / static_cast<float>(cycle_s_) : 0.0f;
     setProcessorState();
     SetActiveWireNames();
-    emit updateCircuitStateSignal(active_wires_);
+    emitCircuitState();
     emit processorClockedSignal(processor_state_);
 }
 

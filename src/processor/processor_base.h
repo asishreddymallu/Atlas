@@ -208,6 +208,14 @@ class ProcessorBase : public QObject
     /// the stage added to its mask; a backbone name is never tagged.
     void lightWire(const QString &name, WireStage stage);
 
+    /// The stage table's cells for the state the processor is in now. The
+    /// pipelined models return their four pipeline registers, RVSS the
+    /// instruction it just executed.
+    virtual QList<StageCell> stageCells() const { return {}; }
+    /// Sends the circuit view this cycle: updateCircuitStateSignal (names
+    /// only, as before) and circuitSnapshotSignal (names, stages, table).
+    void emitCircuitState();
+
 
     std::unique_ptr<CircuitScene> circuit_scene_; // Circuit scene for visualization
     UndoBuffer<StepDelta> m_undoBuffer{100};
@@ -327,6 +335,9 @@ class ProcessorBase : public QObject
     void processorClockedSignal(const ProcessorState &processorState);
     // this will send the list of wire that have to
     void updateCircuitStateSignal(const QList<QString> &wireList);
+    // the same cycle with each wire's stage and the stage table's cells;
+    // this is what the circuit scene is connected to
+    void circuitSnapshotSignal(const Kites::CircuitSnapshot &snapshot);
     // we emit this signal when vm is paused at breakpoint
     //  so that gui can chane paused button to resume
     void processorPausedAtBreakpointSignal();

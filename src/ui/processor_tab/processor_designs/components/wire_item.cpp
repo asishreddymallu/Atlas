@@ -9,6 +9,10 @@ WireItem::WireItem(const QPainterPath &path, QGraphicsItem *parent)
     // setFlag(QGraphicsItem::ItemIsMovable, true);
     m_activePen = QPen(Qt::yellow, 2, Qt::SolidLine);
     m_inactivePen = QPen(Qt::gray, 1, Qt::SolidLine);
+    // The lit colour at about a third of its opacity: still clearly a lit
+    // wire against the scene's black background, clearly not the selected
+    // stage's.
+    m_dimmedPen = QPen(QColor(255, 255, 0, 90), 2, Qt::SolidLine);
     setPen(m_inactivePen);
 }
 
@@ -24,13 +28,23 @@ void WireItem::setName(const QString &name)
 
 void WireItem::setActive(bool isActive)
 {
-    if (isActive)
+    setState(isActive ? State::Active : State::Off);
+}
+
+void WireItem::setState(State state)
+{
+    m_state = state;
+    switch (state)
     {
+    case State::Active:
         setPen(m_activePen);
-    }
-    else
-    {
+        break;
+    case State::Dimmed:
+        setPen(m_dimmedPen);
+        break;
+    case State::Off:
         setPen(m_inactivePen);
+        break;
     }
 }
 QRectF WireItem::boundingRect() const
