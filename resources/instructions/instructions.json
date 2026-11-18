@@ -164,6 +164,8 @@
         "bgtu",
         "bleu",
         "j",
-        "jr"
+        "jr",
+        "call",
+        "tail"
     ]
 }

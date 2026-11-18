@@ -70,7 +70,13 @@ bool Parser::parse_pseudo()
             }
             else
             {
-                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column, "Invalid label reference", DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
+                // la takes only .data labels here (a .text label is not
+                // supported - known_issues 111). Say so, and name the label:
+                // "Invalid label reference" alone did not.
+                recordError(ParseError(currentToken().line_number, currentToken().column_number, currentToken().end_column,
+                                       "la needs a label defined in .data; '" + label +
+                                           "' is not a .data label",
+                                       DiagnosticSeverity::Error, DiagnosticCategory::Assembler));
                 errors_.all_errors.emplace_back(errors::InvalidLabelRefError(
                     "Invalid label reference", "Expected: Label defined in .data section",
                     filename_, currentToken().line_number, currentToken().column_number,
@@ -906,7 +912,11 @@ bool Parser::parse_pseudo()
     }
 
     // j
-    else if (currentToken().value == "j")
+    // j, call and tail are all one jal (known_issues 111): call f = jal ra, f;
+    // tail f = jal x0, f, like j. One instruction and jal's +-1 MiB reach -
+    // not the two-instruction auipc + jalr - by the user's choice.
+    else if (currentToken().value == "j" || currentToken().value == "call" ||
+             currentToken().value == "tail")
     {
         if (peekToken(1).line_number == currentToken().line_number &&
             peekToken(1).type == TokenType::LABEL_REF &&
@@ -917,7 +927,7 @@ bool Parser::parse_pseudo()
             block.setOpcode("jal");
             block.setLineNumber(currentToken().line_number);
             block.setInstructionIndex(instruction_index_);
-            block.setRd("x0");
+            block.setRd(currentToken().value == "call" ? "x1" : "x0");
             if (symbol_table_.find(peekToken(1).value) != symbol_table_.end() &&
                 !symbol_table_[peekToken(1).value].isData)
             {

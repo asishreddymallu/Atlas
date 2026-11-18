@@ -1442,8 +1442,7 @@
       "format": "call label",
       "summary": "Call a subroutine: ra = return address, then jump to label",
       "example": "call label_t",
-      "support": "unsupported",
-      "reason": "Declared as a pseudo-instruction, but the parser has no expansion for it and rejects every form ('Expected: call <text label>')."
+      "expandsTo": "jal ra, label"
     },
     "tail": {
       "ext": "pseudo",
@@ -1451,8 +1450,7 @@
       "format": "tail label",
       "summary": "Tail call: jump to label without saving a return address",
       "example": "tail label_t",
-      "support": "unsupported",
-      "reason": "Declared as a pseudo-instruction, but the parser has no expansion for it and rejects every form ('Expected: tail <text label>')."
+      "expandsTo": "jal x0, label"
     }
   }
 }
