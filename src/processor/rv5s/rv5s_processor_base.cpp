@@ -555,9 +555,14 @@ void RV5StageVM_Base::pipeline_memory()
         // stall)
         if (is_F_Instruction)
         { // FLW
-
+            // Zero-extended, as rvss does: a single sits in the low 32 bits
+            // of the f register with the upper half zero (known_issues 71).
+            // This used to cast through int32_t, so any single with bit 31
+            // set - every negative value - came out 0xFFFFFFFF_xxxxxxxx on
+            // the pipelined models only (known_issues 74). fmv.x.w is the
+            // one that sign-extends, into an x register, by the spec.
             mem_wb_reg_.memory_data =
-                static_cast<int32_t>(memory_controller_.readWord(ex_mem_reg_.alu_result));
+                static_cast<uint32_t>(memory_controller_.readWord(ex_mem_reg_.alu_result));
             mem_wb_reg_.f_memory_data = mem_wb_reg_.memory_data;
         }
         else if (is_D_Instruction)
