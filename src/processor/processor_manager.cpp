@@ -17,6 +17,8 @@
 #include "processor/processor_manager.h"
 
 #include <QCoreApplication>
+#include <QMutexLocker>
+#include <algorithm>
 #include <QEvent>
 #include <QtGlobal>
 #include "common/globals.h"
@@ -76,6 +78,57 @@ void ProcessorManager::changeProcessor(ProcessorType vmType)
     connect(m_currentProcessor.get(), &ProcessorBase::processorClockedSignal, this,
             &ProcessorManager::processorClockedSignal, Qt::DirectConnection);
     // create new connections for the new VM
+
+    // The new processor has run nothing: no stage holds an instruction, so
+    // nothing is selected until the next clock. The cursor line is kept.
+    {
+        QMutexLocker lock(&m_selectionMutex);
+        m_lastProgramCounters.clear();
+    }
+    refreshSelectedStages();
+}
+
+void ProcessorManager::setSelectedSourceLine(int line)
+{
+    {
+        QMutexLocker lock(&m_selectionMutex);
+        m_selectedSourceLine = line;
+    }
+    refreshSelectedStages();
+}
+
+quint8 ProcessorManager::selectedStages() const
+{
+    QMutexLocker lock(&m_selectionMutex);
+    return m_selectedStages;
+}
+
+void ProcessorManager::refreshSelectedStages()
+{
+    quint8 stages = 0;
+    {
+        QMutexLocker lock(&m_selectionMutex);
+        // The inverse of updateEditorHighlight: stage i is selected when
+        // the instruction its label shows (programCounters[i], in the order
+        // IF, ID, EX, MEM, WB) comes from the cursor's line. RVSS has one
+        // "." marker and no stages, so it never selects.
+        if (m_currentProcessorType != ProcessorType::RVSS && m_selectedSourceLine > 0)
+        {
+            const auto &mapping = m_currentProgram.instruction_number_line_number_mapping;
+            const size_t count  = std::min<size_t>(m_lastProgramCounters.size(), 5);
+            for (size_t i = 0; i < count; ++i)
+            {
+                const uint64_t pc = m_lastProgramCounters[i];
+                if (pc == INVALID_PC)
+                    continue;
+                const auto it = mapping.find(static_cast<unsigned int>(pc / 4));
+                if (it != mapping.end() && static_cast<int>(it->second) == m_selectedSourceLine)
+                    stages |= stageBit(static_cast<WireStage>(i));
+            }
+        }
+        m_selectedStages = stages;
+    }
+    emit selectedStagesSignal(stages);
 }
 
 void ProcessorManager::loadProgram(const AssembledProgram &program)
@@ -176,6 +229,13 @@ void ProcessorManager::processorClockedSlot(const ProcessorState &processorState
 
 void ProcessorManager::updateEditorHighlight(const std::vector<uint64_t>& programCounters)
 {
+    // The circuit view's stage selection reads the same PCs.
+    {
+        QMutexLocker lock(&m_selectionMutex);
+        m_lastProgramCounters = programCounters;
+    }
+    refreshSelectedStages();
+
     // Nothing has been clocked yet, so there is no stage to point at.
     //
     // RVSSProcessor::Run() emits processorClockedSignal(processor_state_)

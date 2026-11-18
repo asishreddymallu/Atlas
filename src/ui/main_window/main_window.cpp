@@ -184,6 +184,31 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             });
     connect(&ThemeManager::getInstance(), &ThemeManager::themeChangedSignal, 
             this, &MainWindow::themeChangedSlot);
+
+    // Editor cursor -> the stages holding that line -> the circuit view.
+    // The manager also re-emits on every clock, and processorChanged()
+    // pushes the selection into a replaced scene. The second connection is
+    // auto: during a run the manager emits on the worker thread, so it is
+    // queued to this one.
+    if (auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]))
+    {
+        // Direct: the manager lives on the processor thread
+        // (moveToThread above), and the selection reads the program's line
+        // mapping, which loadProgram rewrites on this, the UI thread.
+        connect(editorTab, &EditorTab::cursorLineChangedSignal, m_processorManager,
+                &ProcessorManager::setSelectedSourceLine, Qt::DirectConnection);
+    }
+    connect(m_processorManager, &ProcessorManager::selectedStagesSignal, this,
+            [this](quint8)
+            {
+                // The manager's CURRENT selection, not the value carried: a
+                // queued emit can arrive late - stopping a paused run makes
+                // the old processor clock once more on the worker thread,
+                // and that selection would otherwise land on the scene of
+                // the processor that replaced it.
+                if (CircuitScene *scene = m_processorManager->getCircuitScene())
+                    scene->setSelectedStages(m_processorManager->selectedStages());
+            });
 }
 
 void MainWindow::setUpProblemsDock()
@@ -957,6 +982,10 @@ void MainWindow::processorChanged(const ProcessorType &vmType)
         cacheTab->changeMemoryController(m_processorManager->getMemoryController());
     }
     emit processorChangedSignal();
+    // The scene belongs to the processor, so a new processor brings a new
+    // scene that has never been told what is selected.
+    if (CircuitScene *scene = m_processorManager->getCircuitScene())
+        scene->setSelectedStages(m_processorManager->selectedStages());
 
     // Last, and from the manager rather than from vmType: changeProcessor
     // leaves m_currentProcessorType alone if the worker did not stop

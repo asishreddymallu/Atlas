@@ -151,6 +151,10 @@ signals:
     /// Diagnostics currently shown, each with originalLine resolved. Emitted
     /// empty by resetErrorLines() so the Problems dock clears with the editor.
     void diagnosticsChangedSignal(const QVector<Diagnostic> &diagnostics); 
+    /// The source editor's cursor moved; `line` is 1-based, the numbering
+    /// the assembler's line mapping and the stage labels use. The circuit
+    /// view selects the stages holding that line's instructions.
+    void cursorLineChangedSignal(int line);
 };
 } // namespace Kites
 #endif // EDITORTAB__H

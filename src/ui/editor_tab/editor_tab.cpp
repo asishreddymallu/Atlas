@@ -75,6 +75,8 @@ EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
     //         });
     connect(m_editor, &QPlainTextEdit::textChanged, this,
             [this]() { m_diagnosticsDebounceTimer->start(); });
+    connect(m_editor, &QPlainTextEdit::cursorPositionChanged, this,
+            [this]() { emit cursorLineChangedSignal(m_editor->textCursor().blockNumber() + 1); });
 }
 
 void EditorTab::requestLiveDiagnostics()

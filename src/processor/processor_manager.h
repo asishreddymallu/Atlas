@@ -12,6 +12,7 @@
 #include "profiler/profiler.h"
 #include "ui/processor_tab/circuit_scene.h"
 #include "processor_state.h"
+#include <QMutex>
 #include <QObject>
 #include <memory>
 #include <sstream>
@@ -64,6 +65,21 @@ public:
 
     void setBreakpoints(const std::vector<uint64_t> &breakpoints);
 
+    /**
+     * @brief The editor's cursor is on this 1-based source line.
+     *
+     * The selected stages are the stages whose instruction comes from that
+     * line - the inverse of the mapping that labels the editor
+     * (updateEditorHighlight). A pseudo-instruction expanding to several
+     * instructions can put the line in several stages; a line with nothing
+     * in the pipeline selects none. RVSS has no stages and never selects.
+     * Recomputed here, on every clock (step, Undo, Redo, run) and when the
+     * processor or program changes; emitted as selectedStagesSignal.
+     */
+    void setSelectedSourceLine(int line);
+    /// The current selection, a stageBit mask (WireStage IF..WB).
+    quint8 selectedStages() const;
+
     RegisterFile *getRegisterFile() const;
     MemoryController *getMemoryController() const;
     CircuitScene *getCircuitScene() const;
@@ -81,6 +97,15 @@ public:
     unsigned int getInstructionsRetired() const;
 private:
     void updateEditorHighlight(const std::vector<uint64_t>& programCounters);
+    /// Recomputes the selection from the stored line and PCs and emits it.
+    void refreshSelectedStages();
+
+    // Written on the worker thread during Run (processorClockedSlot is a
+    // DirectConnection) and on the UI thread by the editor, hence the mutex.
+    mutable QMutex        m_selectionMutex;
+    std::vector<uint64_t> m_lastProgramCounters;
+    int                   m_selectedSourceLine{-1};
+    quint8                m_selectedStages{0};
     // Maps the current program counter back to a 1-based editor source line,
     // or -1 if it isn't in the current program's mapping.
     int resolveCurrentSourceLine() const;
@@ -108,6 +133,8 @@ signals:
     // sourceLine is 1-based, or -1 if the failing PC couldn't be mapped back to a source line.
     void runErrorSignal(const QString &errorMessage, int sourceLine);
     void updateDisassemblySignal(const QString &disassemblyText);
+    /// The stages selected from the editor's cursor line (stageBit mask).
+    void selectedStagesSignal(quint8 stages);
     void updateEditorHighlightSignal(const std::vector<std::pair<int,std::string>> &editorLines, 
         const std::vector<std::pair<int,std::string>> &disassemblyLines);
     // std::unique_ptr<> m_instance;
