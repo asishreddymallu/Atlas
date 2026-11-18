@@ -183,8 +183,12 @@ alu::AluOp RV5SControlUnit::GetAluSignalFor(uint32_t instruction, uint8_t alu_op
                 return alu::AluOp::AND; // ANDI
             case 0b001:
                 return alu::AluOp::SLL; // SLLI
-            case 0b101:                  // For SRAI/SRLI, we need to check funct7
-                if (funct7 == 0b0100000)
+            case 0b101: // SRAI/SRLI: RV64 shamt is 6 bits, so shamt[5] is
+                        // bit 25 - the low bit of an RV32 "funct7". Tell
+                        // them apart by funct6 (bits 31:26), as rvss does;
+                        // funct7 made every srai by 32..63 an srli
+                        // (known_issues 106).
+                if (((instruction >> 26) & 0b111111) == 0b010000)
                     return alu::AluOp::SRA; // SRAI
                 return alu::AluOp::SRL;     // SRLI
             default:
