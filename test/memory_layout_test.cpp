@@ -190,6 +190,14 @@ TEST(MemoryPanelLayout, TheByteOrderControlIsInTheTopRowBesideDisplayType)
     // Same row as Display Type, within a control's height.
     EXPECT_LT(std::abs(topIn(ui.memory, order) - topIn(ui.memory, display)), display->height())
         << "the byte-order control is not on the controls row";
+
+    // And that row is the top one. Without this the test passed against a
+    // stub that put the control at the BOTTOM beside the old Display
+    // Type - "on the controls row" was true and useless.
+    auto *table = ui.memory->findChild<QTableView *>("memoryTableView");
+    ASSERT_NE(table, nullptr);
+    EXPECT_LE(bottomIn(ui.memory, order), topIn(ui.memory, table))
+        << "the byte-order control is below the table";
 }
 
 TEST(MemoryPanelLayout, TheByteOrderComboDrivesTheModel)
