@@ -12,6 +12,7 @@
 #include <QThread>
 #include <QWidget>
 
+class QLabel;
 class QSpinBox;
 
 namespace Kites
@@ -63,6 +64,11 @@ private:
     };
 
     void setUpStatusBar();
+    /// Writes the loaded processor into the status bar. Reads the type
+    /// back from the manager rather than trusting a requested one:
+    /// changeProcessor declines if the worker will not stop
+    /// (processor_manager.cpp:62-66), and then nothing changed.
+    void updateProcessorStatusLabel();
     /// Creates the execution QActions - Processor, Run, Debug Run, Pause,
     /// Step, Undo, Redo - and the execution-speed spin box, with their
     /// shortcuts, tooltips, icons and connections. They are displayed by the
@@ -114,6 +120,11 @@ private:
     QAction           *m_undoAction        {nullptr};
     QAction           *m_redoAction        {nullptr};
     QSpinBox          *m_stepDelaySpin     {nullptr};
+    // The permanent status-bar widget naming the loaded processor.
+    // Before this there was nothing anywhere in the chrome that said
+    // which of the five models was running; the window title is fixed
+    // and reopening the chooser was the only way to find out.
+    QLabel            *m_processorStatusLabel {nullptr};
     ProblemsDock      *m_problemsDock     {nullptr};
     RibbonBar         *m_ribbon            {nullptr};
     QStackedWidget    *m_stackedTabs       {nullptr};

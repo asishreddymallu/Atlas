@@ -1,4 +1,5 @@
 #include "processor_dialog.h"
+#include "processor/processor_choice.h"
 #include "ui_processor_dialog.h"
 
 namespace Kites
@@ -7,8 +8,42 @@ ProcessorDialog::ProcessorDialog(QWidget *parent, const ProcessorType &currentVM
     : QDialog(parent), ui(new Ui::ProcessorDialog)
 {
     ui->setupUi(this);
-    ui->treeWidget->setHeaderHidden(true);
-    ui->treeWidget->setCurrentItem(ui->treeWidget->topLevelItem(static_cast<int>(currentVMType)));
+
+    // The dialog opens on the processor that is loaded, read through the
+    // mapping rather than by indexing anything with the enum's value.
+    const ProcessorChoice choice = processorChoiceFor(currentVMType);
+    ui->pipelineRadio->setChecked(choice.pipeline);
+    ui->singleCycleRadio->setChecked(!choice.pipeline);
+    ui->hazardCheck->setChecked(choice.hazard);
+    ui->forwardingCheck->setChecked(choice.forwarding);
+
+    // Only the Pipeline radio changes what is enabled, but all three
+    // change the note, so all three come here.
+    connect(ui->pipelineRadio, &QRadioButton::toggled, this, &ProcessorDialog::refresh);
+    connect(ui->hazardCheck, &QCheckBox::toggled, this, &ProcessorDialog::refresh);
+    connect(ui->forwardingCheck, &QCheckBox::toggled, this, &ProcessorDialog::refresh);
+
+    refresh();
+}
+
+void ProcessorDialog::refresh()
+{
+    const bool pipeline = ui->pipelineRadio->isChecked();
+
+    // setEnabled, not setChecked: greying leaves the two boxes holding
+    // whatever the user last chose, so Pipeline -> Single-cycle ->
+    // Pipeline comes back to the same model.
+    ui->hazardCheck->setEnabled(pipeline);
+    ui->forwardingCheck->setEnabled(pipeline);
+
+    ui->noteLabel->setText(QString::fromUtf8(processorNote(
+        pipeline, ui->hazardCheck->isChecked(), ui->forwardingCheck->isChecked())));
+}
+
+ProcessorType ProcessorDialog::selectedType() const
+{
+    return processorTypeFor(ui->pipelineRadio->isChecked(), ui->hazardCheck->isChecked(),
+                            ui->forwardingCheck->isChecked());
 }
 
 ProcessorDialog::~ProcessorDialog()
@@ -18,33 +53,7 @@ ProcessorDialog::~ProcessorDialog()
 
 void ProcessorDialog::on_buttonBox_accepted()
 {
-    QTreeWidgetItem *selectedItem = ui->treeWidget->currentItem();
-    if (selectedItem)
-    {
-        m_currentSelectedItem = selectedItem;
-        QString processorType = selectedItem->text(0);
-        // all these names were set in processor_dialog.ui using qt Designer
-        if (processorType == "Single cycle processor")
-        {
-            emit vmSelected(ProcessorType::RVSS);
-        }
-        else if (processorType == "5 statge Processor w/o hazard detection w/o forwarding")
-        {
-            emit vmSelected(ProcessorType::RV5Stage_NH_NF);
-        }
-        else if (processorType == "5 statge Processor w/ hazard detection w/o forwarding")
-        {
-            emit vmSelected(ProcessorType::RV5Stage_H_NF);
-        }
-        else if (processorType == "5 statge Processor w/o hazard detection w/ forwarding")
-        {
-            emit vmSelected(ProcessorType::RV5Stage_NH_F);
-        }
-        else if (processorType == "5 statge Processor w/ hazard detection w/ forwarding")
-        {
-            emit vmSelected(ProcessorType::RV5Stage_H_F);
-        }
-    }
+    emit vmSelected(selectedType());
 }
 
 } // namespace Kites

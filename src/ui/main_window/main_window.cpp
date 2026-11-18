@@ -3,6 +3,7 @@
 #include "common/assembled_program.h"
 #include "common/globals.h"
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
+#include "processor/processor_choice.h"
 #include "processor/processor_manager.h"
 #include "ui/cache_tab/cache_tab.h"
 #include "ui/compiler_tab/compiler_tab.h"
@@ -222,8 +223,28 @@ void MainWindow::setUpProblemsDock()
 void MainWindow::setUpStatusBar()
 {
     QStatusBar *statusBar = this->statusBar();
+
+    // Added before "Ready" so that it sits to its left and "Ready" stays
+    // where it has always been, hard against the right edge.
+    m_processorStatusLabel = new QLabel(this);
+    m_processorStatusLabel->setObjectName("processorStatusLabel");
+    m_processorStatusLabel->setToolTip("The processor model this window is running");
+    statusBar->addPermanentWidget(m_processorStatusLabel);
+    updateProcessorStatusLabel();
+
     QLabel *statusLabel = new QLabel("Ready", this);
     statusBar->addPermanentWidget(statusLabel);
+}
+
+void MainWindow::updateProcessorStatusLabel()
+{
+    if (!m_processorStatusLabel || !m_processorManager)
+    {
+        return;
+    }
+    m_processorStatusLabel->setText(
+        QStringLiteral("Processor: ") +
+        QString::fromUtf8(processorDescription(m_processorManager->getProcessorType())));
 }
 
 void MainWindow::setUpExecutionActions()
@@ -936,6 +957,12 @@ void MainWindow::processorChanged(const ProcessorType &vmType)
         cacheTab->changeMemoryController(m_processorManager->getMemoryController());
     }
     emit processorChangedSignal();
+
+    // Last, and from the manager rather than from vmType: changeProcessor
+    // leaves m_currentProcessorType alone if the worker did not stop
+    // (processor_manager.cpp:62-66), and the status bar must say what is
+    // loaded, not what was asked for.
+    updateProcessorStatusLabel();
 
     // well also have to change the processor design from here later
 }
