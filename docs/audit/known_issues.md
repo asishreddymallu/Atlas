@@ -5066,7 +5066,7 @@ No value changes. Not fixed: E2 records it.
 
 ---
 
-## 106. rv5s executes `srai` with a shift of 32 or more as `srli`
+## 106. FIXED: rv5s executed `srai` with a shift of 32 or more as `srli`
 
 RV64 `srai` keeps shamt[5] in bit 25. The rv5s ALU control tests
 `funct7 == 0b0100000` (`rv5s_control_unit.cpp:187`). With shamt >= 32,
@@ -5084,9 +5084,23 @@ The ISA sweep found 6 such programs per pipeline: shamt 32 and 63 with
 x6 = -1, INT64_MIN and INT32_MIN. `srli` and `slli` are unaffected. `sraiw`
 could not be tested (109). Not fixed in E2.
 
+**Fixed in E3 (`c53dc4d`; test `b0fbdb1`).** The check now reads funct6,
+bits 31:26 (`rv5s_control_unit.cpp:191`), as rvss does. The W path
+(`sraiw`) was already right: its shamt has five bits.
+
+`test/shift_immediate_test.cpp` covers slli/srli/srai at every shamt
+0..63 and slliw/srliw/sraiw at 0..31, with three inputs, on all five
+models, against a Python oracle (`~/atlas-verify/e3/gen_shift.py`); 90
+tests.
+- **Red:** 8 tests, `sraiMsb1Lsb1` and `sraiAllOnes` on the four
+  pipelines. That is 256 wrong results, exactly shamt 32..63 for each.
+  The positive input cannot tell srai from srli.
+- **Control** (the fix reverted alone): the same 8 names.
+- **Sweep after E3:** 0 srai divergences.
+
 ---
 
-## 107. rvss rounds double-precision ops in whatever mode the last FP load left
+## 107. FIXED: rvss rounded double-precision ops in whatever mode the last FP load left
 
 Two defects compound:
 1. **rvss never maps a dynamic rounding mode for doubles.**
@@ -5114,9 +5128,50 @@ fsub.d, fmul.d, fdiv.d, fsqrt.d and the D conversions. For example,
 `fcvt.l.d` of -1.5 gives -1 on rvss and -2 on the pipelines; -2 is
 correct for RNE.
 
-The leak is process-wide: it changes the host's rounding mode for every
-later floating-point calculation in the process, GUI included. Not
-measured beyond the simulator. Not fixed in E2.
+~~The leak is process-wide~~ **Corrected in E3:** the leak is per
+thread, not process-wide. C11 gives the floating-point environment
+thread storage duration. It lands on whichever thread executes the
+instruction: the Run worker, or the GUI thread itself when the user
+steps (`ProcessorManager::step()` runs `StepAndNotify()` on the UI
+thread). Not fixed in E2.
+
+### Fixed in E3 (`224cccb`; test `9592fb0`)
+
+1. `RVSSProcessor::ExecuteDouble` maps rm = 0b111 to `frm`
+   (`rvss_processor.cpp:390`), as `ExecuteFloat` does (`:348`).
+2. A `RoundingModeGuard` (`alu.cpp:365`) restores the calling thread's
+   mode on every return path of `fpexecute` and `dfpexecute`
+   (`alu.cpp:393`, `:776`). The hand-written restores are now
+   redundant and were left in place.
+
+108 (fcsr after D ops) is untouched.
+
+`test/double_rounding_test.cpp` has 771 tests, from
+`~/atlas-verify/e3/gen_dround.py`:
+- 59 DYN cases after an `fld`, against Python's IEEE doubles (RNE);
+- 94 explicit rtz/rdn/rup/rmm cases on fadd.d/fmul.d/fcvt.l.d, against
+  an exact `Fraction` rounding. RMM ties are left out (113);
+- the 32 explicit-rm conversion encodings (114);
+- a check per model that the host thread's rounding mode is unchanged
+  after a run, starting from each of the four modes.
+
+**Red** (`9592fb0`), 191 tests:
+- 107: 20 DYN cases on rvss, 25 non-tie RMM cases on all five models
+  (inheriting the leaked round-up), and the 5 host-mode tests;
+- 114: 141 tests (below).
+
+**Control** (107's fix reverted alone): 65 tests. That is the 20 DYN
+cases on rvss, 40 non-tie RMM cases (fadd 15, fcvt.l.d 15, fmul 10) and
+the 5 host-mode tests. The explicit fcvt.l.d RMM cases now count here,
+because 114 is fixed.
+
+**Sweep after E3:** 0 non-fcsr divergences. The 27 programs of E2's
+107 class agree.
+
+**Gates:** livesweep and modelsweep each changed exactly 14 rvss rows:
+`fcvt.{l,lu,w,wu}.d` of 2.5 and 7.25, and `fdiv.d B` / `fsqrt.d B`.
+Every new value equals Python's RNE result (2.5 → 2, 7.25 → 7,
+7.25/2.5 = `0x4007333333333333`, √7.25 = `0x40058A68A4A8D9F3`).
 
 ---
 
@@ -5133,9 +5188,14 @@ pipeline where fcsr differs; every one is a D op. It is the plumbing
 that 72 describes, but 72 does not record that the models *disagree*. A
 fix for 72 has to cover rvss's double path too. Not fixed in E2.
 
+**E3 re-run** (6393 programs, now including explicit-rm D programs): 487
+programs per pipeline differ from rvss, and every differing field is
+fcsr. This is now the only kind of rvss-vs-pipeline divergence in the
+sweep. Still open, tied to 72.
+
 ---
 
-## 109. The base RV64 W instructions do not assemble
+## 109. FIXED: the base RV64 W instructions did not assemble (and their immediates read as 0)
 
 `addw subw sllw srlw sraw addiw slliw srliw sraiw` are in the
 encoder's table (`instruction_string_map`, e.g. `instructions.cpp:203`
@@ -5153,9 +5213,46 @@ Found by the ISA sweep: 433 of its 4935 programs could not be assembled.
 Those are the 11 mnemonics above, plus `fclass.s`/`fclass.d`, which are
 known (52). Not fixed in E2.
 
+### Fixed in E3 (`f43ed4f`; test `63ebb5b`)
+
+Fixing the table exposed a **second defect**: `ImmGenerator` had no
+case for OP-IMM-32 (`0b0011011`). So every addiw/slliw/srliw/sraiw
+immediate read as **0** on all five models. `sext.w` (immediate 0)
+hid it.
+
+The fixes:
+- the nine syntax rows (`instructions.cpp:778`);
+- OP-IMM-32 in `ImmGenerator`'s I-type group (`processor_base.cpp:365`);
+- the W shift-immediates limited to 0..31 (RV64 reserves shamt[5];
+  `i_m_formats.cpp:106`);
+- the instruction docs and the editor's instruction list now offer the
+  nine, as `InstructionDocs`' two pinning tests require.
+
+The old names `fmv.s.x`/`fmv.x.s` still do not assemble; they were left
+alone.
+
+`test/w_forms_test.cpp` has 202 tests, from `~/atlas-verify/e3/gen_w.py`:
+- 29 encodings against a spec-layout encoder;
+- 40 programs on all five models against a Python RV64IM oracle:
+  32-bit wrap, sign extension, register shift counts 0/31/32/63, shamt
+  0/31, rd = x0, rs1 = rd, and the M-extension W forms and negw/sext.w
+  as regression cases;
+- shamt 32 rejected.
+
+**Red:** 142 of 202. That is every case using the nine, plus the
+encoding and range tests. The 60 regression tests passed.
+
+**Control** (the fix reverted alone): 147 failing. These are the same
+cases, plus the 5 `LiExpansion` tests, because the 110 fix's `addiw`
+needs the immediate.
+
+**Sweep after E3:** the W forms run in 2498 oracle programs (63
+mnemonics) with 0 mismatches. The only W errors left are the
+deliberately rejected shamt 32/63.
+
 ---
 
-## 110. `li` of 0x7FFFFFFF loads 0xFFFFFFFF7FFFFFFF
+## 110. FIXED: `li` of 0x7FFFF800..0x7FFFFFFF loaded 0xFFFFFFFF7FFFFxxx
 
 `emitLi32` splits a 32-bit value as
 `upper = (v + 2048) >> 12; lower = v - (upper << 12)`
@@ -5171,9 +5268,37 @@ at all (77). Smallest repro: `li x5, 0x7fffffff`.
 Not fixed in E2. Every value in [0x7FFFF800, 0x7FFFFFFF] is presumably
 affected the same way; only 0x7FFFFFFF was run.
 
+### Fixed in E3 (`fb99a32`; test `f6a216f`)
+
+After a `lui`, the 32-bit step emits **`addiw`** instead of `addi`
+(`pseudo_formats.cpp:212`), the standard RV64 sequence. A lone 12-bit
+value keeps `addi rd, x0, imm`.
+
+**Audit** (`~/atlas-verify/e3/li_audit.py`, out of tree), over 6161
+values: the boundaries ±2^11, ±2^31, ±2^32 and ±2^63 (±3), the whole of
+0x7FFFF800..0x7FFFFFFF and its negatives, and 2000 seeded random 64-bit
+values. Each expansion's words are decoded and emulated in Python; that
+emulation is nh-nf's check. Each value also runs on rvss, h-f, h-nf and
+nh-f.
+
+| | wrong (emulation) | wrong on each of rvss/h-f/h-nf/nh-f |
+|---|---|---|
+| before | **2048**: exactly 0x7FFFF800..0x7FFFFFFF | 2048 |
+| after | 0 | 0 |
+
+The expansion-length histogram is identical before and after
+({1: 17, 2: 4119, 3: 15, 4: 1, 5: 9, 6: 55, 7: 3, 8: 1942}). **0 values
+changed instruction count.**
+
+`test/li_expansion_test.cpp`: 86 values on rvss, h-f, h-nf and nh-f,
+plus a count check against the pre-fix counts.
+- **Red:** 18 of 86 values on all four models; the count test passed.
+- **Control** (the fix reverted alone): the 4
+  `ValueReachesTheRegister` tests.
+
 ---
 
-## 111. `call` and `tail` do not assemble, and `la` takes only `.data` labels
+## 111. FIXED (call, tail): `call` and `tail` did not assemble; `la` takes only `.data` labels
 
 - **`call` and `tail`.** Both are listed as valid
   (`instructions.cpp:368-369`) and in `instruction_syntax_map`, but
@@ -5185,6 +5310,32 @@ affected the same way; only 0x7FFFFFFF was run.
 
 E2's control-flow tests use `jal ra, f` / `ret` in place of `call`, and
 data labels for `la`. Not fixed in E2.
+
+### Fixed in E3 (`50a3ec4`; test `203029b`)
+
+- **call and tail.** They go through the `j` arm
+  (`pseudo_formats.cpp:930`), so the range check and back-patching are
+  shared: `call f` = `jal ra, f` and `tail f` = `jal x0, f`. That is one
+  instruction with ±1 MiB reach, by the user's choice over auipc + jalr.
+  The instruction docs and the editor list now offer both.
+- **la of a `.text` label** stays unsupported. Its editor diagnostic now
+  reads "la needs a label defined in .data; '<name>' is not a .data
+  label" (`pseudo_formats.cpp:76-78`). It used to say only "Invalid
+  label reference". It cannot always say ".text", because the parser
+  runs in one pass and the label may be defined below the `la`.
+
+`test/call_tail_test.cpp` has 7 tests:
+- a backward call, a nested call saving ra, a tail out of a called
+  function, and a top-level tail, on all five models (padded). The
+  links and landings come from `~/atlas-verify/e3/gen_call.py`
+  (4 × index);
+- the jal encodings;
+- the `la` message.
+
+**Red:** all 7. **Control** (the parser change reverted alone): all 7.
+Reverting only the JSON edits fails
+`InstructionDocs.TheSupportFlagMatchesWhatTheAssemblerDoes`, which shows
+that test is sensitive.
 
 ---
 
@@ -5219,3 +5370,54 @@ Everything else about Undo across an ecall holds:
 **Not fixed:** the fix needs `StepDelta` to carry the consumed line and
 both Undo implementations, and Redo, to put it back. All of that is
 outside the code E1 added, which was E2's limit for this part.
+
+---
+
+## 113. RMM (round to nearest, ties to max magnitude) is not implemented
+
+rm = `0b100` hits `default: break` in both `Alu::fpexecute` and
+`Alu::dfpexecute` (`alu.cpp:388-390`, `:770-772` before E3). No rounding
+mode is set, so the operation runs in whatever mode the thread is in,
+which is nearest-even after 107's fix. RMM and RNE differ only on an
+exact tie, so every RMM result off a tie is right and every tie goes
+to even instead of away from zero.
+
+Found while writing 107's explicit-mode tests (E3). Ties computed exactly
+with `Fraction` by `~/atlas-verify/e3/gen_dround.py`:
+
+| instruction | RMM (spec) | here (RNE) |
+|---|---|---|
+| `fadd.d` 1.0 + 2^-53, rmm | `0x3FF0000000000001` | `0x3FF0000000000000` |
+| `fadd.d` -1.0 + -2^-53, rmm | `0xBFF0000000000001` | `0xBFF0000000000000` |
+| `fcvt.l.d` 2.5, rmm | 3 | 2 |
+| `fcvt.l.d` 0.5, rmm | 1 | 0 |
+| `fcvt.l.d` -0.5, rmm | -1 | 0 |
+
+`test/double_rounding_test.cpp` asserts RMM only off ties. Not fixed,
+by decision: `fenv` has no RMM, so it needs software rounding.
+
+---
+
+## 114. FIXED: the explicit rounding-mode forms of eight D conversions did not assemble
+
+The rounding-mode syntax row of eight conversions named the opposite
+operand classes from their plain row (`instructions.cpp:961-974` before
+E3):
+
+| mnemonics | had | needs |
+|---|---|---|
+| `fcvt.w.d`, `fcvt.wu.d`, `fcvt.l.d`, `fcvt.lu.d` | FPR, GPR, RM | GPR, FPR, RM |
+| `fcvt.d.w`, `fcvt.d.wu` | GPR, FPR, RM | FPR, GPR, RM |
+| `fcvt.s.d`, `fcvt.d.s` | GPR, FPR, RM | FPR, FPR, RM |
+
+So `fcvt.l.d x5, f6, rtz` never parsed. The single-precision rows were
+right. Found while writing 107's explicit-mode tests: there was no way
+to ask fcvt.l.d for rtz.
+
+**Fixed in E3 (`56aaa97`; test `9592fb0`).** The eight rows are fixed
+(`instructions.cpp:963`).
+- **Red:** 141 tests. That is the encoding test (32 encodings against a
+  spec-layout encoder) and 140 explicit-mode fcvt.l.d cases (rtz/rdn/rup
+  on 8 values × 5 models, plus 20 non-tie rmm).
+- **Control** (reverted alone): the same 141.
+
