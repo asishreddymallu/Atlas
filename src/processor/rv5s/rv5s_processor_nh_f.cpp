@@ -73,31 +73,34 @@ void RV5StageProcessorNHF::SetActiveWireNames()
     // Clear current dynamic list and populate canonical always-active wires first
     active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
 
-    // Note we are checking the singnals are the execution of these imstructions
-    //  so all the signals indicated what happened in this cycle
-    // for example if mem_wb_reg_.prev_reg_write is true that means in this cycle
-    // we executed an instruction that will write to register file in this cycle
-    // so we highlight accordingly
-    //  Immediate / ALU source selection
+    // Every condition below reads the register holding the instruction its
+    // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
+    // EX = id_ex_reg_, MEM = ex_mem_reg_, WB = mem_wb_reg_. Never a prev_*
+    // shadow - those are one generation old here (known_issues 95).
 
-    if (id_ex_reg_.alu_src)
+    // ID: control unit and immediate generator into ID/EX
+    const RV5SControlUnit id = idStageControl();
+    if (id.GetAluSrc())
     {
         active_wires_.append("Imm_to_P2");
-        active_wires_.append("P2Imm_to_ALU2_down");
     }
-
-    if (id_ex_reg_.mem_write)
+    if (id.GetMemWrite())
     {
         active_wires_.append("Control_to_P2_MEM");
     }
-    if (id_ex_reg_.reg_write)
+    if (id.GetRegWrite())
     {
         active_wires_.append("Control_to_P2_WB");
     }
 
-    // Memory control / data path (in EX/MEM stage)
-    // mem_read  happened is this cycle
-    if (ex_mem_reg_.prev_mem_read)
+    // EX: immediate selected as the ALU's second operand
+    if (id_ex_reg_.alu_src)
+    {
+        active_wires_.append("P2Imm_to_ALU2_down");
+    }
+
+    // MEM: memory control / data path
+    if (ex_mem_reg_.mem_read)
     {
         active_wires_.append("P3_to_DM_Memread");
         active_wires_.append("DMMux_to_DM");
@@ -108,8 +111,8 @@ void RV5StageProcessorNHF::SetActiveWireNames()
         active_wires_.append("P3ALUres_to_DMup");
     }
 
-    // Register writeback paths (MEM/WB stage)
-    if (mem_wb_reg_.prev_reg_write)
+    // WB: register writeback paths
+    if (mem_wb_reg_.reg_write)
     {
         active_wires_.append("P4_wbcontrol_to_WBmux");
         active_wires_.append("RdP4_to_FU");
@@ -143,32 +146,41 @@ void RV5StageProcessorNHF::SetActiveWireNames()
         }
     }
 
-    // MEM/WB forwarding (lower priority), with the same guard.
-    if (producerWritesGpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_reg_write) &&
-        mem_wb_reg_.prev_rd != 0)
+    // MEM/WB forwarding (lower priority), with the same guard. mem_wb_reg_,
+    // not its prev_* copy: pipeline_memory() copies exactly these fields
+    // into prev_* at the start of the next Step, which is what the EX of the
+    // instruction now in ID/EX forwards from (known_issues 95).
+    if (producerWritesGpr(mem_wb_reg_.instruction, mem_wb_reg_.reg_write) &&
+        mem_wb_reg_.rd != 0)
     {
-        if (mem_wb_reg_.prev_rd == id_ex_reg_.rs1)
+        if (mem_wb_reg_.rd == id_ex_reg_.rs1)
         {
             active_wires_.append("P4EB_to_FWD_unit");
             active_wires_.append("FDU_to_FMUX1_cntrl");
         }
-        if (mem_wb_reg_.prev_rd == id_ex_reg_.rs2)
+        if (mem_wb_reg_.rd == id_ex_reg_.rs2)
         {
             active_wires_.append("P4EB_to_FWD_unit");
             active_wires_.append("FDU_to_FMUX3");
         }
     }
 
-    // Branch / PC selection wires
-    if (ex_mem_reg_.prev_branch_taken)
+    // EX: the comparison result of a branch, taken or not
+    if (isBranchInstruction(id_ex_reg_.instruction))
     {
         active_wires_.append("ALU_zerores_to_P3");
+    }
+
+    // PC selection. A taken branch in MEM selects its target through the
+    // AND gate; a jump redirects from EX along a path this drawing does not
+    // have, so in that cycle neither input of the PC mux lights.
+    if (branchRedirectsNextStep())
+    {
         active_wires_.append("ANDGate_lower_entry");
         active_wires_.append("ANDGATE_to_PCMUX");
         active_wires_.append("P3_to_PCMux");
-        // active_wires_.append("ALU1_to_PCMuxUp");
     }
-    else
+    else if (!jumpRedirectsNextStep())
     {
         active_wires_.append("ALU1_to_PCMuxUp");
     }

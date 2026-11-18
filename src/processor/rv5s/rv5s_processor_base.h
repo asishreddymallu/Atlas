@@ -75,6 +75,27 @@ class RV5StageVM_Base : public ProcessorBase
     void print_pipeline_registers_debug();
     bool is_pipeline_drained() const;
     void setProcessorState() override;
+
+    // --- Read-only queries for SetActiveWireNames (known_issues 95) ---
+    // SetActiveWireNames runs after Step(), when every pipeline register
+    // holds the instruction its stage label shows (setProcessorState):
+    // ID = if_id_reg_, EX = id_ex_reg_, MEM = ex_mem_reg_, WB = mem_wb_reg_.
+    // That labelled cycle is the one the NEXT Step() executes, so what it
+    // does is a function of the registers as they stand. These answer
+    // that without changing any state.
+    static bool isBranchInstruction(uint32_t instruction); // B-type
+    static bool isJumpInstruction(uint32_t instruction);   // JAL or JALR
+    /// pipeline_memory will redirect to a taken B-type's target.
+    bool branchRedirectsNextStep() const;
+    /// pipeline_execute will redirect for a JAL/JALR (unless the branch flushed it).
+    bool jumpRedirectsNextStep() const;
+    /// The hazard unit will stall: the same check_data_hazard call Step()
+    /// makes, on the registers as Step() will have left them at that point.
+    bool hazardUnitWillStall(bool forwarding) const;
+    /// The control signals of the instruction labelled ID, decoded on a
+    /// fresh control unit - never control_unit_. A NOP decodes to all
+    /// false, as pipeline_decode treats it.
+    RV5SControlUnit idStageControl() const;
     void Run() override; // run debug run adn reset are same across all rv5s vms
     bool StepAndNotify() override;
 

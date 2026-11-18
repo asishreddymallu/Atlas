@@ -62,14 +62,24 @@ void RV5StageProcessorHNF::SetActiveWireNames()
     // Clear and populate canonical wires for the Hazard Detection + No Forwarding (H_NF) circuit
     active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
 
-    // Immediate / ALU source selection
-    if (id_ex_reg_.alu_src)
+    // Every condition below reads the register holding the instruction its
+    // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
+    // EX = id_ex_reg_, MEM = ex_mem_reg_, WB = mem_wb_reg_. Never a prev_*
+    // shadow - those are one generation old here (known_issues 95).
+
+    // ID: the immediate generator's output into ID/EX
+    if (idStageControl().GetAluSrc())
     {
         active_wires_.append("Imm_to_P2");
+    }
+
+    // EX: immediate selected as the ALU's second operand
+    if (id_ex_reg_.alu_src)
+    {
         active_wires_.append("P2Imm_to_ALU2_down");
     }
 
-    // Control signals in ID stage reflected on P2 control wires
+    // EX: control carried on from ID/EX to EX/MEM
     if (id_ex_reg_.mem_write)
     {
         active_wires_.append("P2_to_P3_MEMControl");
@@ -79,7 +89,7 @@ void RV5StageProcessorHNF::SetActiveWireNames()
         active_wires_.append("P2_to_P3_WBcontrol");
     }
 
-    // Memory control / data path (EX/MEM stage)
+    // MEM: memory control / data path
     if (ex_mem_reg_.mem_read)
     {
         active_wires_.append("P3_to_DM_Memread");
@@ -91,7 +101,7 @@ void RV5StageProcessorHNF::SetActiveWireNames()
         active_wires_.append("P3ALUres_to_DMup");
     }
 
-    // Register writeback paths (MEM/WB stage)
+    // WB: register writeback paths
     if (mem_wb_reg_.reg_write)
     {
         active_wires_.append("P4_wbcontrol_to_WBmux");
@@ -99,21 +109,29 @@ void RV5StageProcessorHNF::SetActiveWireNames()
         active_wires_.append("WBMux_to_RF");
     }
 
-    // Branch / PC selection wires
-    if (ex_mem_reg_.branch_taken || id_ex_reg_.branch)
+    // EX: the comparison result of a branch, taken or not
+    if (isBranchInstruction(id_ex_reg_.instruction))
     {
         active_wires_.append("ALU_zerores_to_P3");
+    }
+
+    // PC selection. A taken branch in MEM selects its target through the
+    // AND gate; a jump redirects from EX along a path this drawing does not
+    // have, so in that cycle neither input of the PC mux lights.
+    if (branchRedirectsNextStep())
+    {
         active_wires_.append("ANDGate_lower_entry");
         active_wires_.append("ANDGATE_to_PCMUX");
         active_wires_.append("P3_to_PCMux");
     }
-    else
+    else if (!jumpRedirectsNextStep())
     {
         active_wires_.append("ALU1_to_PCMuxUp");
     }
 
-    // Hazard Detection Unit (HDU) / stall indicators (key feature of H_NF mode)
-    if (stall_fetch_and_decode_ || stall_cycles_ > 0)
+    // ID: the hazard unit stalls this cycle - the decision Step() makes next
+    // (key feature of H_NF mode)
+    if (hazardUnitWillStall(false))
     {
         active_wires_.append("HDU_to_P1");
         active_wires_.append("HDU_to_HDU_mUX");

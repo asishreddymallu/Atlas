@@ -77,23 +77,34 @@ void RV5StageProcessorNHNF::SetActiveWireNames()
     // Clear and populate canonical wires for the NH_NF circuit (no forwarding)
     active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
 
-    // Backbone / always-visible wires (scene JSON uses these names)
+    // Every condition below reads the register holding the instruction its
+    // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
+    // EX = id_ex_reg_, MEM = ex_mem_reg_, WB = mem_wb_reg_. Never a prev_*
+    // shadow - those are one generation old here (known_issues 95).
 
-    // Conditional wires based on current pipeline signals
-    if (id_ex_reg_.alu_src)
+    // ID: the immediate generator's output into ID/EX
+    if (idStageControl().GetAluSrc())
     {
         active_wires_.append("Imm_to_P2");
+    }
+
+    // EX: immediate selected as the ALU's second operand
+    if (id_ex_reg_.alu_src)
+    {
         active_wires_.append("P2Imm_to_ALU2_down");
         active_wires_.append("P2_to_ALUMux");
     }
 
-    // Memory stage activity (EX/MEM)
-    // the intruction executed in this cycle was branch/jal/jalr
-    if ((ex_mem_reg_.instruction & 0b1111111) == 0b1100011 ||
-        (ex_mem_reg_.instruction & 0b1111111) == 0b1100111 ||
-        (ex_mem_reg_.instruction & 0b1111111) == 0b1101111)
+    // EX: a branch's comparison result and the target adder (which a jump
+    // uses too), or the ALU result for everything else
+    const bool ex_branch = isBranchInstruction(id_ex_reg_.instruction);
+    const bool ex_jump   = isJumpInstruction(id_ex_reg_.instruction);
+    if (ex_branch)
     {
         active_wires_.append("ALU_zerores_to_P3");
+    }
+    if (ex_branch || ex_jump)
+    {
         active_wires_.append("ALU2_to_P3");
     }
     else
@@ -101,62 +112,59 @@ void RV5StageProcessorNHNF::SetActiveWireNames()
         active_wires_.append("ALU_to_P3");
     }
 
-    if ((mem_wb_reg_.instruction & 0b11111111) == 0b1100011 ||
-        (mem_wb_reg_.instruction & 0b11111111) == 0b1100111 ||
-        (mem_wb_reg_.instruction & 0b11111111) == 0b1101111)
+    // MEM: a branch's target and outcome travel towards the PC mux; any
+    // other instruction's ALU result is the data-memory address
+    if (isBranchInstruction(ex_mem_reg_.instruction))
     {
         active_wires_.append("ANDGate_lower_entry");
         active_wires_.append("P3_to_PCMux");
-        // active_wires_.append("ANDGATE_to_PCMUX");
     }
     else
     {
         active_wires_.append("P3ALUres_to_DMup");
     }
 
-    if (ex_mem_reg_.prev_branch_taken)
+    // PC selection. A taken branch in MEM selects its target through the
+    // AND gate; a jump redirects from EX along a path this drawing does not
+    // have, so in that cycle neither input of the PC mux lights.
+    if (branchRedirectsNextStep())
     {
         active_wires_.append("ANDGATE_to_PCMUX");
         active_wires_.append("P3_to_UpperEntryANDGATE");
     }
-    else
+    else if (!jumpRedirectsNextStep())
     {
         active_wires_.append("ALU1_to_PCMuxUp");
     }
 
-    if (ex_mem_reg_.prev_mem_read)
+    // MEM: memory control / data path
+    if (ex_mem_reg_.mem_read)
     {
         active_wires_.append("DM_to_P4");
         active_wires_.append("P3_to_DM_Memread");
     }
-    if (ex_mem_reg_.prev_mem_write)
+    if (ex_mem_reg_.mem_write)
     {
         active_wires_.append("P3_TO_DM_control_memwrite");
         active_wires_.append("P3_rs2_to_DMdown");
-        // active_wires_.append("P3ALUres_to_DMup");
     }
 
-    if (mem_wb_reg_.prev_reg_write)
+    // WB: register writeback paths
+    if (mem_wb_reg_.reg_write)
     {
         active_wires_.append("P4_wbcontrol_to_WBmux");
         active_wires_.append("P4_to_RF_regwritecontrol");
         active_wires_.append("WBMux_to_RF");
     }
-
-    if (mem_wb_reg_.prev_mem_to_reg)
+    if (mem_wb_reg_.mem_to_reg)
     {
         active_wires_.append("P4DM_to_lastMux");
-        // active_wires_.append("WBMux_to_RF");
     }
-    else if (mem_wb_reg_.prev_reg_write)
+    else if (mem_wb_reg_.reg_write)
     {
-
         active_wires_.append("P4_ALUres_to_Mux");
         active_wires_.append("RdP4_to_RF");
     }
-    // Branch / PC selection wires
-
-    // The scene reads `active_wires_` when callers emit `updateCircuitStateSignal`.
 }
 
 void RV5StageProcessorNHNF::Reset()

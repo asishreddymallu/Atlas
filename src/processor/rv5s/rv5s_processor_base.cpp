@@ -1,6 +1,7 @@
 #include "common/debug_colors.h"
 #include "common/instructions.h"
 #include "processor/rv5s/rv5s_processor_base.h"
+#include "processor/rv5s/rv5s_hdu.h"
 #include <thread>
 
 namespace Kites
@@ -161,8 +162,84 @@ void RV5StageVM_Base::setProcessorState()
     // processor_state_.programCounters[toIndex(PipelineStage::EX)]  = id_ex_reg_.pc;
     // processor_state_.programCounters[toIndex(PipelineStage::MEM)] = ex_mem_reg_.pc;
     // processor_state_.programCounters[toIndex(PipelineStage::WB)]  = mem_wb_reg_.pc;
-    processor_state_.programCounters = 
+    processor_state_.programCounters =
     {program_counter_, if_id_reg_.pc, id_ex_reg_.pc, ex_mem_reg_.pc, mem_wb_reg_.pc};
+}
+
+bool RV5StageVM_Base::isBranchInstruction(uint32_t instruction)
+{
+    return (instruction & 0b1111111) == 0b1100011;
+}
+
+bool RV5StageVM_Base::isJumpInstruction(uint32_t instruction)
+{
+    const uint32_t opcode = instruction & 0b1111111;
+    return opcode == 0b1101111 || opcode == 0b1100111;
+}
+
+bool RV5StageVM_Base::branchRedirectsNextStep() const
+{
+    // The condition pipeline_memory() redirects and flushes on.
+    return ex_mem_reg_.branch_taken && isBranchInstruction(ex_mem_reg_.instruction);
+}
+
+bool RV5StageVM_Base::jumpRedirectsNextStep() const
+{
+    // pipeline_execute() redirects for a JAL/JALR in ID/EX, unless
+    // pipeline_memory() has already flushed ID/EX for a taken branch.
+    return !branchRedirectsNextStep() && isJumpInstruction(id_ex_reg_.instruction);
+}
+
+bool RV5StageVM_Base::hazardUnitWillStall(bool forwarding) const
+{
+    // Mirrors the H models' Step(): a stall already counting down
+    // continues; otherwise check_data_hazard runs AFTER writeback, memory
+    // and execute, on the registers as those three leave them.
+    if (stall_cycles_ > 0)
+    {
+        return true;
+    }
+
+    const bool flush = branchRedirectsNextStep();
+
+    // memory() resets IF/ID and ID/EX for a taken branch; execute() resets
+    // IF/ID for a jump.
+    IF_ID_Register if_id = if_id_reg_;
+    ID_EX_Register id_ex = id_ex_reg_;
+    if (flush)
+    {
+        if_id.reset();
+        id_ex.reset();
+    }
+    else if (jumpRedirectsNextStep())
+    {
+        if_id.reset();
+    }
+
+    // execute() moves ID/EX into EX/MEM, keeping the old EX/MEM fields as
+    // prev_* - the only fields check_data_hazard reads from it.
+    EX_MEM_Register ex_mem   = ex_mem_reg_;
+    ex_mem.prev_reg_write    = ex_mem_reg_.reg_write;
+    ex_mem.prev_rd           = ex_mem_reg_.rd;
+    ex_mem.prev_freg_write   = ex_mem_reg_.freg_write;
+    ex_mem.prev_frd          = ex_mem_reg_.frd;
+    ex_mem.reg_write         = id_ex.reg_write;
+    ex_mem.rd                = id_ex.rd;
+    ex_mem.freg_write        = id_ex.freg_write;
+    ex_mem.frd               = id_ex.frd;
+    ex_mem.mem_read          = id_ex.mem_read;
+
+    return check_data_hazard(if_id, id_ex, ex_mem, forwarding) > 0;
+}
+
+RV5SControlUnit RV5StageVM_Base::idStageControl() const
+{
+    RV5SControlUnit control; // every signal false
+    if (if_id_reg_.instruction != NOP)
+    {
+        control.SetControlSignals(if_id_reg_.instruction);
+    }
+    return control;
 }
 
 void RV5StageVM_Base::pipeline_decode()

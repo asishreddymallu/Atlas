@@ -87,14 +87,24 @@ void RV5StageProcessorHF::SetActiveWireNames()
     active_wires_.resize(always_active_wires_count_);
     // Backbone / always-visible wires (names sourced from H_F_Processor.json)
 
-    // Immediate / ALU source selection
-    if (id_ex_reg_.alu_src)
+    // Every condition below reads the register holding the instruction its
+    // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
+    // EX = id_ex_reg_, MEM = ex_mem_reg_, WB = mem_wb_reg_. Never a prev_*
+    // shadow - those are one generation old here (known_issues 95).
+
+    // ID: the immediate generator's output into ID/EX
+    if (idStageControl().GetAluSrc())
     {
         active_wires_.append("Imm_to_P2");
+    }
+
+    // EX: immediate selected as the ALU's second operand
+    if (id_ex_reg_.alu_src)
+    {
         active_wires_.append("P2Imm_to_ALU2_down");
     }
 
-    // Control signals in ID stage reflected on P2 control wires
+    // EX: control carried on from ID/EX to EX/MEM
     if (id_ex_reg_.mem_write)
     {
         active_wires_.append("P2_to_P3_MEMControl");
@@ -104,8 +114,8 @@ void RV5StageProcessorHF::SetActiveWireNames()
         active_wires_.append("P2_to_P3_WBcontrol");
     }
 
-    // Memory control / data path (EX/MEM stage)
-    if (ex_mem_reg_.prev_mem_read || ex_mem_reg_.mem_read)
+    // MEM: memory control / data path
+    if (ex_mem_reg_.mem_read)
     {
         active_wires_.append("P3_to_DM_Memread");
         active_wires_.append("DMMux_to_DM");
@@ -116,8 +126,8 @@ void RV5StageProcessorHF::SetActiveWireNames()
         active_wires_.append("P3ALUres_to_DMup");
     }
 
-    // Register writeback paths (MEM/WB stage)
-    if (mem_wb_reg_.prev_reg_write || mem_wb_reg_.reg_write)
+    // WB: register writeback paths
+    if (mem_wb_reg_.reg_write)
     {
         active_wires_.append("P4_wbcontrol_to_WBmux");
         active_wires_.append("RdP4_to_FU");
@@ -149,37 +159,47 @@ void RV5StageProcessorHF::SetActiveWireNames()
         }
     }
 
-    // The same guard one stage further down the pipeline.
-    if (producerWritesGpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_reg_write) &&
-        mem_wb_reg_.prev_rd != 0)
+    // The same guard one stage further down the pipeline. mem_wb_reg_, not
+    // its prev_* copy: pipeline_memory() copies exactly these fields into
+    // prev_* at the start of the next Step, which is what the EX of the
+    // instruction now in ID/EX forwards from (known_issues 95).
+    if (producerWritesGpr(mem_wb_reg_.instruction, mem_wb_reg_.reg_write) &&
+        mem_wb_reg_.rd != 0)
     {
-        if (mem_wb_reg_.prev_rd == id_ex_reg_.rs1)
+        if (mem_wb_reg_.rd == id_ex_reg_.rs1)
         {
             active_wires_.append("P4EB_to_FWD_unit");
             active_wires_.append("FDU_to_FMUX1_cntrl");
         }
-        if (mem_wb_reg_.prev_rd == id_ex_reg_.rs2)
+        if (mem_wb_reg_.rd == id_ex_reg_.rs2)
         {
             active_wires_.append("P4EB_to_FWD_unit");
             active_wires_.append("FDU_to_FMUX3");
         }
     }
 
-    // Branch / PC selection wires
-    if (ex_mem_reg_.prev_branch_taken || ex_mem_reg_.branch_taken)
+    // EX: the comparison result of a branch, taken or not
+    if (isBranchInstruction(id_ex_reg_.instruction))
     {
         active_wires_.append("ALU_zerores_to_P3");
+    }
+
+    // PC selection. A taken branch in MEM selects its target through the
+    // AND gate; a jump redirects from EX along a path this drawing does not
+    // have, so in that cycle neither input of the PC mux lights.
+    if (branchRedirectsNextStep())
+    {
         active_wires_.append("ANDGate_lower_entry");
         active_wires_.append("ANDGATE_to_PCMUX");
         active_wires_.append("P3_to_PCMux");
     }
-    else
+    else if (!jumpRedirectsNextStep())
     {
         active_wires_.append("ALU1_to_PCMuxUp");
     }
 
-    // Hazard Detection Unit (HDU) / stall indicators
-    if (stall_fetch_and_decode_ || stall_cycles_ > 0)
+    // ID: the hazard unit stalls this cycle - the decision Step() makes next
+    if (hazardUnitWillStall(true))
     {
         active_wires_.append("HDU_to_P1");
         active_wires_.append("HDUMux_to_P2");

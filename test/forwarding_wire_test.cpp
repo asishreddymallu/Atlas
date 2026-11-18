@@ -50,7 +50,7 @@ namespace
 /// The conditional forwarding wires, i.e. the ones the guards decide.
 /// The EX/MEM arm lights all three; the MEM/WB arm lights only the first
 /// and the third, because its rs1 branch omits FDU_to_fMUX2
-/// (rv5s_processor_h_f.cpp:147-151).
+/// (the MEM/WB arm of SetActiveWireNames).
 const char *const kConditional[] = {"FDU_to_FMUX1_cntrl", "FDU_to_fMUX2", "FDU_to_FMUX3"};
 const char *const kExMemArm[]    = {"FDU_to_FMUX1_cntrl", "FDU_to_fMUX2", "FDU_to_FMUX3"};
 const char *const kMemWbArm[]    = {"FDU_to_FMUX1_cntrl", "FDU_to_FMUX3"};
@@ -135,18 +135,21 @@ const std::vector<Model> &forwardingModels()
 // The consumer reads t0 twice, so one program exercises both the rs1 and
 // the rs2 branch of each guarded block.
 //
-// The two distances are chosen to reach the two guards, which is NOT the
-// same as the two distances at which the machine really forwards:
+// The two distances reach the two guards, and they are the two distances
+// at which the machine really forwards:
 //
-//   adjacent  -> the EX/MEM guard  (h_f.cpp:128, nh_f.cpp:121)
-//   two nops  -> the MEM/WB guard  (h_f.cpp:145, nh_f.cpp:140)
+//   adjacent  -> the EX/MEM guard
+//   one nop   -> the MEM/WB guard
 //
-// One nop apart - where the MEM/WB forwarding path is actually used -
-// lights nothing at all. That is a separate defect, measured and pinned
-// by TheMemWbGuardFiresOneInstructionTooLate below.
+// Until known_issues 95 was fixed the MEM/WB guard read mem_wb_reg_.prev_*
+// and fired one nop LATER, at two nops, where nothing is forwarded. The
+// three tests below used two nops to reach it then; they use one now.
+// TheMemWbGuardFiresExactlyWhenTheMachineForwards pins all four distances.
 
 const char *kGapNone = "";
+const char *kGapOne  = "    nop\n";
 const char *kGapTwo  = "    nop\n    nop\n";
+const char *kGapThree = "    nop\n    nop\n    nop\n";
 
 std::string program(const char *producer, const char *gap)
 {
@@ -170,8 +173,8 @@ TEST(ForwardingWires, AnFpProducerDoesNotLightTheIntegerForwardingPath)
     {
         expectConditionalWiresDark(model, litDuring(model, dir, program(kFpProducer, kGapNone)),
                                    "fadd.d f5 then a consumer reading t0 (x5), adjacent");
-        expectConditionalWiresDark(model, litDuring(model, dir, program(kFpProducer, kGapTwo)),
-                                   "fadd.d f5 then a consumer reading t0, two nops apart");
+        expectConditionalWiresDark(model, litDuring(model, dir, program(kFpProducer, kGapOne)),
+                                   "fadd.d f5 then a consumer reading t0, one nop apart");
     }
 }
 
@@ -184,8 +187,8 @@ TEST(ForwardingWires, AnIntegerProducerStillLightsIt)
     {
         expectWiresLit(model, litDuring(model, dir, program(kIntProducer, kGapNone)), kExMemArm, 3,
                        "addi t0 then a consumer reading t0, adjacent");
-        expectWiresLit(model, litDuring(model, dir, program(kIntProducer, kGapTwo)), kMemWbArm, 2,
-                       "addi t0 then a consumer reading t0, two nops apart");
+        expectWiresLit(model, litDuring(model, dir, program(kIntProducer, kGapOne)), kMemWbArm, 2,
+                       "addi t0 then a consumer reading t0, one nop apart");
     }
 }
 
@@ -198,42 +201,38 @@ TEST(ForwardingWires, AnFpInstructionThatWritesAGprStillLightsIt)
     {
         expectWiresLit(model, litDuring(model, dir, program(kFpToGprProducer, kGapNone)),
                        kExMemArm, 3, "fcvt.l.d t0 then a consumer reading t0, adjacent");
-        expectWiresLit(model, litDuring(model, dir, program(kFpToGprProducer, kGapTwo)),
-                       kMemWbArm, 2, "fcvt.l.d t0 then a consumer reading t0, two nops apart");
+        expectWiresLit(model, litDuring(model, dir, program(kFpToGprProducer, kGapOne)),
+                       kMemWbArm, 2, "fcvt.l.d t0 then a consumer reading t0, one nop apart");
     }
 }
 
-TEST(ForwardingWires, TheMemWbGuardFiresOneInstructionTooLate)
+TEST(ForwardingWires, TheMemWbGuardFiresExactlyWhenTheMachineForwards)
 {
-    // Measured, and pinned rather than fixed - it is a different defect
-    // from 81 and wants its own evidence. See the known_issues entry.
+    // known_issues 95. SetActiveWireNames runs AFTER the whole Step, when
+    // id_ex_reg_ already holds the instruction that executes next. Its
+    // MEM/WB guard used to read mem_wb_reg_.prev_*, which is correct DURING
+    // execute and one generation stale here, so the MEM/WB wires were dark
+    // one nop apart - where the machine forwards from MEM/WB - and lit two
+    // nops apart, where the value is already in the register file.
     //
-    // SetActiveWireNames runs AFTER the whole Step
-    // (rv5s_processor_base.cpp:68-69), by which time pipeline_decode has
-    // already reloaded id_ex_reg_ with the NEXT instruction. The MEM/WB
-    // guard still reads mem_wb_reg_.prev_*, which is correct DURING
-    // execute (rv5s_processor_base.cpp:440-445) and one stage stale here.
-    //
-    // So the wires light one instruction later than the forwarding they
-    // are drawing: dark where MEM/WB forwarding really happens, lit
-    // where the value is already architectural and nothing forwards.
+    // The four distances, producer `addi t0` and consumer reading t0:
+    //   0 nops  forwarded from EX/MEM -> the EX/MEM arm's three wires
+    //   1 nop   forwarded from MEM/WB -> the MEM/WB arm's two wires
+    //   2 nops  read from the register file (written back first) -> dark
+    //   3 nops  dark
     QTemporaryDir dir;
     ASSERT_TRUE(dir.isValid());
-    const char *oneNop = "    nop\n";
 
     for (Model model : forwardingModels())
     {
-        const QSet<QString> whereItForwards =
-            litDuring(model, dir, program(kIntProducer, oneNop));
-        for (const char *wire : kConditional)
-            EXPECT_FALSE(whereItForwards.contains(QString::fromLatin1(wire)))
-                << name(model) << ": " << wire
-                << " is lit one nop apart. If the MEM/WB guard has been corrected, this test "
-                   "and the known_issues entry both need updating";
-
-        const QSet<QString> whereItDoesNot = litDuring(model, dir, program(kIntProducer, kGapTwo));
-        EXPECT_TRUE(whereItDoesNot.contains(QStringLiteral("FDU_to_FMUX1_cntrl")))
-            << name(model) << ": the MEM/WB guard no longer fires two nops apart either";
+        expectWiresLit(model, litDuring(model, dir, program(kIntProducer, kGapNone)), kExMemArm, 3,
+                       "0 nops apart");
+        expectWiresLit(model, litDuring(model, dir, program(kIntProducer, kGapOne)), kMemWbArm, 2,
+                       "1 nop apart");
+        expectConditionalWiresDark(model, litDuring(model, dir, program(kIntProducer, kGapTwo)),
+                                   "2 nops apart");
+        expectConditionalWiresDark(model, litDuring(model, dir, program(kIntProducer, kGapThree)),
+                                   "3 nops apart");
     }
 }
 
