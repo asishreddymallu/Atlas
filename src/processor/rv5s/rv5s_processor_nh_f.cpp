@@ -118,8 +118,15 @@ void RV5StageProcessorNHF::SetActiveWireNames()
 
     // Forwarding unit activity: drive FWD unit wires when forwarding is relevant
     // EX/MEM forwarding (highest priority)
-    if (ex_mem_reg_.reg_write && ex_mem_reg_.rd != 0)
+    if (producerWritesGpr(ex_mem_reg_.instruction, ex_mem_reg_.reg_write) &&
+        ex_mem_reg_.rd != 0)
     {
+        // producerWritesGpr, not reg_write: the control unit sets reg_write
+        // for every OP-FP instruction and the EX/MEM rd field carries the
+        // same five bits as frd, so the bare test lit the integer
+        // forwarding path for `fadd.d f5, ...` followed by anything that
+        // reads x5 - a path with nothing travelling along it. The same
+        // substitution 79 made in the datapath (known_issues 81).
         // If EX/MEM destination matches ID/EX sources, show forwarding path
         if (ex_mem_reg_.rd == id_ex_reg_.rs1)
         {
@@ -136,8 +143,9 @@ void RV5StageProcessorNHF::SetActiveWireNames()
         }
     }
 
-    // MEM/WB forwarding (lower priority)
-    if (mem_wb_reg_.prev_reg_write && mem_wb_reg_.prev_rd != 0)
+    // MEM/WB forwarding (lower priority), with the same guard.
+    if (producerWritesGpr(mem_wb_reg_.prev_instruction, mem_wb_reg_.prev_reg_write) &&
+        mem_wb_reg_.prev_rd != 0)
     {
         if (mem_wb_reg_.prev_rd == id_ex_reg_.rs1)
         {
