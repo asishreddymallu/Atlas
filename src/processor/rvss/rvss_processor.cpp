@@ -36,10 +36,19 @@ RVSSProcessor::RVSSProcessor() : ProcessorBase()
             &Kites::RVSSCircuitScene::updateCircuitState, Qt::QueuedConnection);
 #endif
 
-    active_wires_.append("IM_to_PC_pc");
-    active_wires_.append("PC_to_IM_instruction");
+    // IM_to_PC_pc and PC_to_IM_instruction used to head this list.
+    // Neither is a wire: single_cycle_draft1.json holds 22 wires and all
+    // 22 are named, so there was nothing for either to refer to. The two
+    // wires they plausibly meant are already here - the instruction
+    // leaving instruction memory is IM_to_RF_rs1_whole immediately
+    // below, and the address reaching it is PC_to_InstrMem further down.
+    // They read as leftovers from the pipelined drawings' naming, where
+    // the same two wires are PC_to_IM and IM_to_P1.
     active_wires_.append("IM_to_RF_rs1_whole");
-    active_wires_.append("RF_to_ALUMUX");
+    // ...Mux, not ...MUX. Imm_to_ALUMUX below really is spelled with the
+    // capitals in the drawing; this one is not, so the register file's
+    // output into the ALU mux was never highlighted at all.
+    active_wires_.append("RF_to_ALUMux");
     active_wires_.append("PCMux_to_PC");
     active_wires_.append("Imm_to_ALUMUX");
     active_wires_.append("BranchALU_to_PCMUX");
