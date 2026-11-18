@@ -121,6 +121,18 @@ class RV5StageVM_Base : public ProcessorBase
     uint64_t execute_float();
     uint64_t execute_double();
 
+    /// auipc's result: the instruction's own PC plus its upper immediate,
+    /// sign-extended from 32 bits (ImmGenerator hands back the raw 20 bits).
+    /// The ALU cannot produce it - the control unit gives auipc no PC
+    /// operand and its "register" fields are immediate bits - so each
+    /// variant overrides the ALU result with this, as it already did for
+    /// lui (known_issues 103).
+    static uint64_t auipc_result(const ID_EX_Register &id_ex)
+    {
+        const auto upper = static_cast<int32_t>(static_cast<uint32_t>(id_ex.imm) << 12);
+        return id_ex.pc + static_cast<uint64_t>(static_cast<int64_t>(upper));
+    }
+
     void execute_csr() {};
 
     void pipeline_memory();
