@@ -3564,34 +3564,62 @@ cumulative counter would want to be a second field.
 
 ---
 
-## 81. The circuit view can light a forwarding wire that is not forwarding
+## 81. FIXED: the circuit view lit a forwarding wire that was not forwarding
 
-`SetActiveWireNames()` decides which forwarding wires to highlight with
+`SetActiveWireNames()` decided which forwarding wires to highlight with
 the same bare test the datapath used before 79:
 
 ```cpp
-if (ex_mem_reg_.reg_write && ex_mem_reg_.rd != 0)      // h_f.cpp:128
+if (ex_mem_reg_.reg_write && ex_mem_reg_.rd != 0)            // h_f.cpp:128
 if (mem_wb_reg_.prev_reg_write && mem_wb_reg_.prev_rd != 0)  // h_f.cpp:145
 ```
 
 and the same two in `rv5s_processor_nh_f.cpp:121,140`. `reg_write` is
 set for every OP-FP instruction and `rd` carries the same five bits as
-`frd`, so `fadd.d f5, …` followed by any instruction reading x5 lights
-`P2_to_FDU_rs1`, `P4EB_to_FWD_unit`, `FDU_to_FMUX1_cntrl` and
-`FDU_to_fMUX2` — the forwarding path — although after 79 nothing is
-forwarded along it.
+`frd`, so `fadd.d f5, …` followed by any instruction reading x5 lit the
+integer forwarding path although after 79 nothing travels along it.
 
-**Read, not run.** The datapath consequence is fixed and tested; this is
-the diagram beside it, and I did not launch the GUI to watch the wires
-light. The assertion here is that the condition is the one 79 replaced,
-at the four line numbers above, and that `SetActiveWireNames` feeds
-`active_wires_` which is what the circuit scene draws
-(`rv5s_processor_base.cpp` emits `updateCircuitStateSignal(active_wires_)`).
+**Fixed**, with the same substitution 79 made, at all four sites:
+`producerWritesGpr(…instruction, …reg_write)` from
+`rv5s_forwarding.h:55`, which both files already included.
 
-The fix is the same one-line substitution 79 made: ask
-`producerWritesGpr()` instead of `reg_write`. It is left open because no
-test covers the circuit view and a wire-highlighting change should be
-seen before it is shipped.
+**There was no FPR site to change.** All four guards cover GPR-indexed
+wires, and neither `SetActiveWireNames` lights an FPR forwarding wire at
+all — worth recording, because the entry as filed implied there might be.
+
+Measured on h-f and nh-f, union of `active_wires_` over every cycle,
+before → after. The three wires are the only CONDITIONAL ones:
+`P2_to_FDU_rs1`, `P2_to_FDU_RS2` and `P4EB_to_FWD_unit` are in the
+constructor's backbone (`h_f.cpp:68-70`) and are on regardless, which is
+why the original entry's list of four was half backbone.
+
+| producer, then a consumer reading t0 (x5) | `FDU_to_FMUX1_cntrl` | `FDU_to_fMUX2` | `FDU_to_FMUX3` |
+|---|---|---|---|
+| `fadd.d f5`, adjacent | 1 → **0** | 1 → **0** | 1 → **0** |
+| `fadd.d f5`, two nops apart | 1 → **0** | 0 → 0 | 1 → **0** |
+| `addi t0`, adjacent | 1 → 1 | 1 → 1 | 1 → 1 |
+| `addi t0`, two nops apart | 1 → 1 | 0 → 0 | 1 → 1 |
+| `fcvt.l.d t0`, adjacent | 1 → 1 | 1 → 1 | 1 → 1 |
+| `fcvt.l.d t0`, two nops apart | 1 → 1 | 0 → 0 | 1 → 1 |
+
+`fcvt.l.d` is the case that stops the fix over-reaching: it is an F
+instruction that really does write the integer register t0 (funct7
+`1100001`), and `producerWritesGpr` recognises it, so its wires stay
+lit.
+
+Covered by `test/forwarding_wire_test.cpp`. No Spy was needed:
+`active_wires_` (`processor_base.h:193`) and `SetActiveWireNames()`
+(`:288`) are both public, and `StepAndNotify` calls the latter every
+cycle (`rv5s_processor_base.cpp:69`).
+
+Still **not run in the GUI** — the assertion is about the contents of
+`active_wires_`, which is what `CircuitScene::updateCircuitState` reads
+(`circuit_scene.cpp:156-184`); nobody opened a window and watched a wire
+go dark.
+
+Two things found beside it, both open: the distances at which these
+wires light are not the distances at which the machine forwards (95),
+and nothing checked that a lit name is a wire that exists (93).
 
 ---
 
@@ -4260,3 +4288,179 @@ Not fixed here. The reliable workaround is a second `ninja` pass, or
 removing `<build>/kites_core_autogen` before building, after any `.ui`
 edit. A real fix belongs in the build files and wants someone to read
 what AUTOUIC actually compares.
+
+---
+
+## 93. FIXED: nothing checked that a wire name a processor lights is a wire that exists
+
+The circuit view highlights by **name**. Each processor appends strings
+to `active_wires_` and `CircuitScene::updateCircuitState`
+(`circuit_scene.cpp:156-184`) turns on every `WireItem` whose
+`getName()` is in that list:
+
+```cpp
+if (wireList.contains(wire->getName()))
+    wire->setActive(true);
+```
+
+A name no wire carries lights nothing and says nothing - no warning, no
+log line, no crash. It is indistinguishable from "that signal was not
+active this cycle", which is the one thing a teaching diagram must never
+be ambiguous about.
+
+Measured across the five models, by extracting every
+`active_wires_.append("…")` from each `.cpp` and comparing with its
+scene JSON:
+
+| model | distinct names | JSON wires (named / unnamed) | appended with no wire | drawn, never lit |
+|---|---|---|---|---|
+| rvss | 21 | 22 (22 / 0) | **3** | 4 |
+| nh-nf | 44 | 44 (44 / 0) | 0 | 0 |
+| h-nf | 36 | 46 (19 / **27**) | **24** | 7 |
+| nh-f | 43 | 53 (52 / 1) | 0 | 9 |
+| h-f | 45 | 57 (57 / 0) | 0 | 12 |
+
+**The three rvss names are fixed.** `RF_to_ALUMUX` was a case typo of the
+drawing's `RF_to_ALUMux` - the neighbouring `Imm_to_ALUMUX` really is
+spelled with the capitals, which is presumably how it happened - so the
+register file's output into the ALU mux had never lit at all.
+`IM_to_PC_pc` and `PC_to_IM_instruction` are deleted: all 22 wires in
+that drawing are named, so neither could have referred to an unnamed
+one, and the two wires they plausibly meant are already on the same
+always-active list - `IM_to_RF_rs1_whole` and `PC_to_InstrMem`. Across
+all eight scene files the closest names are `PC_to_IM` and `IM_to_P1`,
+which are the **pipelined** drawings' names for those two wires.
+
+**The gate is `test/wire_name_gate_test.cpp`.** It is a lint written as a
+test, because that is where this project's gates live. It reads the
+`.cpp` and the JSON from disk - no hand-copied name list - and checks its
+own extraction: the number of `active_wires_.append(` occurrences must
+equal the number of string-literal arguments it matched, so a name built
+at run time would fail the gate rather than be quietly missed. It reads
+the source rather than a running processor for two reasons: no single
+program reaches every branch of `SetActiveWireNames`, so a run-time
+union would under-report; and `kites_test` does not link the compiled
+`.qrc`, so a resource path does not resolve there.
+
+The drawn-but-never-lit set is asserted per model as an exact baseline
+too. Those are not defects on their own - a drawing may carry wires the
+highlighting does not model - but a wire that silently stops being lit,
+or a new one nobody wired up, is now noticed.
+
+h-nf's 24 unmatched names are recorded as a KNOWN set instead of being
+fixed: see 94. No JSON was edited in this stage.
+
+---
+
+## 94. `H_NF_Processor.json` leaves 27 of its 46 wires unnamed, so two thirds of what h-nf computes lights nothing
+
+`RV5StageProcessorHNF::SetActiveWireNames` appends 36 distinct names.
+`H_NF_Processor.json` holds 46 wires of which **27 have an empty
+`name`**, leaving 19 named. Twenty-four of the 36 names match nothing,
+including backbone wires the model considers always active:
+`PCMux_to_PC`, `P1_to_Control_RF_andall`, `RF_to_P2_UP`, `Imm_to_P2`,
+`ALU_to_P3`, `HDU_to_P1` and eighteen more. The full list is in
+`test/wire_name_gate_test.cpp`'s `kKnownUnmatchedHNf`.
+
+The other four drawings are in much better shape: nh-nf and h-f name
+every wire, nh-f leaves one unnamed.
+
+So on the hazard-detection-without-forwarding model - the one a student
+picks to watch interlocks - most of the diagram cannot light. The
+processor is computing the right answer and sending it to a drawing that
+has nowhere to put it.
+
+**This is data work on the drawing, not a code fix**, which is why this
+stage asserts the current set exactly rather than changing it: naming 27
+wires means deciding which drawn line is which, and the only honest way
+to do that is with the drawing in front of you. The gate's exact-set
+assertion means progress on it is noticed - the test fails if the list
+shrinks as well as if it grows.
+
+There is no editor for these files in the tree, and the directory also
+holds `H_NF_Processor copy.json`, `NH_NF_Processor - Copy.json` and an
+unused `SSE.json`, so whoever picks this up should start by working out
+which file is authoritative.
+
+---
+
+## 95. The MEM/WB forwarding wires light one instruction too late
+
+Separate from 81, and found by the test written for it.
+
+`SetActiveWireNames` runs **after** the whole `Step()`
+(`rv5s_processor_base.cpp:68-69`). By then `pipeline_decode` has already
+reloaded `id_ex_reg_` with the instruction that will execute **next**
+cycle, while the MEM/WB guard still reads `mem_wb_reg_.prev_*`
+(`rv5s_processor_h_f.cpp:153`, `rv5s_processor_nh_f.cpp:147`). Those
+`prev_` fields are a snapshot taken in `pipeline_memory`
+(`rv5s_processor_base.cpp:440-445`) so that **execute** can see the
+value that was written back in the same cycle - they are correct during
+EX and one stage stale where this function actually runs.
+
+Measured on h-f, union of `active_wires_` over every cycle, producer and
+consumer separated by 0 to 3 `nop`s:
+
+| nops between | does the machine forward? | `FDU_to_FMUX1_cntrl` | `FDU_to_fMUX2` | `FDU_to_FMUX3` |
+|---|---|---|---|---|
+| 0 | yes, EX/MEM | 1 | 1 | 1 |
+| 1 | **yes, MEM/WB** | **0** | **0** | **0** |
+| 2 | no, already written back | **1** | 0 | **1** |
+| 3 | no | 0 | 0 | 0 |
+
+So the MEM/WB half of the forwarding diagram is dark exactly when that
+path is in use, and lit one instruction later when the value is already
+architectural and nothing forwards. The `fMUX2` column is 0 at two nops
+because that arm's rs1 branch appends only `P4EB_to_FWD_unit` and
+`FDU_to_FMUX1_cntrl` (`rv5s_processor_h_f.cpp:155-159`).
+
+Pinned, not fixed:
+`ForwardingWires.TheMemWbGuardFiresOneInstructionTooLate` asserts the
+current behaviour in both directions, so correcting it fails the test and
+whoever does it finds this entry. The fix is presumably to read
+`mem_wb_reg_` rather than `mem_wb_reg_.prev_*` in this function only,
+leaving the datapath's use of `prev_*` alone - but that is a change to
+what the diagram draws and wants its own evidence, which this stage did
+not gather.
+
+---
+
+## 96. `RVSSProcessor::SetActiveWireNames` never truncates, so Undo and Redo leave stale wires lit
+
+Every model is supposed to start each cycle from the constructor's
+always-active backbone and add this cycle's wires to it. The four
+pipelined models do - `rv5s_processor_h_f.cpp:87` resizes, and
+`nh_nf.cpp:78`, `nh_f.cpp:74` and `h_nf.cpp:63` erase back to
+`always_active_wires_count_`.
+
+RVSS does not. Its clear is commented out:
+
+```cpp
+// first clear the current list
+// TODO * we dont have to clear wire that will always be active
+// active_wires_.clear();          // rvss_processor.cpp:69-72
+```
+
+Of its four callers only one compensates. `StepAndNotify` erases
+**after** emitting (`rvss_processor.cpp:1215-1216`), which is why an
+ordinary Run - whose loop is `StepAndNotify` - behaves. `DebugRun`
+(`:1133`), `Undo` (`:1283`) and `Redo` (`:1351`) call
+`SetActiveWireNames` and emit without erasing before or after.
+
+Measured: on a loaded, stepped RVSS, calling `SetActiveWireNames()`
+twice grows `active_wires_` the second time, while all four pipelined
+models return the same size.
+`WireNameGate.OnlyTheSingleCycleModelFailsToTruncateItsWireList` pins
+exactly that.
+
+The consequence for Undo and Redo is **read, not run**: this stage did
+not drive the toolbar. From the code, each press adds this state's wires
+again without removing the previous ones, so on the single-cycle model a
+wire that was active once stays lit, and the list grows with every
+press. `CircuitScene::updateCircuitState` does a `QList::contains` per
+wire per update (`circuit_scene.cpp:170`), so the cost grows with it.
+
+Not fixed here. The fix is one line - the same `erase` the four
+pipelined models already do - but it changes what the diagram draws on
+every Undo, and the right stage for that is the one that looks at the
+circuit view with a window open.
