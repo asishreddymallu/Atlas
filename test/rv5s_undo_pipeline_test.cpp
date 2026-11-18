@@ -146,15 +146,15 @@ void checkProgram(Model model, const QTemporaryDir &dir, const std::string &body
     for (int n = 2; n <= total; ++n)
         checkOne(model, dir, body, what, straight, total, n, n);
 
-    // The third family - undo into the MIDDLE and continue - is not
-    // asserted here, and not because it passes. Stepping forward after
-    // an Undo that lands mid-program completes with every architectural
-    // register unwritten: `li t0,3; fcvt.d.l f1,t0; fmadd.d f4,…` run
-    // as step 3, undo 1, step 8 ends at the right PC (40) with the right
-    // retired count (3) and x5 = f1 = f4 = 0. Measured identical at
-    // 47ff007, before any of this branch's commits, so it is not a
-    // regression from the forwarding work and it is not this stage's to
-    // fix. docs/audit/known_issues.md 82.
+    // Family 3: undo into the MIDDLE and continue. This was excluded
+    // when the file was written, and not because it passed - stepping on
+    // from an Undo that landed mid-program used to finish with every
+    // architectural register unwritten (known_issues 82, fixed since).
+    // The full (N, k) sweep lives in rv5s_undo_continue_test.cpp; this
+    // keeps the diagonal of it beside the two families above.
+    for (int n = 2; n <= total; ++n)
+        for (int k = 1; k < n; ++k)
+            checkOne(model, dir, body, what, straight, total, n, k);
 }
 } // namespace
 

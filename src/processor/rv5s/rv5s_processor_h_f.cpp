@@ -360,7 +360,7 @@ void RV5StageProcessorHF::pipeline_execute()
         }
 
         // --- EXECUTION ---
-        alu::AluOp alu_operation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+        alu::AluOp alu_operation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
         std::tie(alu_result, overflow) = alu::Alu::execute(alu_operation, alu_in1, alu_in2);
         // temporary fix for lui instruction
 
@@ -585,7 +585,7 @@ uint64_t RV5StageProcessorHF::pipeline_execute_float()
 
     ex_mem_reg_.freg2_data = fstore_data;
     // Execute FP operation
-    alu::AluOp aluOperation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp aluOperation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
@@ -693,7 +693,7 @@ uint64_t RV5StageProcessorHF::pipeline_execute_double()
 
     ex_mem_reg_.freg2_data = fstore_data;
 
-    alu::AluOp alu_operation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp alu_operation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 

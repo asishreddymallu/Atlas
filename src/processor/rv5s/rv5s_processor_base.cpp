@@ -779,7 +779,7 @@ uint64_t RV5StageVM_Base::execute_float()
         reg2_value = static_cast<uint64_t>(static_cast<int64_t>(id_ex_reg_.imm));
     }
 
-    alu::AluOp aluOperation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp aluOperation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
@@ -815,7 +815,7 @@ uint64_t RV5StageVM_Base::execute_double()
         reg2_value = static_cast<uint64_t>(static_cast<int64_t>(id_ex_reg_.imm));
     }
 
-    alu::AluOp alu_operation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp alu_operation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 

@@ -104,16 +104,42 @@ void RV5SControlUnit::SetControlSignals(uint32_t instruction)
 
 alu::AluOp RV5SControlUnit::GetAluSignal(uint32_t instruction, bool ALUOp)
 {
-    // This is the "ALU Control Unit" logic. It runs in the Execute stage.
-    (void)ALUOp; // The boolean ALUOp from the base class is ignored in this design.
+    // The base class's virtual entry point. It can only reach the member
+    // alu_op_, so the pipeline does not use it - see GetAluSignalFor.
+    (void)ALUOp; // The boolean ALUOp from the base class is not enough to pick a row.
+    return GetAluSignalFor(instruction, alu_op_);
+}
 
+/**
+ * The "ALU Control Unit" logic, run in the Execute stage.
+ *
+ * The ALUOp row comes in as an ARGUMENT rather than being read from the
+ * member alu_op_, and that is the whole of known_issues 82. alu_op_ is
+ * written only by SetControlSignals(), i.e. only by the Decode stage,
+ * and Step() runs the stages backwards (WB, MEM, EX, ID, IF), so EX used
+ * to read the row the PREVIOUS cycle's decode left behind. That is
+ * correct while the machine only ever moves forwards, but it is state
+ * that lives across a cycle boundary and RV5StageStepDelta does not
+ * carry it, so an Undo restored all four pipeline registers and left
+ * alu_op_ holding the undone cycle's row. Stepping on from there decoded
+ * the instruction in EX against the wrong row: `addi t0, x0, 3` came out
+ * as 0, and `sd t2, 256(x0)` stored at address 1, over the program's own
+ * instruction bytes.
+ *
+ * ID_EX_Register::alu_op is the same value, latched at decode
+ * (rv5s_processor_base.cpp:243) and restored by Undo with the rest of
+ * the register, so taking it from there leaves nothing for an Undo to
+ * lose.
+ */
+alu::AluOp RV5SControlUnit::GetAluSignalFor(uint32_t instruction, uint8_t alu_op)
+{
     uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0b111;
     uint8_t funct7 = (instruction >> 25) & 0b1111111;
     uint8_t funct5 = (instruction >> 20) & 0b11111;
     uint8_t funct2 = (instruction >> 25) & 0b11;
 
-    switch (alu_op_)
+    switch (alu_op)
     {
     case 0: // ALUOp=0 -> Must be ADD (for Loads, Stores, JALR, LUI, AUIPC).
         return alu::AluOp::ADD;

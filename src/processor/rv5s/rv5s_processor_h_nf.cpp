@@ -219,7 +219,7 @@ void RV5StageProcessorHNF::pipeline_execute()
     uint64_t alu_in2 =
         id_ex_reg_.alu_src ? static_cast<uint64_t>(id_ex_reg_.imm) : id_ex_reg_.reg2_data;
 
-    alu::AluOp alu_operation = control_unit_.GetAluSignal(cur_instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp alu_operation = control_unit_.GetAluSignalFor(cur_instruction, id_ex_reg_.alu_op);
     uint64_t alu_result = 0;
 
     bool overflow;
@@ -361,7 +361,7 @@ uint64_t RV5StageProcessorHNF::pipeline_execute_float()
         reg2_value = static_cast<uint64_t>(static_cast<int64_t>(id_ex_reg_.imm));
     }
 
-    alu::AluOp aluOperation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp aluOperation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
@@ -397,7 +397,7 @@ uint64_t RV5StageProcessorHNF::pipeline_execute_double()
         reg2_value = static_cast<uint64_t>(static_cast<int64_t>(id_ex_reg_.imm));
     }
 
-    alu::AluOp alu_operation = control_unit_.GetAluSignal(instruction, id_ex_reg_.alu_op > 0);
+    alu::AluOp alu_operation = control_unit_.GetAluSignalFor(instruction, id_ex_reg_.alu_op);
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 
