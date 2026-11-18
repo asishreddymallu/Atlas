@@ -71,7 +71,7 @@ RV5StageProcessorNHF::RV5StageProcessorNHF() : RV5StageVM_Base()
 void RV5StageProcessorNHF::SetActiveWireNames()
 {
     // Clear current dynamic list and populate canonical always-active wires first
-    active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
+    resetWiresToBackbone();
 
     // Every condition below reads the register holding the instruction its
     // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
@@ -82,41 +82,41 @@ void RV5StageProcessorNHF::SetActiveWireNames()
     const RV5SControlUnit id = idStageControl();
     if (id.GetAluSrc())
     {
-        active_wires_.append("Imm_to_P2");
+        lightWire("Imm_to_P2", WireStage::ID);
     }
     if (id.GetMemWrite())
     {
-        active_wires_.append("Control_to_P2_MEM");
+        lightWire("Control_to_P2_MEM", WireStage::ID);
     }
     if (id.GetRegWrite())
     {
-        active_wires_.append("Control_to_P2_WB");
+        lightWire("Control_to_P2_WB", WireStage::ID);
     }
 
     // EX: immediate selected as the ALU's second operand
     if (id_ex_reg_.alu_src)
     {
-        active_wires_.append("P2Imm_to_ALU2_down");
+        lightWire("P2Imm_to_ALU2_down", WireStage::EX);
     }
 
     // MEM: memory control / data path
     if (ex_mem_reg_.mem_read)
     {
-        active_wires_.append("P3_to_DM_Memread");
-        active_wires_.append("DMMux_to_DM");
+        lightWire("P3_to_DM_Memread", WireStage::MEM);
+        lightWire("DMMux_to_DM", WireStage::MEM);
     }
     if (ex_mem_reg_.mem_write)
     {
-        active_wires_.append("P3_TO_DM_control_memwrite");
-        active_wires_.append("P3ALUres_to_DMup");
+        lightWire("P3_TO_DM_control_memwrite", WireStage::MEM);
+        lightWire("P3ALUres_to_DMup", WireStage::MEM);
     }
 
     // WB: register writeback paths
     if (mem_wb_reg_.reg_write)
     {
-        active_wires_.append("P4_wbcontrol_to_WBmux");
-        active_wires_.append("RdP4_to_FU");
-        active_wires_.append("WBMux_to_RF");
+        lightWire("P4_wbcontrol_to_WBmux", WireStage::WB);
+        lightWire("RdP4_to_FU", WireStage::WB);
+        lightWire("WBMux_to_RF", WireStage::WB);
     }
 
     // Forwarding unit activity: drive FWD unit wires when forwarding is relevant
@@ -133,16 +133,16 @@ void RV5StageProcessorNHF::SetActiveWireNames()
         // If EX/MEM destination matches ID/EX sources, show forwarding path
         if (ex_mem_reg_.rd == id_ex_reg_.rs1)
         {
-            active_wires_.append("P2_to_FDU_rs1");
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX1_cntrl");
-            active_wires_.append("FDU_to_fMUX2");
+            lightWire("P2_to_FDU_rs1", WireStage::EX);
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX1_cntrl", WireStage::EX);
+            lightWire("FDU_to_fMUX2", WireStage::EX);
         }
         if (ex_mem_reg_.rd == id_ex_reg_.rs2)
         {
-            active_wires_.append("P2_to_FDU_RS2");
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX3");
+            lightWire("P2_to_FDU_RS2", WireStage::EX);
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX3", WireStage::EX);
         }
     }
 
@@ -155,20 +155,20 @@ void RV5StageProcessorNHF::SetActiveWireNames()
     {
         if (mem_wb_reg_.rd == id_ex_reg_.rs1)
         {
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX1_cntrl");
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX1_cntrl", WireStage::EX);
         }
         if (mem_wb_reg_.rd == id_ex_reg_.rs2)
         {
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX3");
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX3", WireStage::EX);
         }
     }
 
     // EX: the comparison result of a branch, taken or not
     if (isBranchInstruction(id_ex_reg_.instruction))
     {
-        active_wires_.append("ALU_zerores_to_P3");
+        lightWire("ALU_zerores_to_P3", WireStage::EX);
     }
 
     // PC selection. A taken branch in MEM selects its target through the
@@ -176,13 +176,13 @@ void RV5StageProcessorNHF::SetActiveWireNames()
     // have, so in that cycle neither input of the PC mux lights.
     if (branchRedirectsNextStep())
     {
-        active_wires_.append("ANDGate_lower_entry");
-        active_wires_.append("ANDGATE_to_PCMUX");
-        active_wires_.append("P3_to_PCMux");
+        lightWire("ANDGate_lower_entry", WireStage::MEM);
+        lightWire("ANDGATE_to_PCMUX", WireStage::MEM);
+        lightWire("P3_to_PCMux", WireStage::MEM);
     }
     else if (!jumpRedirectsNextStep())
     {
-        active_wires_.append("ALU1_to_PCMuxUp");
+        lightWire("ALU1_to_PCMuxUp", WireStage::IF);
     }
 }
 

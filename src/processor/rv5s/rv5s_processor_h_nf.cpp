@@ -60,7 +60,7 @@ RV5StageProcessorHNF::RV5StageProcessorHNF() : RV5StageVM_Base()
 void RV5StageProcessorHNF::SetActiveWireNames()
 {
     // Clear and populate canonical wires for the Hazard Detection + No Forwarding (H_NF) circuit
-    active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
+    resetWiresToBackbone();
 
     // Every condition below reads the register holding the instruction its
     // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
@@ -70,49 +70,49 @@ void RV5StageProcessorHNF::SetActiveWireNames()
     // ID: the immediate generator's output into ID/EX
     if (idStageControl().GetAluSrc())
     {
-        active_wires_.append("Imm_to_P2");
+        lightWire("Imm_to_P2", WireStage::ID);
     }
 
     // EX: immediate selected as the ALU's second operand
     if (id_ex_reg_.alu_src)
     {
-        active_wires_.append("P2Imm_to_ALU2_down");
+        lightWire("P2Imm_to_ALU2_down", WireStage::EX);
     }
 
     // EX: control carried on from ID/EX to EX/MEM
     if (id_ex_reg_.mem_write)
     {
-        active_wires_.append("P2_to_P3_MEMControl");
+        lightWire("P2_to_P3_MEMControl", WireStage::EX);
     }
     if (id_ex_reg_.reg_write)
     {
-        active_wires_.append("P2_to_P3_WBcontrol");
+        lightWire("P2_to_P3_WBcontrol", WireStage::EX);
     }
 
     // MEM: memory control / data path
     if (ex_mem_reg_.mem_read)
     {
-        active_wires_.append("P3_to_DM_Memread");
-        active_wires_.append("DMMux_to_DM");
+        lightWire("P3_to_DM_Memread", WireStage::MEM);
+        lightWire("DMMux_to_DM", WireStage::MEM);
     }
     if (ex_mem_reg_.mem_write)
     {
-        active_wires_.append("P3_TO_DM_control_memwrite");
-        active_wires_.append("P3ALUres_to_DMup");
+        lightWire("P3_TO_DM_control_memwrite", WireStage::MEM);
+        lightWire("P3ALUres_to_DMup", WireStage::MEM);
     }
 
     // WB: register writeback paths
     if (mem_wb_reg_.reg_write)
     {
-        active_wires_.append("P4_wbcontrol_to_WBmux");
-        active_wires_.append("RdP4_to_FU");
-        active_wires_.append("WBMux_to_RF");
+        lightWire("P4_wbcontrol_to_WBmux", WireStage::WB);
+        lightWire("RdP4_to_FU", WireStage::WB);
+        lightWire("WBMux_to_RF", WireStage::WB);
     }
 
     // EX: the comparison result of a branch, taken or not
     if (isBranchInstruction(id_ex_reg_.instruction))
     {
-        active_wires_.append("ALU_zerores_to_P3");
+        lightWire("ALU_zerores_to_P3", WireStage::EX);
     }
 
     // PC selection. A taken branch in MEM selects its target through the
@@ -120,38 +120,27 @@ void RV5StageProcessorHNF::SetActiveWireNames()
     // have, so in that cycle neither input of the PC mux lights.
     if (branchRedirectsNextStep())
     {
-        active_wires_.append("ANDGate_lower_entry");
-        active_wires_.append("ANDGATE_to_PCMUX");
-        active_wires_.append("P3_to_PCMux");
+        lightWire("ANDGate_lower_entry", WireStage::MEM);
+        lightWire("ANDGATE_to_PCMUX", WireStage::MEM);
+        lightWire("P3_to_PCMux", WireStage::MEM);
     }
     else if (!jumpRedirectsNextStep())
     {
-        active_wires_.append("ALU1_to_PCMuxUp");
+        lightWire("ALU1_to_PCMuxUp", WireStage::IF);
     }
 
     // ID: the hazard unit stalls this cycle - the decision Step() makes next
     // (key feature of H_NF mode)
     if (hazardUnitWillStall(false))
     {
-        active_wires_.append("HDU_to_P1");
-        active_wires_.append("HDU_to_HDU_mUX");
-        active_wires_.append("HDUMux_to_P2");
-        active_wires_.append("HDU_mux_lowest_toP2");
-        active_wires_.append("Control_ControlMux");
+        lightWire("HDU_to_P1", WireStage::ID);
+        lightWire("HDU_to_HDU_mUX", WireStage::ID);
+        lightWire("HDUMux_to_P2", WireStage::ID);
+        lightWire("HDU_mux_lowest_toP2", WireStage::ID);
+        lightWire("Control_ControlMux", WireStage::ID);
     }
 
-    // Preserve ordering while removing duplicates
-    QList<QString> uniqueList;
-    QSet<QString> seen;
-    for (const auto &w : active_wires_)
-    {
-        if (!seen.contains(w))
-        {
-            uniqueList.append(w);
-            seen.insert(w);
-        }
-    }
-    active_wires_ = uniqueList;
+    // lightWire keeps the list free of duplicates, first occurrence first.
 
     // The scene will read `active_wires_` when `updateCircuitStateSignal` is emitted by callers.
 }

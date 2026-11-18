@@ -84,7 +84,7 @@ RV5StageProcessorHF::RV5StageProcessorHF() : RV5StageVM_Base()
 void RV5StageProcessorHF::SetActiveWireNames()
 {
     // Clear and populate canonical wires for the Hazard+Forwarding (H_F) circuit
-    active_wires_.resize(always_active_wires_count_);
+    resetWiresToBackbone();
     // Backbone / always-visible wires (names sourced from H_F_Processor.json)
 
     // Every condition below reads the register holding the instruction its
@@ -95,43 +95,43 @@ void RV5StageProcessorHF::SetActiveWireNames()
     // ID: the immediate generator's output into ID/EX
     if (idStageControl().GetAluSrc())
     {
-        active_wires_.append("Imm_to_P2");
+        lightWire("Imm_to_P2", WireStage::ID);
     }
 
     // EX: immediate selected as the ALU's second operand
     if (id_ex_reg_.alu_src)
     {
-        active_wires_.append("P2Imm_to_ALU2_down");
+        lightWire("P2Imm_to_ALU2_down", WireStage::EX);
     }
 
     // EX: control carried on from ID/EX to EX/MEM
     if (id_ex_reg_.mem_write)
     {
-        active_wires_.append("P2_to_P3_MEMControl");
+        lightWire("P2_to_P3_MEMControl", WireStage::EX);
     }
     if (id_ex_reg_.reg_write)
     {
-        active_wires_.append("P2_to_P3_WBcontrol");
+        lightWire("P2_to_P3_WBcontrol", WireStage::EX);
     }
 
     // MEM: memory control / data path
     if (ex_mem_reg_.mem_read)
     {
-        active_wires_.append("P3_to_DM_Memread");
-        active_wires_.append("DMMux_to_DM");
+        lightWire("P3_to_DM_Memread", WireStage::MEM);
+        lightWire("DMMux_to_DM", WireStage::MEM);
     }
     if (ex_mem_reg_.mem_write)
     {
-        active_wires_.append("P3_TO_DM_control_memwrite");
-        active_wires_.append("P3ALUres_to_DMup");
+        lightWire("P3_TO_DM_control_memwrite", WireStage::MEM);
+        lightWire("P3ALUres_to_DMup", WireStage::MEM);
     }
 
     // WB: register writeback paths
     if (mem_wb_reg_.reg_write)
     {
-        active_wires_.append("P4_wbcontrol_to_WBmux");
-        active_wires_.append("RdP4_to_FU");
-        active_wires_.append("WBMux_to_RF");
+        lightWire("P4_wbcontrol_to_WBmux", WireStage::WB);
+        lightWire("RdP4_to_FU", WireStage::WB);
+        lightWire("WBMux_to_RF", WireStage::WB);
     }
 
     // Forwarding unit activity: show FWD wires when forwarding is relevant
@@ -146,16 +146,16 @@ void RV5StageProcessorHF::SetActiveWireNames()
         // substitution 79 made in the datapath (known_issues 81).
         if (ex_mem_reg_.rd == id_ex_reg_.rs1)
         {
-            active_wires_.append("P2_to_FDU_rs1");
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX1_cntrl");
-            active_wires_.append("FDU_to_fMUX2");
+            lightWire("P2_to_FDU_rs1", WireStage::EX);
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX1_cntrl", WireStage::EX);
+            lightWire("FDU_to_fMUX2", WireStage::EX);
         }
         if (ex_mem_reg_.rd == id_ex_reg_.rs2)
         {
-            active_wires_.append("P2_to_FDU_RS2");
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX3");
+            lightWire("P2_to_FDU_RS2", WireStage::EX);
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX3", WireStage::EX);
         }
     }
 
@@ -168,20 +168,20 @@ void RV5StageProcessorHF::SetActiveWireNames()
     {
         if (mem_wb_reg_.rd == id_ex_reg_.rs1)
         {
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX1_cntrl");
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX1_cntrl", WireStage::EX);
         }
         if (mem_wb_reg_.rd == id_ex_reg_.rs2)
         {
-            active_wires_.append("P4EB_to_FWD_unit");
-            active_wires_.append("FDU_to_FMUX3");
+            lightWire("P4EB_to_FWD_unit", WireStage::EX);
+            lightWire("FDU_to_FMUX3", WireStage::EX);
         }
     }
 
     // EX: the comparison result of a branch, taken or not
     if (isBranchInstruction(id_ex_reg_.instruction))
     {
-        active_wires_.append("ALU_zerores_to_P3");
+        lightWire("ALU_zerores_to_P3", WireStage::EX);
     }
 
     // PC selection. A taken branch in MEM selects its target through the
@@ -189,36 +189,25 @@ void RV5StageProcessorHF::SetActiveWireNames()
     // have, so in that cycle neither input of the PC mux lights.
     if (branchRedirectsNextStep())
     {
-        active_wires_.append("ANDGate_lower_entry");
-        active_wires_.append("ANDGATE_to_PCMUX");
-        active_wires_.append("P3_to_PCMux");
+        lightWire("ANDGate_lower_entry", WireStage::MEM);
+        lightWire("ANDGATE_to_PCMUX", WireStage::MEM);
+        lightWire("P3_to_PCMux", WireStage::MEM);
     }
     else if (!jumpRedirectsNextStep())
     {
-        active_wires_.append("ALU1_to_PCMuxUp");
+        lightWire("ALU1_to_PCMuxUp", WireStage::IF);
     }
 
     // ID: the hazard unit stalls this cycle - the decision Step() makes next
     if (hazardUnitWillStall(true))
     {
-        active_wires_.append("HDU_to_P1");
-        active_wires_.append("HDUMux_to_P2");
-        active_wires_.append("HDU_mux_lowest_toP2");
-        active_wires_.append("HDU_to_HDU_mUX");
+        lightWire("HDU_to_P1", WireStage::ID);
+        lightWire("HDUMux_to_P2", WireStage::ID);
+        lightWire("HDU_mux_lowest_toP2", WireStage::ID);
+        lightWire("HDU_to_HDU_mUX", WireStage::ID);
     }
 
-    // Preserve ordering while removing duplicates
-    QList<QString> uniqueList;
-    QSet<QString> seen;
-    for (const auto &w : active_wires_)
-    {
-        if (!seen.contains(w))
-        {
-            uniqueList.append(w);
-            seen.insert(w);
-        }
-    }
-    active_wires_ = uniqueList;
+    // lightWire keeps the list free of duplicates, first occurrence first.
 
     // The scene will read `active_wires_` when `updateCircuitStateSignal` is emitted by callers.
 }

@@ -9,6 +9,7 @@
 #include "alu.h"
 #include "common/assembled_program.h"
 #include "memory_controller.h"
+#include "processor/circuit_stage.h"
 #include "processor/processor_state.h"
 #include "processor/registers.h"
 #include "ui/processor_tab/circuit_scene.h"
@@ -194,6 +195,18 @@ class ProcessorBase : public QObject
     size_t always_active_wires_count_{};
     // the list of wire that will be active in this cycle of vm
     // well send this to the gui to highlight those wires
+
+    /// Parallel to active_wires_: each entry's stage bitmask (stageBit),
+    /// kNoStage for the backbone and for every RVSS wire. Kept the same
+    /// length as active_wires_ by resetWiresToBackbone() and lightWire().
+    QList<quint8> active_wire_stages_{};
+
+    /// Truncates active_wires_ to the constructor's backbone and resets
+    /// active_wire_stages_ to match, all kNoStage.
+    void resetWiresToBackbone();
+    /// Lights a conditional wire for one stage. A name already lit gets
+    /// the stage added to its mask; a backbone name is never tagged.
+    void lightWire(const QString &name, WireStage stage);
 
 
     std::unique_ptr<CircuitScene> circuit_scene_; // Circuit scene for visualization

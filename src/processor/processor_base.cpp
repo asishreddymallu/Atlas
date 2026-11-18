@@ -576,4 +576,28 @@ void ProcessorBase::ModifyRegister(const std::string &reg_name, uint64_t value)
 {
     registers_.ModifyRegister(reg_name, value);
 }
+
+void ProcessorBase::resetWiresToBackbone()
+{
+    const qsizetype backbone = static_cast<qsizetype>(always_active_wires_count_);
+    active_wires_.resize(backbone);
+    active_wire_stages_ = QList<quint8>(backbone, kNoStage);
+}
+
+void ProcessorBase::lightWire(const QString &name, WireStage stage)
+{
+    const qsizetype at = active_wires_.indexOf(name);
+    if (at < 0)
+    {
+        active_wires_.append(name);
+        active_wire_stages_.append(stageBit(stage));
+        return;
+    }
+    // Backbone entries stay unstaged: they are on whatever any instruction
+    // does (known_issues 98), so they belong to no one stage.
+    if (at >= static_cast<qsizetype>(always_active_wires_count_))
+    {
+        active_wire_stages_[at] |= stageBit(stage);
+    }
+}
 }//namespace Kites

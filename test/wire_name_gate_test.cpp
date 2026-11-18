@@ -24,8 +24,8 @@
  * `test/` (`test/CMakeLists.txt:40`), which is how the ~100 existing
  * `"../examples/..."` opens work.
  *
- * The extraction CHECKS ITSELF: the number of `active_wires_.append(`
- * occurrences must equal the number of string-literal matches, so a name
+ * The extraction CHECKS ITSELF: the number of `active_wires_.append(` and
+ * `lightWire(` occurrences must equal the number of string-literal matches, so a name
  * built from a variable would fail this file rather than be quietly
  * missed.
  */
@@ -90,14 +90,18 @@ Appended appendedNames(const QString &path)
         return out;
     out.read = true;
 
+    // Two forms light a wire: the constructors' backbone appends, and
+    // lightWire("name", stage) for every conditional wire, which also
+    // records the stage it is lit for (stage_tag_test.cpp).
     static const QRegularExpression literal(
-        QStringLiteral(R"RX(active_wires_\.append\("([^"]+)"\))RX"));
+        QStringLiteral(R"RX((?:active_wires_\.append|lightWire)\("([^"]+)")RX"));
 
     QSet<QString> seen;
     const QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
     for (const QString &line : lines)
     {
-        out.calls += line.count(QStringLiteral("active_wires_.append("));
+        out.calls += line.count(QStringLiteral("active_wires_.append(")) +
+                     line.count(QStringLiteral("lightWire("));
         const QRegularExpressionMatch match = literal.match(line);
         if (!match.hasMatch())
             continue;
@@ -251,7 +255,7 @@ TEST(WireNameGate, EveryAppendIsAStringLiteralTheExtractionCanSee)
         const Appended appended = appendedNames(QString::fromLatin1(model.source));
         ASSERT_TRUE(appended.read) << model.tag;
         EXPECT_EQ(appended.calls, appended.literals)
-            << model.tag << ": " << appended.calls << " calls to active_wires_.append( but "
+            << model.tag << ": " << appended.calls << " calls to active_wires_.append( or lightWire( but "
             << appended.literals
             << " string-literal arguments - a name this gate cannot see is being appended";
     }

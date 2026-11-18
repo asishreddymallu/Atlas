@@ -75,7 +75,7 @@ RV5StageProcessorNHNF::RV5StageProcessorNHNF() : RV5StageVM_Base()
 void RV5StageProcessorNHNF::SetActiveWireNames()
 {
     // Clear and populate canonical wires for the NH_NF circuit (no forwarding)
-    active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
+    resetWiresToBackbone();
 
     // Every condition below reads the register holding the instruction its
     // stage label shows after this Step (setProcessorState): ID = if_id_reg_,
@@ -85,14 +85,14 @@ void RV5StageProcessorNHNF::SetActiveWireNames()
     // ID: the immediate generator's output into ID/EX
     if (idStageControl().GetAluSrc())
     {
-        active_wires_.append("Imm_to_P2");
+        lightWire("Imm_to_P2", WireStage::ID);
     }
 
     // EX: immediate selected as the ALU's second operand
     if (id_ex_reg_.alu_src)
     {
-        active_wires_.append("P2Imm_to_ALU2_down");
-        active_wires_.append("P2_to_ALUMux");
+        lightWire("P2Imm_to_ALU2_down", WireStage::EX);
+        lightWire("P2_to_ALUMux", WireStage::EX);
     }
 
     // EX: a branch's comparison result and the target adder (which a jump
@@ -101,27 +101,27 @@ void RV5StageProcessorNHNF::SetActiveWireNames()
     const bool ex_jump   = isJumpInstruction(id_ex_reg_.instruction);
     if (ex_branch)
     {
-        active_wires_.append("ALU_zerores_to_P3");
+        lightWire("ALU_zerores_to_P3", WireStage::EX);
     }
     if (ex_branch || ex_jump)
     {
-        active_wires_.append("ALU2_to_P3");
+        lightWire("ALU2_to_P3", WireStage::EX);
     }
     else
     {
-        active_wires_.append("ALU_to_P3");
+        lightWire("ALU_to_P3", WireStage::EX);
     }
 
     // MEM: a branch's target and outcome travel towards the PC mux; any
     // other instruction's ALU result is the data-memory address
     if (isBranchInstruction(ex_mem_reg_.instruction))
     {
-        active_wires_.append("ANDGate_lower_entry");
-        active_wires_.append("P3_to_PCMux");
+        lightWire("ANDGate_lower_entry", WireStage::MEM);
+        lightWire("P3_to_PCMux", WireStage::MEM);
     }
     else
     {
-        active_wires_.append("P3ALUres_to_DMup");
+        lightWire("P3ALUres_to_DMup", WireStage::MEM);
     }
 
     // PC selection. A taken branch in MEM selects its target through the
@@ -129,41 +129,41 @@ void RV5StageProcessorNHNF::SetActiveWireNames()
     // have, so in that cycle neither input of the PC mux lights.
     if (branchRedirectsNextStep())
     {
-        active_wires_.append("ANDGATE_to_PCMUX");
-        active_wires_.append("P3_to_UpperEntryANDGATE");
+        lightWire("ANDGATE_to_PCMUX", WireStage::MEM);
+        lightWire("P3_to_UpperEntryANDGATE", WireStage::MEM);
     }
     else if (!jumpRedirectsNextStep())
     {
-        active_wires_.append("ALU1_to_PCMuxUp");
+        lightWire("ALU1_to_PCMuxUp", WireStage::IF);
     }
 
     // MEM: memory control / data path
     if (ex_mem_reg_.mem_read)
     {
-        active_wires_.append("DM_to_P4");
-        active_wires_.append("P3_to_DM_Memread");
+        lightWire("DM_to_P4", WireStage::MEM);
+        lightWire("P3_to_DM_Memread", WireStage::MEM);
     }
     if (ex_mem_reg_.mem_write)
     {
-        active_wires_.append("P3_TO_DM_control_memwrite");
-        active_wires_.append("P3_rs2_to_DMdown");
+        lightWire("P3_TO_DM_control_memwrite", WireStage::MEM);
+        lightWire("P3_rs2_to_DMdown", WireStage::MEM);
     }
 
     // WB: register writeback paths
     if (mem_wb_reg_.reg_write)
     {
-        active_wires_.append("P4_wbcontrol_to_WBmux");
-        active_wires_.append("P4_to_RF_regwritecontrol");
-        active_wires_.append("WBMux_to_RF");
+        lightWire("P4_wbcontrol_to_WBmux", WireStage::WB);
+        lightWire("P4_to_RF_regwritecontrol", WireStage::WB);
+        lightWire("WBMux_to_RF", WireStage::WB);
     }
     if (mem_wb_reg_.mem_to_reg)
     {
-        active_wires_.append("P4DM_to_lastMux");
+        lightWire("P4DM_to_lastMux", WireStage::WB);
     }
     else if (mem_wb_reg_.reg_write)
     {
-        active_wires_.append("P4_ALUres_to_Mux");
-        active_wires_.append("RdP4_to_RF");
+        lightWire("P4_ALUres_to_Mux", WireStage::WB);
+        lightWire("RdP4_to_RF", WireStage::WB);
     }
 }
 
