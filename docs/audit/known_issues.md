@@ -4639,3 +4639,56 @@ Not changed. Removing a name from the backbone changes what every cycle
 draws, and it is a question about the drawing: should an idle control
 wire be dark? That belongs with the frame review, not with the timing
 fix.
+
+---
+
+## 99. Stopping a paused run makes the old processor clock once more, and that clock arrives queued after a processor switch
+
+When a Run or Debug Run is stopped, `RV5StageVM_Base::Run` emits
+`processorClockedSignal` once more as it leaves its loop
+(`rv5s_processor_base.cpp:51-56`, "to get rid of any highlights"). That
+emit happens on the **worker** thread. `ProcessorManager` receives it by
+DirectConnection (`processor_manager.cpp:74-75`), so its slot runs there
+too, and anything the slot emits towards the UI is **queued**.
+
+The sequence on the toolbar path is Stop, then choose a processor:
+1. The worker runs that last clock.
+2. `changeProcessor` replaces the processor, and with it the circuit
+   scene.
+3. Only then does the UI thread drain the queue, carrying the old
+   processor's state.
+
+**Measured for the stage selection, fixed there.** The first version of
+U4b's `selectedStagesSignal` handler applied the value it carried. The
+test `StageHighlight.AProcessorChangeCarriesTheSelectionIntoTheNewScene`
+saw the new scene receive the old processor's EX selection (`4`) after
+the switch, where `0` was right. The handler now asks the manager for
+its current selection when the event is delivered
+(`main_window.cpp:201`), so a late delivery applies the state as it is
+now.
+
+**Not checked for the editor's stage labels.** `updateEditorHighlightSignal`
+takes the same route with the same PCs. Whether that leaves the old
+labels drawn after a switch was not run. It depends on what
+`processor_state_` holds at that final emit, which this stage did not
+measure.
+
+---
+
+## 100. The single-cycle stage cell shows the wrong instruction after Undo
+
+U4b fills the circuit view's one CI cell for RVSS from
+`current_instruction_` at `last_executed_pc_`
+(`rvss_processor.cpp:66-71`). That is the instruction the wires describe.
+`current_instruction_` is set only by `Fetch` (`:183`). `Undo` and `Redo`
+(`:1228`, `:1297`) rewind the PC and registers but not that field or the
+control unit.
+
+So after an Undo the CI cell, like the wires (97), shows the last
+instruction **fetched**, not the one undone to. This is the same root
+cause as 97, and it would be fixed the same way: carry the decoded
+instruction in the step delta.
+
+Read, not run. The single-cycle test steps forward only
+(`StageTable.SingleCycleShowsOneCellWithTheInstructionJustExecuted`).
+
