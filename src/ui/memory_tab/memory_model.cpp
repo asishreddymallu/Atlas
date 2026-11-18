@@ -2,6 +2,7 @@
 #include "ui/common/table_font.h"
 #include "config/config.h"
 #include <QDebug>
+#include <QtEndian>
 #include <algorithm>
 #include <cstdint>
 namespace Kites
@@ -63,6 +64,20 @@ void MemoryModel::setDisplayBase(Base base)
     m_displayBase = base;
     endResetModel();
 }
+
+void MemoryModel::setByteOrder(ByteOrder order)
+{
+    // The same shape as setDisplayBase: a whole-model reset, so the
+    // header - which names the order - is re-read along with the cells.
+    beginResetModel();
+    m_byteOrder = order;
+    endResetModel();
+}
+
+ByteOrder MemoryModel::byteOrder() const
+{
+    return m_byteOrder;
+}
 void MemoryModel::changeMemoryController(MemoryController *memoryController)
 {
     beginResetModel();
@@ -120,7 +135,11 @@ QVariant MemoryModel::headerData(int section, Qt::Orientation orientation, int r
         case 0:
             return QString("Address");
         case 1:
-            return QString("Double Word");
+            // The order is named in the header because the same eight
+            // bytes read two different ways underneath it, and a reader
+            // must never have to guess which one is on screen.
+            return m_byteOrder == ByteOrder::Big ? QString("Double Word (BE)")
+                                                 : QString("Double Word (LE)");
         case 2:
             return QString("Byte 0");
         case 3:
@@ -216,6 +235,17 @@ QVariant MemoryModel::data(const QModelIndex &index, int role) const
         case 1: // Double Word
         {
             uint64_t doubleWord = m_memoryController->readDoubleWord_d(alignedAddress);
+            // The one place byte order is applied, and it is applied to a
+            // value that has already been read. readDoubleWord_d assembles
+            // the bytes little-endian exactly as the machine does
+            // (main_memory.cpp:79); this spells that value back the other
+            // way round. Memory is not touched, the Byte 0-7 columns below
+            // are not touched, and because the swap happens before
+            // formatting it holds in hex, decimal and binary alike.
+            if (m_byteOrder == ByteOrder::Big)
+            {
+                doubleWord = qbswap(doubleWord);
+            }
             return QString("%1%2").arg(prefix).arg(
                 QString::number(doubleWord, static_cast<int>(m_displayBase)).toUpper());
         }

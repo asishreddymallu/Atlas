@@ -28,6 +28,11 @@ class MemoryModel : public QAbstractTableModel
 
     // void changeMemoryController(std::shared_ptr<MemoryController> memoryController);
     void setDisplayBase(Base base);
+    /// How the Double Word column reads its eight bytes. A display
+    /// choice: it reaches `data()` and nothing else, and memory, the
+    /// caches and the processor never learn about it.
+    void setByteOrder(ByteOrder order);
+    ByteOrder byteOrder() const;
     void changeMemoryController(MemoryController *memoryController);
     void setRowsVisible(int rows);
     void offsetCentralAddress(int offset);
@@ -44,6 +49,7 @@ class MemoryModel : public QAbstractTableModel
     uint64_t m_currentCentralAddress = 64; // please keep this a multiple of 8
     // other wise  this crashes fuck my life
     Base m_displayBase = Base::Hexadecimal;
+    ByteOrder m_byteOrder = ByteOrder::Little;
     MemoryController *m_memoryController;
   public slots:
     void memoryResetSlot();

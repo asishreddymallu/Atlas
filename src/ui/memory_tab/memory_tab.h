@@ -33,10 +33,23 @@ class MemoryTab : public KitesTab
     /// The base the combo box currently shows.
     Base displayBase() const;
 
+    /// Selects a byte order by driving the tab's own combo box, exactly
+    /// as setDisplayBase drives the other one. The combo stays the
+    /// state; an unknown order is ignored.
+    void setByteOrder(ByteOrder order);
+
+    /// The byte order the combo box currently shows.
+    ByteOrder byteOrder() const;
+
   signals:
     /// Emitted whenever the combo box lands on a new base, whoever moved it,
     /// so a second view of the same choice can follow it.
     void displayBaseChangedSignal(Base base);
+
+    /// The same for the byte order. This one has no ribbon twin - it is a
+    /// property of one column of one table, not a window-wide command -
+    /// but it is announced the same way so the tab stays observable.
+    void byteOrderChangedSignal(ByteOrder order);
 
   private:
     Ui::MemoryTab *ui;

@@ -25,6 +25,26 @@ Base baseForText(const QString &text)
             return entry.base;
     return Base::Hexadecimal; // the combo's first entry, and the model's default
 }
+
+// The byte-order combo, built the same way for the same reason: the label
+// and the value cannot drift apart if they sit in one table.
+struct OrderEntry
+{
+    const char *text;
+    ByteOrder   order;
+};
+constexpr OrderEntry orderEntries[] = {
+    {"Little", ByteOrder::Little},
+    {"Big", ByteOrder::Big},
+};
+
+ByteOrder orderForText(const QString &text)
+{
+    for (const OrderEntry &entry : orderEntries)
+        if (text == QLatin1String(entry.text))
+            return entry.order;
+    return ByteOrder::Little; // the combo's first entry, and the model's default
+}
 } // namespace
 
 MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
@@ -82,6 +102,14 @@ MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
                 // sees the table already in the new base.
                 emit displayBaseChangedSignal(base);
             });
+
+    connect(ui->byteOrderCombo, &QComboBox::currentTextChanged, this,
+            [this](const QString &text)
+            {
+                const ByteOrder order = orderForText(text);
+                m_memoryModel->setByteOrder(order);
+                emit byteOrderChangedSignal(order);
+            });
 }
 
 void MemoryTab::triggerSearch()
@@ -99,6 +127,18 @@ void MemoryTab::setDisplayBase(Base base)
 Base MemoryTab::displayBase() const
 {
     return baseForText(ui->comboBox->currentText());
+}
+
+void MemoryTab::setByteOrder(ByteOrder order)
+{
+    for (const OrderEntry &entry : orderEntries)
+        if (entry.order == order)
+            ui->byteOrderCombo->setCurrentText(QLatin1String(entry.text));
+}
+
+ByteOrder MemoryTab::byteOrder() const
+{
+    return orderForText(ui->byteOrderCombo->currentText());
 }
 
 void MemoryTab::changeMemoryController(MemoryController *memoryController)
