@@ -384,6 +384,14 @@ void RVSSProcessor::ExecuteDouble()
 
     int32_t imm = ImmGenerator(current_instruction_);
 
+    // A dynamic rm (0b111, the assembler's default) means "use frm", as in
+    // ExecuteFloat and on every pipeline. Passing 7 through left the ALU in
+    // whatever mode the thread was already in (known_issues 107).
+    if (rm == 0b111)
+    {
+        rm = registers_.ReadCsr(0x002);
+    }
+
     uint64_t reg1_value = registers_.ReadFpr(rs1);
     uint64_t reg2_value = registers_.ReadFpr(rs2);
     uint64_t reg3_value = registers_.ReadFpr(rs3);

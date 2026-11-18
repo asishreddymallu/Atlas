@@ -353,6 +353,26 @@ bool canonicalizesNaN(AluOp op)
         return false;
     }
 }
+
+/// Restores the calling thread's rounding mode on every way out of
+/// fpexecute/dfpexecute. Both set the host mode from rm, and restored it by
+/// hand on only some return paths: the fld/fsd address add returned early
+/// with fld's funct3 (0b011, RUP) applied, so the thread stayed in round-up
+/// and every later host floating-point operation on it - the next double
+/// op with a dynamic rm on rvss among them - rounded up (known_issues 107).
+/// The floating-point environment is per thread: the Run worker, or the GUI
+/// thread itself when the user steps.
+class RoundingModeGuard
+{
+  public:
+    RoundingModeGuard() : saved_(std::fegetround()) {}
+    ~RoundingModeGuard() { std::fesetround(saved_); }
+    RoundingModeGuard(const RoundingModeGuard &) = delete;
+    RoundingModeGuard &operator=(const RoundingModeGuard &) = delete;
+
+  private:
+    int saved_;
+};
 } // namespace
 
 [[nodiscard]] std::pair<uint64_t, uint8_t> Alu::fpexecute(AluOp op, uint64_t ina, uint64_t inb,
@@ -370,6 +390,7 @@ bool canonicalizesNaN(AluOp op)
 
     uint8_t fcsr = 0;
 
+    const RoundingModeGuard restore_rounding_mode; // known_issues 107
     int original_rm = std::fegetround();
 
     switch (rm)
@@ -752,6 +773,7 @@ bool canonicalizesNaN(AluOp op)
 
     uint8_t fcsr = 0;
 
+    const RoundingModeGuard restore_rounding_mode; // known_issues 107
     int original_rm = std::fegetround();
 
     switch (rm)
