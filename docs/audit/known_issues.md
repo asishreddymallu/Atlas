@@ -2760,7 +2760,7 @@ the wrong answer.
 
 ---
 
-## 66. Only one of the four rv5s variants handles `ecall` at all
+## 66. FIXED: only one of the four rv5s variants handled `ecall` at all
 
 `handle_syscall()` is pure virtual on the base
 (`rv5s_processor_base.h:104`) and all four variants override it. **Three
@@ -2807,9 +2807,105 @@ path reaches it. The only untimed waits the rv5s loops can enter are the
 pause waits at `rv5s_processor_base.cpp:33` and `rvss_processor.cpp:136`,
 both of which `StopAndReset` wakes.
 
-Status: **recorded, not fixed.** Three dead overrides and an `a7`-blind
-fourth are simulator-semantics work, not threading work, and AGENTS.md
-rule 4 keeps core logic out of this branch.
+Status at the time: **recorded, not fixed.** Three dead overrides and
+an `a7`-blind fourth are simulator-semantics work, not threading work, and
+AGENTS.md rule 4 kept core logic out of that branch.
+
+### Answered from the code before the fix (base `19cf41f`)
+
+- **Which stage reads a0/a7.** None reads a7. nh_nf acted on the opcode
+  alone, in EX (`rv5s_processor_nh_nf.cpp:210-214`). The other three
+  never reached their overrides.
+- **Forwarded or stalled?** Neither, on any variant. An ecall encodes
+  rs1 = rs2 = 0, so the hazard unit (`rv5s_hdu.cpp:39-57`) and the
+  forwarding units never learn that it reads a0-a2 and a7.
+- **Does an exit drain?** No. nh_nf returned from `pipeline_execute`
+  before EX/MEM was latched, and the run stopped after that Step. The
+  instruction just before the ecall had done MEM but not WB, so its
+  register write was lost. A store just before the ecall survived (its
+  MEM had run). Measured with the `lirepro` harness on
+  `li a7,10; nop x4; li x5,5; ecall; li x6,9`, run through `DebugRun`:
+
+  | | rv5-nh-nf | rv5-nh-f | rv5-h-nf | rv5-h-f |
+  |---|---|---|---|---|
+  | base, x5 / x6 | **0 / 0** (write lost) | 5 / **9** (no exit) | 5 / **9** | 5 / **9** |
+  | after, x5 / x6 | 5 / 0 | 5 / 0 | 5 / 0 | 5 / 0 |
+
+- **The worker-thread stop (62).** On the Run worker, `RequestStop` →
+  `StopFromRunLoop` was correct. Stepping onto the ecall was not: it
+  self-deadlocked. See 102.
+- **rvss's own exit** called `exit(0)`. See 101.
+
+### The fix (`e2eeacf`, `03e4c9d`, `24f763b`)
+
+The design choice (the user's): the pipelines serve an ecall at
+**writeback**, through the same service rvss uses.
+
+- `RVSSProcessor::HandleSyscall` moved verbatim into
+  `ProcessorBase::ServeSyscall(StepDelta &)` (`processor_base.cpp:528`).
+  rvss calls it from Execute (`rvss_processor.cpp:419-421`), so the five
+  models share one table: 1 print int, 2 print float, 3 print double,
+  4 print string, 10 exit, 63 read (fd 0, with the input wait), 64 write
+  (fd 1). Anything else prints "Unknown syscall number" on stderr and
+  carries on (`:742`). 93 stays unknown.
+- `RV5StageVM_Base::pipeline_writeback` serves an instruction with
+  opcode `0x73` and funct3 0 (`rv5s_processor_base.cpp:682`), via
+  `serve_syscall_at_writeback` (`:757`):
+  1. Every older instruction has retired, so a0-a2 and a7 are
+     architectural on every variant. No forwarding path and no stall was
+     added for them.
+  2. An exit drains by construction.
+  3. Everything younger is flushed (IF/ID, ID/EX, EX/MEM, any
+     `stall_cycles_`) and refetched from ecall + 4, as for a trap. This
+     happens before MEM and EX run in that Step, so a store right after
+     the exit never writes.
+  4. The cost is three bubbles per ecall.
+- The four `handle_syscall` overrides and their pure virtual are gone.
+  nh_nf's ecall early-return is gone, so its ecall now flows down the
+  pipe as a no-op like on the other three (`rv5s_processor_nh_nf.cpp:216`).
+- `ebreak` (funct3 0, imm 1) is served exactly like `ecall` on all five,
+  because that is the test rvss always used. Not changed here.
+- Residue, not undone: a younger FP instruction that was in EX in the
+  cycle before the flush has already written fcsr (`WriteCsr(0x003)`;
+  see 72).
+
+**Tests.** `test/ecall_syscall_test.cpp`, value-parameterized per model
+(one ctest process per model and case, 40 tests). Each case runs
+unpadded and padded. rvss, h-nf and h-f are asserted in both forms;
+nh-nf and nh-f are asserted padded only, as their contract. The cases:
+- print an int;
+- read "42" and echo it;
+- the same, with the input arriving 300 ms later;
+- Stop while parked in the read;
+- `li a7,93` immediately before an ecall, after an earlier `li a7,10`;
+- a store right before the exit, and one right after it;
+- an ALU write right before the exit;
+- stepping onto the exit.
+
+An `atexit` guard turns an `exit()` during a run into status 1. Without
+it, the old rvss `exit(0)` made ctest report those tests as passed.
+
+**Measured, not asserted:** with every case asserted unpadded on all
+five, only `ReadsAnIntegerAndEchoesIt/rv5-nh-nf` fails. Its ordinary
+`lbu`→`addi` and `mul`→`add` pairs have no forwarding. The ecall itself
+is right unpadded on both no-hazard variants, because it reads at
+writeback.
+
+**Red** (base + tests only): 40 of 44 new tests fail, including all 40
+ecall rows except `StopWakesARunWaitingForInput/rvss`; rvss's read wait
+was already stop-aware. The nh-nf stepping row fails by its 10 s
+watchdog.
+
+**Controls** (out of tree, each reverted alone):
+- `exit(0)` back → 35 of 40 red; only the five Stop-while-waiting rows
+  pass, because they never exit.
+- Exit via `RequestStop()` → exactly the five
+  `SteppingOntoAnExitEndsTheProgramWithoutHanging` rows red, each at the
+  10 s watchdog.
+- The writeback service call removed → all 32 rv5s rows red, the 8 rvss
+  rows green.
+- The flush removed → `ReadsAnIntegerAndEchoesIt` and
+  `ExitKeepsAStoreJustBeforeItAndDropsOneAfter`, on rv5-h-nf and rv5-h-f.
 
 ---
 
@@ -2848,6 +2944,14 @@ wall time on a program ending in `ecall`:
 
 The other three are unaffected because they never call `handle_syscall`
 at all — see issue 66.
+
+**Update (66, 101, 102).** `handle_syscall` no longer exists. The exit
+service is now `ProcessorBase::ServeSyscall`, on all five models. It
+stops through `StopForProgramExit()` (`processor_base.cpp:749`), which is
+`StopFromRunLoop()` on the run thread, exactly as described above. On a
+manual step it does not call `RequestStop()` at all (102):
+`StepAndNotify()` returns false, and `ProcessorManager::step()` then
+takes the end-of-program path this entry describes, reset included.
 
 **The change is confined to the worker-thread caller.** The only other
 `RequestStop()` caller is `ProcessorManager::step()`
@@ -3200,7 +3304,7 @@ its allow-list.
 
 ---
 
-## 74. rv5s sign-extends a loaded single; rvss zero-extends it
+## 74. FIXED: rv5s sign-extended a loaded single; rvss zero-extends it
 
 Found by the pass-through negative control of the NaN survey, and it is
 the only case in 306 where the five models disagreed.
@@ -3221,9 +3325,31 @@ but **they do not match each other**, and that is the part that makes a
 program's result depend on which model a student picked. Any single
 whose bit 31 is set is affected — every negative single, not just NaNs.
 
-Not fixed: the fix is in the rv5s memory stage, outside this stage's
-file, and it interacts with 71 — whoever settles the representation
-should settle both at once.
+Not fixed at the time: the fix is in the rv5s memory stage, outside
+that stage's file, and it interacts with 71.
+
+**Fixed (`7de4932`)** to match rvss and the convention 71 records
+(zero-extended, not NaN-boxed). The FLW cast in `pipeline_memory` went
+from `int32_t` to `uint32_t` (`rv5s_processor_base.cpp:568`; it was
+`:560` at base). NaN-boxing stays open under 71.
+
+`test/flw_zero_extend_test.cpp` runs `sw` of the word, then `flw f2`,
+`fsd f2`, `ld x6`, padded, on all five models. Expected values come from
+Python `struct`:
+
+| word | f2 / x6 before, rv5s | after, all five |
+|---|---|---|
+| `0xBF800000` (-1.0) | `0xFFFFFFFFBF800000` | `0x00000000BF800000` |
+| `0xC0200000` (-2.5) | `0xFFFFFFFFC0200000` | `0x00000000C0200000` |
+| `0xFFC00000` (negative qNaN) | `0xFFFFFFFFFFC00000` | `0x00000000FFC00000` |
+
+`fmv.x.w` is unchanged and pinned. It sign-extends into the x register
+by the architecture (`alu.cpp:698-703`): `0xFFFFFFFFBF800000`, both
+after `fmv.w.x` and after `flw`.
+
+Red at base: `FlwZeroExtend.LoadedSingleIsZeroExtendedOnEveryModel`
+fails and the `fmv.x.w` pin passes. The control (cast back to `int32_t`)
+fails the same one test.
 
 ---
 
@@ -3389,6 +3515,46 @@ neither the editor nor the run reports anything. Every float test in this
 repository builds its constants one byte at a time with four `nop`s
 between dependent pairs for exactly this reason
 (`test/float_test_support.h`).
+
+**Correction: the rv5-nh-f cell was wrong.** Re-measured with the
+out-of-tree `lirepro` harness, both stepped and through `DebugRun`, at
+three commits:
+- HEAD;
+- `424b41d`, where this entry was written;
+- `9ce7f61`, before the 76 fix.
+
+At every one, `li x5, 0x3FF0000000000000` leaves x5 =
+`0x3FF0000000000000` on nh-f, and so does a consumer back to back
+(`addi x6, x5, 0`).
+
+The expansion is `addi x5, x0, 1023; slli x5, x5, 52`
+(`pseudo_formats.cpp:213-232`). Every `li` chain is lui/addi/slli: ALU
+producers at distance 0, which nh-f's EX/MEM forwarding covers
+(`rv5s_processor_nh_f.cpp:279`). So it is **not an nh-f forwarding
+defect and not load-use**.
+
+The one thing that did go wrong on nh-f was an *FP* consumer:
+`fmv.d.x f1, x5` gave `f1 = 0x3FF` at `9ce7f61`. That was defect 76,
+fixed in `6912b0c`. Only the nh-nf cell (x5 = 0) stands. It has no
+forwarding, and `li` cannot be padded from the source.
+
+**The pair that genuinely needs a nop on nh-f** is a load (`lb`, `lh`,
+`lw`, `ld`, `lbu`, `lhu`, `lwu`, `flw`, `fld`) followed immediately by an
+instruction reading its destination. nh-f never calls
+`check_data_hazard`, and no forwarding path has the value before the end
+of MEM. Measured with `ld x5; addi x6, x5, 0`: nh-f x6 = 0 at distance
+0, right at distance 1.
+
+The processor chooser's note for nh-f ("dependent instructions need nops
+between them", `processor_choice.cpp:98-99`) therefore overstates it;
+that note was deliberately not edited in this stage.
+
+`test/li_forwarding_nh_f_test.cpp` pins both facts: five multi-instruction
+constants with a distance-0 consumer, and load-use with one nop, on rvss,
+nh-f, h-nf and h-f. It passes at base (there was nothing to fix). Its
+control, disabling nh-f's EX/MEM forward to operand A
+(`rv5s_processor_nh_f.cpp:279`), fails
+`LiForwardingNhF.MultiInstructionLiAndItsConsumerBackToBack`.
 
 Suggested, not implemented: a warning from the assembler when a
 pseudo-instruction expands to more than one instruction and the selected
@@ -4691,4 +4857,88 @@ instruction in the step delta.
 
 Read, not run. The single-cycle test steps forward only
 (`StageTable.SingleCycleShowsOneCellWithTheInstructionJustExecuted`).
+
+---
+
+## 101. FIXED: rvss's exit service ended the whole process
+
+`RVSSProcessor::HandleSyscall`'s `SYSCALL_EXIT` case called `exit(0)`
+(`rvss_processor.cpp:516` at base `19cf41f`). A program ending with
+`li a7,10; ecall` on rvss therefore killed:
+- the GUI;
+- `kites-cli`, before it dumped its registers;
+- the test binary. ctest then reported the test as **passed**: status 0,
+  and no "FAILED" in the output.
+
+Found while answering 66, because the plan was to make the pipelines
+"behave like rvss", and that part of rvss could not be copied.
+
+Fixed in `e2eeacf`. The service (now `ProcessorBase::ServeSyscall`)
+prints the same two lines and sets the same `output_status_`, then calls
+`StopForProgramExit()`. The program stops with its state intact, as 67
+settled for nh-nf.
+
+The ecall tests carry an `atexit` guard that turns a future `exit()`
+during a run into status 1. The control that puts `exit(0)` back fails
+35 of the 40 ecall rows.
+
+---
+
+## 102. FIXED: stepping onto an exit `ecall` deadlocked the UI thread
+
+`ProcessorManager::step()` calls `StepAndNotify()` on the UI thread, and
+`StepAndNotify()` holds `step_mutex_`. On rv5-nh-nf an ecall reached that
+way called `RequestStop()`. `StopFromRunLoop()` declined, because no
+Run() loop owns the thread. `StopAndReset()` then took `step_mutex_`
+again (`processor_base.cpp:156` at base). A `QMutex` is not recursive,
+so the thread deadlocked.
+
+Measured at base: `SteppingOntoAnExitEndsTheProgramWithoutHanging/rv5-nh-nf`
+hit its 10 s watchdog.
+
+Fixed in `e2eeacf`/`03e4c9d`. `StopForProgramExit()`
+(`processor_base.cpp:749`) only records the exit when it is not on the
+run thread. Both `StepAndNotify()`s then return false
+(`rv5s_processor_base.cpp:82`, `rvss_processor.cpp:1014`), and
+`ProcessorManager::step()` takes its existing end-of-program path (67).
+
+Control, routing the exit back through `RequestStop()`: all five
+stepping rows hang at the watchdog.
+
+---
+
+## 103. rv5s computes `auipc` (and so `la`) without the PC
+
+The rv5s control unit sets `reg_write` for AUIPC but neither `alu_src`
+nor any PC input (`rv5s_control_unit.cpp:54-57`). The ALU adds
+`reg1_data` and `reg2_data`, which are whatever the immediate's bits
+decode to as rs1/rs2. It never computes `pc + (imm << 12)`.
+
+Measured on all four rv5s variants with
+`la x10, w; ld x5, 0(x10)` (`w` a `.dword` in `.data`): x5 =
+`0x0005051310000517`. Those are the program's own first two instruction
+words (`auipc x10, 0x10000`; `addi x10, x10, 0`), i.e. the load read
+address 0. rvss loads `0x1122334455667788`.
+
+No test used `la` on a pipeline. This stage's tests load the data base
+with `li` (a single `lui`) instead. **Open**: core semantics, not part of
+this stage.
+
+---
+
+## 104. rv5-nh-nf drops a CSR instruction without latching EX/MEM
+
+`RV5StageProcessorNHNF::pipeline_execute` returns early for any SYSTEM
+instruction other than ecall/ebreak (`rv5s_processor_nh_nf.cpp:216-220`)
+and calls `execute_csr()`, which is empty on every rv5s variant
+(`rv5s_processor_base.h:124`).
+
+Because it returns before latching EX/MEM, the previous EX/MEM contents
+go through MEM again. The CSR instruction itself never reaches writeback
+or retires.
+
+Before 66, ecall took the same early return. That path is gone (66).
+The CSR one is left as found.
+
+**Read, not run.**
 
