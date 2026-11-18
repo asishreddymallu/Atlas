@@ -3595,45 +3595,194 @@ seen before it is shipped.
 
 ---
 
-## 82. Undo into the middle of a program, then continue, loses every register write
+## 82. FIXED: Undo into the middle of a program, then continue, lost every register write
 
 Found while testing that `MEM_WB_Register::prev_instruction` survives an
-Undo. It does. This is a different defect, and it is **older than the
-forwarding work**: measured identical at `47ff007`, before any commit on
-the branch that added the field.
+Undo. It does. This was a different defect, and an older one: measured
+identical at `47ff007`, before any commit on the branch that added that
+field.
 
 ```
     li t0, 3
     fcvt.d.l f1, t0
-    fmadd.d f4, f1, f1, f1        # 7 cycles straight
+    fmadd.d f4, f1, f1, f1
 ```
 
-| run | pc | cycles | retired | x5 | f1 | f4 |
+| run, `rv5-h-f` | pc | cycles | retired | x5 | f1 | f4 |
 |---|---|---|---|---|---|---|
 | straight, 10 steps | 40 | 10 | 3 | **3** | `0x4008…` | `0x4028…` |
-| step 3, **undo 1**, step 8 | 40 | 10 | 3 | **0** | **0** | **0** |
-| step 3, undo 3 (back to cycle 0), step 10 | 40 | 10 | 3 | 3 | `0x4008…` | `0x4028…` |
-| step 7, undo 1/2/3, replay | 28 | 7 | 3 | 3 | `0x4008…` | `0x4028…` |
+| step 3, **undo 1**, step 8 — before | 40 | 10 | 3 | **0** | **0** | **0** |
+| step 3, **undo 1**, step 8 — after | 40 | 10 | 3 | 3 | `0x4008…` | `0x4028…` |
 
-So undoing **to the start** replays correctly, and undoing the **last**
-few cycles replays correctly, but an Undo that lands in the middle and
-is then continued finishes with the right PC, the right cycle count and
-the right retired count — and **nothing written to any architectural
-register**. On `rv5-h-f` and `rv5-nh-f` alike.
+Undoing **to the start** replayed correctly and undoing the **last** few
+cycles replayed correctly, which is why the two existing undo tests
+missed it; an Undo that landed in the middle and was then continued
+finished with the right PC, the right cycle count and the right retired
+count and the wrong architectural state.
 
-The restore itself looks complete: `Undo` assigns all four pipeline
-registers back by whole struct
-(`rv5s_processor_base.cpp:900-903`) from a snapshot taken the same way
-(`:131-134`), and the architectural registers are rolled back from
-`register_changes`. What has not been established is why the replayed
-cycles then commit nothing — that needs its own investigation, which is
-why this is a record and not a fix.
+### What it really was
 
-`test/rv5s_undo_pipeline_test.cpp` covers the two families that do
-replay correctly and names this one in a comment as deliberately not
-asserted, so nothing in the suite pins the broken behaviour.
+`RV5SControlUnit::GetAluSignal` (`src/processor/rv5s/rv5s_control_unit.cpp:105`)
+discarded its `ALUOp` argument — it was `(void)ALUOp;`, with a comment
+saying the boolean "is ignored in this design" — and switched on the
+**member** `alu_op_`, declared in
+`ControlUnit` (`src/processor/control_unit_base.h:53`) and written only
+by `SetControlSignals()`, which only `pipeline_decode()` calls
+(`rv5s_processor_base.cpp:199`).
 
-Note for whoever picks it up: the existing `rv5s_undo_redo_test.cpp`
-always does Step → Undo → **Redo**, never Step → Undo → *Step*, which is
-why a defect this visible has gone unnoticed. The UI offers exactly that
-sequence: undo a cycle, then press Step.
+`Step()` runs the stages backwards — WB, MEM, EX, ID, IF
+(`rv5s_processor_h_f.cpp:203-256`) — so the Execute stage read the row
+the **previous** cycle's decode left behind. Correct while the machine
+only ever moves forwards, and invisible for exactly that reason. It is
+the same "the cycle runs backwards" arrangement that
+`MEM_WB_Register::prev_*` exists for (`rv5s_processor_base.cpp:440-455`),
+except that `prev_*` lives in a pipeline register and `alu_op_` does not.
+
+`RV5StageStepDelta` and `PipelineRegisterChange`
+(`rv5s_processor_base.h:9-27`) carry the four pipeline registers and the
+counters, **not `control_unit_`**. So `Undo()` (`:853-916`) restored
+every pipeline register byte for byte and left `alu_op_` holding the
+undone cycle's row. Traced on `rv5-h-f`, the straight run and the replay
+at the same cycle:
+
+```
+straight  cyc=2 CU.alu_op=1 | ID/EX 00300293 rd=5 rw=1 imm=3 asrc=1 aop=1
+UNDO      cyc=2 CU.alu_op=3 | ID/EX 00300293 rd=5 rw=1 imm=3 asrc=1 aop=1
+```
+
+Every pipeline register matches; `alu_op_` is 3 where it should be 1.
+The replayed `addi t0, x0, 3` then took ALUOp row 3 instead of row 1 and
+latched `ex_mem_reg_.alu_result = 0`. x5 = 0 follows, then f1 = 0.0 by
+forwarding, then f4 = 0.
+
+**It was not only registers.** On a program that stores, the same wrong
+row produced a wrong address:
+
+```
+straight  cyc=8 CU.alu_op=0 | EX/MEM 10703023 alu=0x0000000000000100   # sd t2, 256(x0)
+replay    cyc=8 CU.alu_op=1 | EX/MEM 10703023 alu=0x0000000000000001
+```
+
+Row 1 with `sd`'s funct3 (`0b011`) is `SLTU`, and `SLTU(x0, 256)` is 1,
+so the store went to **address 1** and overwrote the program's own
+instruction bytes; the later `ld` read them back as data
+(`x28 = 0x130000001305A003`).
+
+Three things that were suspected and are **not** the cause, each checked
+in the code: the redo stack **is** cleared on a new step
+(`finalize_step_delta`, `rv5s_processor_base.cpp:150-154`); register
+changes are recorded as (old, new) pairs (`:617`, `:701`, `:750`) and
+re-applied correctly in both directions; and no write-enable or
+write-back latch is mis-restored.
+
+### Measured, before and after
+
+Every `(N, k)` with `1 ≤ k ≤ N ≤ T`, in two sequences — `step N, undo k,
+step (T−N+k)` and `step N, undo k, redo k, step (T−N)` — compared
+against a straight run of `T` cycles on all 32 GPRs, all 32 FPRs, 512
+bytes of memory, the PC, the cycle count, the retired count,
+`stall_cycles_` and `branch_mispredictions_`. Cells that ended somewhere
+other than the straight run:
+
+| program (T) | cells | rvss | nh-nf | nh-f | h-nf | h-f |
+|---|---|---|---|---|---|---|
+| the reported program, padded (16) | 272 | 0 | **15** | **15** | **15** | **15** |
+| the reported program, unpadded (12) | 156 | 0 | **10** | **19** | **13** | **19** |
+| a store and a load back (21) | 462 | 0 | **10** | **10** | **10** | **10** |
+| a loop with a taken branch (36) | 1332 | 0 | 0 | 0 | 0 | 0 |
+
+After the fix every one of those cells is 0, on all five models and all
+four programs. **RVSS never had it**: it has no pipeline, so decode and
+execute run in the same `Step()` and the member is always the row the
+instruction in EX wants.
+
+The failures land on particular cycles, the ones where the undone
+decode's row differs from the row the replayed EX needs: cycles 2 and 7
+for the padded program, 7 and 12 for the store program, and 2, 3 or 5
+for the unpadded one depending on the model. Five of the ten store-
+program cells on each variant also lost the stored byte and corrupted
+the text segment.
+
+**Every failing cell was `step → undo → step`.** `step → undo → redo →
+step` never failed, because `Redo` leaves the machine at cycle N, which
+is exactly where the last forward decode left `alu_op_` — the lost state
+happened to already hold the right value. That is why
+`test/rv5s_undo_redo_test.cpp`, which only ever does Step → Undo →
+**Redo**, never caught it, and the UI offers precisely the sequence that
+breaks: undo a cycle, then press Step.
+
+The same matrix driven through `ProcessorManager` — `main_window.cpp:379-381`
+→ `processor_manager.cpp:278, 313, 317` → `StepAndNotify()` / `Undo()` /
+`Redo()`, i.e. what the toolbar buttons call — reproduces it with the
+same landing cycles, and is clean after the fix. That matrix has to stop
+at the drain point: `ProcessorManager::step()` calls `RequestStop()` once
+`StepAndNotify()` reports the program exhausted
+(`processor_manager.cpp:282-286`), and `RequestStop()` is a full
+`StopAndReset()` (`processor_base.cpp:190-212`), so stepping past the end
+through the UI path wipes the processor by design.
+
+### The fix
+
+`ID_EX_Register::alu_op` (`pipeline_registers.h:71`) already holds the
+same row, latched at decode (`rv5s_processor_base.cpp:243`) and restored
+by `Undo` with the rest of the register. The new
+`RV5SControlUnit::GetAluSignalFor(uint32_t instruction, uint8_t alu_op)`
+takes the row as an argument and holds the table;
+`GetAluSignal(uint32_t, bool)` keeps its virtual signature and delegates
+with `alu_op_`, so `ControlUnit` and RVSS are untouched. All fourteen
+rv5s call sites pass `id_ex_reg_.alu_op`: twelve live (three in each of
+`rv5s_processor_h_f.cpp`, `h_nf.cpp`, `nh_f.cpp`, `nh_nf.cpp`) and two in
+`rv5s_processor_base.cpp:782, :818`, inside `execute_float` and
+`execute_double`, which have no callers.
+
+Nothing about the ALU row now survives a cycle boundary, so there is
+nothing for a snapshot to miss. One deliberate behaviour change: on a
+stall ID/EX is a bubble with `alu_op = 0`, where `alu_op_` kept the
+stalled instruction's row, so a bubble's `alu_result` can differ. A
+bubble carries `rd = 0` and `reg_write = false`, so nothing forwards or
+writes back from it; the suite and the live sweep are the check.
+
+`test/rv5s_undo_continue_test.cpp` sweeps the whole matrix. Controls, in
+a throwaway worktree at the fix commit: reverting **one** call site
+(`rv5s_processor_h_f.cpp:363`) fails `rv5-h-f` alone, 10 cells per
+program; reverting all twelve reproduces the table above exactly;
+bending one bit of the oracle fails all 272 of 272 cells on all five
+models, so the comparison is live.
+
+---
+
+## 83. The cache's own undo history is never called, so Undo doubles the counters
+
+`Cache` has a per-step undo history — `beginStep`, `commitStep`,
+`undoStep`, `redoStep` (`src/processor/cache/cache.cpp:329, 339, 358,
+368`, declared `cache.h:118-121`, with a comment saying one entry is
+pushed per processor step so "the history stays in step with the
+processor's"). **Nothing calls any of the four**, in `src/` or in
+`test/`. The processors' `Undo` rewinds memory byte by byte through
+`memory_controller_.writeByte` (`rv5s_processor_base.cpp:882-890`) —
+deliberately through the cache, so the undone value does not linger in a
+dirty line — and never touches the cache's line state, its replacement
+order or its statistics.
+
+Measured on the store-and-load program, 21 cycles, step 17 / undo 10 /
+continue, after the fix for 82, so the architectural state matches
+exactly:
+
+| | L1 hit | L1 miss | L2 hit | L2 miss | I$ hit | I$ miss |
+|---|---|---|---|---|---|---|
+| straight, `rv5-h-f` | 0 | 2 | 0 | 13 | 12 | 4 |
+| replay, `rv5-h-f` | **10** | 2 | **9** | **16** | **18** | **7** |
+| straight, rvss | 0 | 2 | 0 | 13 | 12 | 4 |
+| replay, rvss | **1** | 2 | 0 | **16** | **19** | **7** |
+
+Two things inflate them: the replayed cycles access the cache a second
+time, and `Undo`'s own `writeByte` calls count as accesses and allocate
+lines. So the cache statistics the UI shows, and anything derived from
+them, are not a function of the architectural state once Undo has been
+used — they are a function of how the user got there. The architectural
+state is correct; only the bookkeeping is not. RVSS has this too.
+
+Not fixed here. The machinery to fix it already exists and is unwired:
+the processors would have to call `beginStep()`/`commitStep()` around
+each step and `undoStep()`/`redoStep()` from `Undo`/`Redo`, and `Undo`
+would then rewind the bytes without going through the cache at all.
