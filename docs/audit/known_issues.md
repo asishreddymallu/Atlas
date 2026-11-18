@@ -4907,7 +4907,7 @@ stepping rows hang at the watchdog.
 
 ---
 
-## 103. rv5s computes `auipc` (and so `la`) without the PC
+## 103. FIXED: rv5s computed `auipc` (and so `la`) without the PC
 
 The rv5s control unit sets `reg_write` for AUIPC but neither `alu_src`
 nor any PC input (`rv5s_control_unit.cpp:54-57`). The ALU adds
@@ -4920,9 +4920,55 @@ Measured on all four rv5s variants with
 words (`auipc x10, 0x10000`; `addi x10, x10, 0`), i.e. the load read
 address 0. rvss loads `0x1122334455667788`.
 
-No test used `la` on a pipeline. This stage's tests load the data base
-with `li` (a single `lui`) instead. **Open**: core semantics, not part of
-this stage.
+No test used `la` on a pipeline. E1's tests loaded the data base with
+`li` (a single `lui`) instead.
+
+### Fixed in E2 (`5791228`; tests `c08b87d`)
+
+**Root cause.** The rv5s control unit gives AUIPC `reg_write` and
+`alu_op 0`, and no `alu_src` and no PC operand
+(`rv5s_control_unit.cpp:54-57`). Every variant feeds the ALU
+`reg1_data` plus `reg2_data` (`h_nf.cpp:225`, `h_f.cpp:317`,
+`nh_f.cpp:251`, `nh_nf.cpp:223`). For auipc those "registers" are
+immediate bits 19:15 and 24:20, so the result was reg[x] + reg[y], and
+0 in practice. Each variant already overrode the ALU for **lui** after
+the fact; none did for auipc. All four shared the bug.
+
+**The fix.** One helper, `RV5StageVM_Base::auipc_result`
+(`rv5s_processor_base.h:130`), returns `pc + sext32(imm << 12)`. Each
+variant applies it right after its lui override (`h_f.cpp:389`,
+`h_nf.cpp:249`, `nh_f.cpp:343`, `nh_nf.cpp:252`). The writeback switch
+already wrote AUIPC.
+
+**Measured** with the `lirepro` harness, all five models:
+
+| program | rvss | rv5s before | rv5s after |
+|---|---|---|---|
+| `nop x3; auipc x5,0; auipc x6,1; auipc x7,0xfffff` | 0xc, 0x1010, 0xfffffffffffff014 | 0, 0, 0 | same as rvss |
+| `beq x0,x0,L; …; L: auipc x5,0` | 0x10 | 0 | 0x10 |
+| `la x5, v` (`.data` +8), then `ld` | 0x10000008, 7 | 0x8, 0x1300000013 | 0x10000008, 7 on nh-f/h-nf/h-f |
+
+On nh-nf, `la` stays wrong after the fix, by design. It expands to
+`auipc` + `addi` with no gap between them, a chain nh-nf cannot run
+(the same as a multi-instruction `li`, 77).
+
+**Tests.** `test/pc_relative_test.cpp`, 44 tests, one per owed (case,
+model). The expectations come from `~/atlas-verify/pcrel/gen.py`, out of
+tree: address = 4·index, data label = `0x10000000` + offset, branch
+outcomes from Python's own comparisons. Every test also asserts
+agreement with rvss. The cases:
+- auipc at three PCs, including a negative upper immediate;
+- `la` of two `.data` labels;
+- jal, jalr, j, jr and ret links and targets;
+- all six branches, taken and not taken, forward and backward;
+- jalr after an ALU or a load producer at distance 0, 1 and 2.
+
+**Red** (tests only, `c08b87d`): 11 of 44 fail. Those are
+`AuipcAtSeveralPcs`, `LaOfADataLabel` and `JumpsLinkAndLand` (whose
+jr/jalr targets come from auipc) on the four pipelines. Branches and
+jalr at every distance already passed.
+
+**Control** (the fix reverted alone, out of tree): the same 11 names fail.
 
 ---
 
@@ -4940,5 +4986,236 @@ or retires.
 Before 66, ecall took the same early return. That path is gone (66).
 The CSR one is left as found.
 
-**Read, not run.**
+### Measured in E2 (no code changed)
 
+**What assembles.**
+- Only `fflags`, `frm` and `fcsr` are CSR names
+  (`registers.cpp:133-137`).
+- `cycle` and `instret`, a numeric address (`csrrw x5, 0x003, x6`), and
+  the pseudo-instructions `csrr` and `csrw` all fail to parse.
+- So cycle and instret could not be measured at all.
+
+**What runs.** The six forms on the three CSRs, padded. Each cell is rd
+(the old value) / the read-back with `csrrs x7, csr, x0` / the CSR's
+final value. Each program first writes a starting value: 6 for
+`csrrs`/`csrrsi`, 7 for `csrrc`/`csrrci`.
+
+| form | rvss (fflags, frm, fcsr alike) | rv5-nh-nf, nh-f, h-nf, h-f |
+|---|---|---|
+| `csrrw x5, c, x6` (x6 = 5) | 0 / 5 / 5 | 0 / 0 / 0 |
+| `csrrs x5, c, x6` (from 6, x6 = 1) | 6 / 7 / 7 | 0 / 0 / 0 |
+| `csrrc x5, c, x6` (from 7, x6 = 2) | 7 / 5 / 5 | 0 / 0 / 0 |
+| `csrrwi x5, c, 5` | 0 / 5 / 5 | 0 / 0 / 0 |
+| `csrrsi x5, c, 1` (from 6) | 6 / 7 / 7 | 0 / 0 / 0 |
+| `csrrci x5, c, 2` (from 7) | 7 / 5 / 5 | 0 / 0 / 0 |
+
+- **rvss** implements all six read-modify-write forms correctly on its
+  three CSRs. They are three separate slots (72, point 1).
+- **The four pipelines** execute every CSR instruction as a no-op. The
+  CSR is never written and rd is never written. `execute_csr()` is
+  empty (`rv5s_processor_base.h:124`).
+
+**nh-nf's early return, traced.** The program is `addi x5,x0,1;
+csrrw x0,fcsr,x0` (`00100293`, `00301073`), using the `lirepro` trace
+mode:
+- The csrrw never reaches MEM or WB.
+- The `addi` sits in EX/MEM for two cycles (3 and 4) and passes WB
+  twice (cycles 4 and 5).
+- h-nf passes the csrrw down the pipe as a no-op.
+
+The retired count is the same on both, 11, because the duplicate
+retires in the csrrw's place. Architectural state is unchanged by the
+duplicate (an idempotent re-write one cycle later). The stage view and
+the per-instruction retire attribution are wrong.
+
+Fix nothing here (E2's instruction). Still open.
+
+---
+
+## 105. The hazard unit stalls lui, auipc and jal on their immediate bits
+
+`check_data_hazard` reads bits 19:15 and 24:20 of every instruction as
+rs1 and rs2 (`rv5s_hdu.cpp:39-40`). For lui and auipc those are bits of
+the 20-bit immediate, and for jal of the jump offset; none of the three
+reads a register. It is the GPR half of 78, which recorded the FPR half.
+`readsIntegerSource` is right for these three (false;
+`instructions.cpp:1169-1189`), but the HDU never asks it.
+
+**Measured** (`lirepro`, debug run, cycles). `lui x6, 0x28` and
+`auipc x6, 0x28` have 5 in bits 19:15; `jal x0, 8` has 8 in bits 24:20.
+Each is placed right after a producer of that register number ("hit") or
+of x7 ("miss"):
+
+| | rv5-h-nf hit / miss | rv5-h-f hit / miss |
+|---|---|---|
+| ALU producer, then lui | 22 / 20 | 20 / 20 |
+| ALU producer, then auipc | 22 / 20 | 20 / 20 |
+| ALU producer, then jal | 24 / 22 | 22 / 22 |
+| `ld` producer, then lui | 22 / 20 | **21** / 20 |
+| `ld` producer, then auipc | 22 / 20 | **21** / 20 |
+| `ld` producer, then jal | 24 / 22 | **23** / 22 |
+
+That is two false stall cycles on h-nf and one on h-f after a load. The
+values are identical hit and miss (x6 = `0x28000` on all five), so this
+is timing only.
+
+On the forwarding variants the forwarding units also match those bits
+(`nh_f.cpp:270-300`). The forwarded operand is then discarded: lui and
+auipc override the ALU result, and jal's link and target do not use it.
+No value changes. Not fixed: E2 records it.
+
+---
+
+## 106. rv5s executes `srai` with a shift of 32 or more as `srli`
+
+RV64 `srai` keeps shamt[5] in bit 25. The rv5s ALU control tests
+`funct7 == 0b0100000` (`rv5s_control_unit.cpp:187`). With shamt >= 32,
+funct7 is `0b0100001`, the test fails, and the instruction runs as SRLI.
+rvss is right; the Python oracle agrees with rvss.
+
+Smallest repro, padded:
+
+```
+addi x6, x0, -1
+srai x5, x6, 32      # rvss 0xFFFFFFFFFFFFFFFF; all four rv5s 0x00000000FFFFFFFF
+```
+
+The ISA sweep found 6 such programs per pipeline: shamt 32 and 63 with
+x6 = -1, INT64_MIN and INT32_MIN. `srli` and `slli` are unaffected. `sraiw`
+could not be tested (109). Not fixed in E2.
+
+---
+
+## 107. rvss rounds double-precision ops in whatever mode the last FP load left
+
+Two defects compound:
+1. **rvss never maps a dynamic rounding mode for doubles.**
+   `RVSSProcessor::ExecuteDouble` passes the instruction's rm field
+   through unchanged (`rvss_processor.cpp:378`). `ExecuteFloat` maps
+   rm = 0b111 (DYN, the assembler's default) to `frm`, and so do all
+   four pipelines for both widths.
+2. **`Alu::dfpexecute` leaks the host rounding mode.** For an unknown rm
+   (7 among them) it leaves the mode as it finds it (`alu.cpp:757-773`).
+   Its `AluOp::ADD` case is the address add of `fld`/`fsd`, whose
+   *funct3* (`0b011`) has just been applied as a rounding mode (RUP).
+   That case returns before the mode is restored (`alu.cpp:780-787`),
+   so the whole process stays in round-toward-+inf.
+
+So on rvss, any double op with the default rm after an `fld` rounds up.
+Measured, `fadd.d` of 1.0 and the smallest denormal:
+
+| | rvss | rv5s (all four) | RNE (Python) |
+|---|---|---|---|
+| operands moved in with `fmv.d.x` | `0x3FF0000000000000` | same | `0x3FF0000000000000` |
+| one `fld` executed first | **`0x3FF0000000000001`** | `0x3FF0000000000000` | `0x3FF0000000000000` |
+
+The ISA sweep found this in 27 programs per pipeline across fadd.d,
+fsub.d, fmul.d, fdiv.d, fsqrt.d and the D conversions. For example,
+`fcvt.l.d` of -1.5 gives -1 on rvss and -2 on the pipelines; -2 is
+correct for RNE.
+
+The leak is process-wide: it changes the host's rounding mode for every
+later floating-point calculation in the process, GUI included. Not
+measured beyond the simulator. Not fixed in E2.
+
+---
+
+## 108. rvss does not write `fcsr` after a double-precision op; the pipelines do
+
+`RVSSProcessor::ExecuteDouble` computes `fcsr_status` but never stores
+it. Only `ExecuteFloat` calls `WriteCsr(0x003, …)`
+(`rvss_processor.cpp:372`). The four pipelines write the status after D
+ops as well.
+
+So after any double-precision op that raises a flag, fcsr reads 0 on
+rvss and 1 on the pipelines. The ISA sweep found 232 programs per
+pipeline where fcsr differs; every one is a D op. It is the plumbing
+that 72 describes, but 72 does not record that the models *disagree*. A
+fix for 72 has to cover rvss's double path too. Not fixed in E2.
+
+---
+
+## 109. The base RV64 W instructions do not assemble
+
+`addw subw sllw srlw sraw addiw slliw srliw sraiw` are in the
+encoder's table (`instruction_string_map`, e.g. `instructions.cpp:203`
+and `:238`) but not in `instruction_syntax_map` (`instructions.cpp:763`).
+The parser looks the mnemonic up there with `operator[]`
+(`parser.cpp:420-421`), gets an empty syntax list, and rejects every
+operand form. `addw x5, x6, x7` fails to parse on every model. So do
+the old names `fmv.s.x` and `fmv.x.s`.
+
+The M-extension W forms (`mulw divw divuw remw remuw`) are in the syntax
+map and work. `negw` and `sext.w` still work, because the pseudo path
+emits `subw`/`addiw` without the parser (`pseudo_formats.cpp:415`).
+
+Found by the ISA sweep: 433 of its 4935 programs could not be assembled.
+Those are the 11 mnemonics above, plus `fclass.s`/`fclass.d`, which are
+known (52). Not fixed in E2.
+
+---
+
+## 110. `li` of 0x7FFFFFFF loads 0xFFFFFFFF7FFFFFFF
+
+`emitLi32` splits a 32-bit value as
+`upper = (v + 2048) >> 12; lower = v - (upper << 12)`
+(`pseudo_formats.cpp:182`). For `0x7FFFFFFF`, `upper` is `0x80000`.
+`lui` sign-extends that to `0xFFFFFFFF80000000`, and `addi -1` leaves
+`0xFFFFFFFF7FFFFFFF`. RV64 needs `addiw` here (or another split) for a
+value whose rounding carries into bit 31.
+
+Found by the oracle: the only oracle mismatch in 2144 programs that ran.
+It is identical on rvss, nh-f, h-nf and h-f; nh-nf cannot run `li`'s chain
+at all (77). Smallest repro: `li x5, 0x7fffffff`.
+
+Not fixed in E2. Every value in [0x7FFFF800, 0x7FFFFFFF] is presumably
+affected the same way; only 0x7FFFFFFF was run.
+
+---
+
+## 111. `call` and `tail` do not assemble, and `la` takes only `.data` labels
+
+- **`call` and `tail`.** Both are listed as valid
+  (`instructions.cpp:368-369`) and in `instruction_syntax_map`, but
+  `pseudo_formats.cpp` has no arm for either. `call f` fails to parse on
+  every model.
+- **`la` of a `.text` label.** The parser rejects it with "Expected:
+  Label defined in .data section" (`pseudo_formats.cpp:72-76`). That is
+  deliberate in the code; RISC-V's `la` takes any symbol.
+
+E2's control-flow tests use `jal ra, f` / `ret` in place of `call`, and
+data labels for `la`. Not fixed in E2.
+
+---
+
+## 112. Undoing an ecall read does not give the input back, so stepping it again hangs
+
+`ServeSyscall`'s read pops the line it consumed from `input_queue_`
+(`processor_base.cpp:656`). Neither undo record has a slot for it:
+`StepDelta` (`processor_base.h:64`) has none, and `RV5StageVM_Base::Undo`
+(`rv5s_processor_base.cpp:987`) and `RVSSProcessor::Undo`
+(`rvss_processor.cpp:1018`) restore registers, memory, the PC and the
+pipeline, not the queue.
+
+After Undo past a read, stepping forward again re-executes the read,
+which finds the queue empty and waits forever (the untimed `input_cv_`
+wait).
+
+**Measured** on all five models (`test/ecall_undo_test.cpp`): with the
+read's step inside the undone range, every step-k/undo-j/step-j
+sequence hung at the test's 3 s watchdog. That is rvss from k = 21 and
+the pipelines from k = 25, the step that serves the read. Those
+sequences are now skipped and counted in the test: 21 on rvss and 25 on
+each pipeline, with 110 and 138 others checked.
+
+Everything else about Undo across an ecall holds:
+- step to the end, then Undo to the start, restores the full state for
+  print, read and exit on all five models;
+- the E1 writeback flush and redirect replay exactly;
+- an out-of-tree steprewind matrix over print, read and exit gives 15
+  rows, 14,450 cells (Undo and Redo), 0 differing. The input is fed
+  repeatedly there, which masks this entry on purpose.
+
+**Not fixed:** the fix needs `StepDelta` to carry the consumed line and
+both Undo implementations, and Redo, to put it back. All of that is
+outside the code E1 added, which was E2's limit for this part.
