@@ -65,11 +65,11 @@ RVSSProcessor::~RVSSProcessor() = default;
 
 void RVSSProcessor::SetActiveWireNames()
 {
-    // first clear the current list
-    // TODO * we dont have to clear wire that will always be active
-    //  so make a list of those wires and only clear the rest
-    //  for now this will
-    // active_wires_.clear();
+    // Start from the constructor's always-active backbone, as the four
+    // pipelined models do. Without this, every caller that does not erase
+    // afterwards - DebugRun, Undo, Redo - leaves the previous cycle's
+    // wires lit and grows the list on every press (known_issues 96).
+    active_wires_.erase(active_wires_.begin() + always_active_wires_count_, active_wires_.end());
 
     // Map control signals to canonical wire names used in the scene JSON.
     // maybe sending integers would be better?

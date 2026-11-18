@@ -325,27 +325,21 @@ TEST(WireNameGate, TheSceneFilesStillHaveTheWireCountsThisBaselineAssumes)
     }
 }
 
-TEST(WireNameGate, OnlyTheSingleCycleModelFailsToTruncateItsWireList)
+TEST(WireNameGate, EveryModelTruncatesItsWireList)
 {
-    // Every model's SetActiveWireNames is supposed to start from the
-    // constructor's backbone and add this cycle's wires to it. The four
-    // pipelined ones do: h_f resizes (rv5s_processor_h_f.cpp:87), the
-    // other three erase back to always_active_wires_count_
-    // (nh_nf.cpp:78, nh_f.cpp:74, h_nf.cpp:63).
+    // Every model's SetActiveWireNames starts from the constructor's
+    // backbone and adds this cycle's wires to it, so calling it twice
+    // gives the same list. h_f resizes (rv5s_processor_h_f.cpp), the
+    // other three pipelined models and rvss erase back to
+    // always_active_wires_count_.
     //
-    // RVSSProcessor::SetActiveWireNames does not - its clear is
-    // commented out (rvss_processor.cpp:63) - so calling it twice leaves
-    // this cycle's wires on the list twice. Its one caller that gets
-    // away with that is StepAndNotify, which erases afterwards
-    // (:1206-1207). DebugRun (:1124), Undo (:1274) and Redo (:1342) do
-    // not, and Undo and Redo are toolbar buttons.
+    // rvss used not to - its clear was commented out, and only
+    // StepAndNotify compensated, so DebugRun, Undo and Redo grew the list
+    // (known_issues 96). The per-path behaviour is rvss_wire_list_test.cpp.
     //
     // A program has to be loaded and stepped first: on a processor that
     // has executed nothing, every control-unit getter is false and rvss
-    // appends nothing, so the growth is invisible.
-    //
-    // Pinned, not fixed: the one-line fix changes what the diagram
-    // draws, which wants its own stage. See the known_issues entry.
+    // appends nothing, so growth would be invisible.
     QTemporaryDir dir;
     ASSERT_TRUE(dir.isValid());
 
@@ -368,17 +362,7 @@ TEST(WireNameGate, OnlyTheSingleCycleModelFailsToTruncateItsWireList)
         vm->SetActiveWireNames();
         const qsizetype twice = vm->active_wires_.size();
 
-        if (model == Model::Rvss)
-        {
-            EXPECT_GT(twice, once)
-                << "rvss stopped growing (" << once << " -> " << twice
-                << "). If its clear was restored, this test and the known_issues entry both "
-                   "need updating";
-        }
-        else
-        {
-            EXPECT_EQ(twice, once) << name(model) << " grew across two calls: " << once << " -> "
-                                   << twice;
-        }
+        EXPECT_EQ(twice, once) << name(model) << " grew across two calls: " << once << " -> "
+                               << twice;
     }
 }
