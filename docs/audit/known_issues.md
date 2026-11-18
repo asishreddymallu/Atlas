@@ -4090,3 +4090,173 @@ Still unreachable for `QRadioButton`, `QLabel`, `QLineEdit`,
 rule. The general fix is one block listing the classes, or dropping
 `color` from the blanket `QWidget` rule and letting the palette do its
 job - the second is correct and the larger change.
+
+---
+
+## 89. FIXED: both data panels put their controls below the data they described
+
+The Memory tab's `QGridLayout` had `memoryTableView` at `row 0, colspan 5`
+and every control on `row 2` - the `Display Type:` label and its combo,
+the `Search Memory` label, the search box and the Search button
+(`memory_tab.ui:22-69` before this stage). The register panel had
+`sectionsContainer` at `row 0` and `Display Type` at `row 1`
+(`register_container.ui:16-46`). Both therefore read bottom-up: the
+control that says how a column is formatted sat as far from that
+column's header as the panel allowed.
+
+Measured offscreen at 1200x800, in panel coordinates, before and after:
+
+| | before | after |
+|---|---|---|
+| memory table | y=9..577 | y=49..617 |
+| Display Type combo | y=585..615 | y=11..41 |
+| Byte order combo | (did not exist) | y=11..41 |
+| search box | y=586..613 | y=12..39 |
+| Search button | y=583..617 | y=9..43 |
+| register sections | y=9..581 | y=45..617 |
+| register Display Type | y=587..617 | y=9..39 |
+
+**Fixed**, in the `.ui` files only. The memory controls moved into a
+nested `QHBoxLayout` on `row 0` with the table beneath, a nested box
+rather than renumbered grid columns because the row gained two widgets
+and the search box should take the slack; the register combo moved to
+`row 0` with the sections beneath. Neither `.cpp` needed a line changed:
+both address their widgets through `ui->`, never by position.
+
+Object names are unchanged, which matters more than it looks. Each of
+these controls has a ribbon twin, and the five tests that pin that sync
+in both directions - `RibbonStage3.MemoryDisplayBaseReachesTheComboAndTheModel`
+(`ribbon_navigation_test.cpp:951`), `.MemoryDisplayBaseMirrorsBackFromTheCombo`
+(`:1001`), `.MemorySearchPressesTheTabsOwnButton` (`:1025`),
+`.RegisterDisplayBaseReachesTheComboAndTheModel` (`:1126`) and
+`.RegisterDisplayBaseMirrorsBackFromTheCombo` (`:1165`) - all reach their
+widgets by objectName, so they went on passing unchanged and were the
+regression net for the move.
+
+`test/memory_layout_test.cpp` asserts the geometry rather than `.ui` row
+numbers, because a row index is not what a reader sees: a widget can be
+on row 0 and still be drawn last inside a nested layout. It also ties
+the sync to the geometry - the widget the ribbon drives is asserted to be
+the one now at the top - so the two cannot drift apart.
+
+---
+
+## 90. FIXED: the Double Word column had one byte order, no way to change it, and no label saying which
+
+`MemoryModel::data` read the Double Word cell with
+`MemoryController::readDoubleWord_d`, which reaches
+`MainMemory::readGeneric` and assembles the eight bytes
+little-endian (`main_memory.cpp:79`), and showed the result unchanged.
+The header said `"Double Word"` and nothing else, so the eight bytes
+`01 02 .. 08` read back as `0x807060504030201` with no indication that
+that was a choice at all.
+
+**Fixed as a display setting and nothing more.** `ByteOrder` lives in
+`src/ui/common/display_base_types.h` beside `Base`, because it is the
+same kind of thing - how a number is written, not what the number is -
+and it reaches exactly one place, the Double Word arm of
+`MemoryModel::data`. When Big is selected the already-read value is
+passed through `qbswap` **before** formatting, so the reversal holds in
+hex, decimal and binary alike. The header names the order in both states,
+`"Double Word (LE)"` / `"Double Word (BE)"`, rather than marking only the
+unusual one.
+
+What deliberately did **not** change, and is asserted in
+`test/memory_endian_test.cpp`: the bytes in memory, the Byte 0-7 columns
+(still in address order), the high-address-at-top row order
+(`memory_model.cpp:189`), and `MainMemory`/`Cache` byte assembly, which
+stay little-endian and must not become parameterised by this. Nothing
+under `src/processor` knows the enum exists, and the A/B engine
+transcript was byte-identical across the change.
+
+The cache counters cannot move either, and for a reason worth recording:
+the model reads through the `_d` family (`memory_model.cpp:237, 254`),
+which bypasses L1 and L2 entirely (`memory_controller.cpp:69-87`), so
+**displaying memory has never touched a cache statistic**. The test pins
+that rather than assuming it.
+
+One thing this stage broke and fixed inside itself: with ten columns
+under `QHeaderView::Stretch`, `"Double Word (LE)"` did not fit and
+rendered as `"...Word (LE)"` - the suffix added to remove an ambiguity
+produced one. Caught by the after-screenshot, not by a test. Column 1 is
+now sized to its contents, the same per-section override the register
+tables already use (`register_container.cpp:114-116`), and
+`MemoryPanelLayout.TheDoubleWordHeaderIsWideEnoughToReadInBothOrders`
+asserts the section is at least as wide as the text it has to draw.
+
+Cells are not editable, and nothing in the application is: no model in
+`src/ui` implements `flags()` or `setData()`. If editing is ever added,
+the rule the big-endian view needs is that an edit must be un-swapped
+before it reaches `writeDoubleWord`, or that the Double Word cell is
+read-only while the view is big-endian and edits go through the
+unambiguous Byte 0-7 columns.
+
+---
+
+## 91. A `MemoryTab` that is never shown has exactly one row, and a test can mistake that for centring
+
+`MemoryTab`'s constructor calls `m_memoryModel->setRowsVisible(1)`
+(`memory_tab.cpp:72`) and the real count only ever arrives from
+`MemoryTableView::resizeEvent` → `MemoryTab`'s `resized` handler
+(`memory_table_view.cpp:21-25`, `memory_tab.cpp:85-94`), which needs the
+widget to be shown and laid out.
+
+So a `MainWindow` constructed in a test but never `show()`n leaves the
+memory model one row tall. `MemoryModel::data` computes its row offset as
+`((((m_rowsVisible * 8) / 2) / 8) * 8) - row * 8` (`memory_model.cpp:189`),
+which is 0 for a single row - so row 0 *is* the central address, and
+`setCentralAddress(0x100)` appears to put `0x100` on row 0.
+
+It does not. `setCentralAddress` centres (`memory_model.cpp:118-124`), and
+in a shown window the same search puts `0x100` in the middle with row 0
+showing **`0x160`** - measured while writing
+`MemoryPanelLayout.TheRibbonStillDrivesTheWidgetsThatMovedToTheTop`,
+which first carried the row-0 assertion copied from
+`ribbon_navigation_test.cpp:1057` and failed on it.
+
+That existing assertion is not wrong today, because that test never shows
+its window. It is **fragile**: adding a `show()` to
+`RibbonStage3.MemorySearchPressesTheTabsOwnButton` would break an
+assertion about search, for a reason that has nothing to do with search.
+
+Not changed here - it is someone else's test and it passes. The fix, when
+that file is next touched, is to assert that the searched address is
+somewhere in view and that the view moved, which is what the new test
+does.
+
+---
+
+## 92. A rewritten `.ui` can be skipped by the next incremental build, and the binary keeps the old layout
+
+Measured, while running this stage's negative control (c), which moves
+the Memory tab's controls row back below the table:
+
+1. the `.ui` was rewritten and `ninja -C build-tests -j4` run once;
+2. ninja reported work and linked `kites_test`;
+3. `ctest` passed **15 of 15** - including the three geometry tests that
+   exist precisely to catch that move;
+4. running ninja a second time, by hand, rebuilt the autogen step, and
+   the same `ctest` invocation then failed the expected three:
+   `MemoryPanelLayout.EveryControlIsAboveTheTable`,
+   `.TheByteOrderControlIsInTheTopRowBesideDisplayType` and
+   `.TheRibbonStillDrivesTheWidgetsThatMovedToTheTop`.
+
+So the first build linked a binary built from the **old**
+`ui_memory_tab.h`. Pushing the `.ui`'s mtime forward before building
+(`touch -d '+1 minute'`) makes one pass enough, every time, which points
+at CMake's AUTOUIC deciding by timestamp whether to re-run `uic`: a
+`.ui` rewritten within the same second as the previous autogen run can
+compare as not-newer. The exact rule inside AUTOUIC was **not** read -
+what is measured is the behaviour above and that a timestamp bump fixes
+it.
+
+Why it matters beyond the control: edit a `.ui`, rebuild, run the app,
+and the window can come up with the previous layout. The build reports
+success, nothing warns, and the natural conclusion is that the edit was
+wrong. It also means a `.ui`-only change can pass CI on a warm build
+directory and behave differently on a cold one.
+
+Not fixed here. The reliable workaround is a second `ninja` pass, or
+removing `<build>/kites_core_autogen` before building, after any `.ui`
+edit. A real fix belongs in the build files and wants someone to read
+what AUTOUIC actually compares.
