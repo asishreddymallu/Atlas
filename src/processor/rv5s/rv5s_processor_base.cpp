@@ -547,6 +547,8 @@ void RV5StageVM_Base::pipeline_memory()
     mem_wb_reg_.frd          = ex_mem_reg_.frd;
     mem_wb_reg_.f_alu_result = ex_mem_reg_.f_alu_result;
     mem_wb_reg_.freg_write   = ex_mem_reg_.freg_write;
+    mem_wb_reg_.fp_status        = ex_mem_reg_.fp_status;
+    mem_wb_reg_.writes_fp_status = ex_mem_reg_.writes_fp_status;
 
     bool is_F_Instruction = instruction_set::isFInstruction(mem_wb_reg_.instruction);
     bool is_D_Instruction = instruction_set::isDInstruction(mem_wb_reg_.instruction);
@@ -683,6 +685,26 @@ void RV5StageVM_Base::pipeline_writeback()
         return;
     }
 
+    // Zicsr (SYSTEM, funct3 != 0): served here, serializing (known_issues 104).
+    if ((mem_wb_reg_.instruction & 0b1111111) == 0b1110011)
+    {
+        serve_csr_at_writeback();
+        return;
+    }
+
+    // An F/D op's exception flags are written when it retires, not in EX:
+    // a younger op flushed behind a CSR instruction or an ecall must leave
+    // no flags, and the write goes into the step delta for Undo (104, 115).
+    // Replace semantics and the flag encoding are unchanged (72).
+    if (mem_wb_reg_.writes_fp_status)
+    {
+        const uint64_t old_fcsr = registers_.ReadCsr(0x003);
+        registers_.WriteCsr(0x001, mem_wb_reg_.fp_status);
+        const uint64_t new_fcsr = registers_.ReadCsr(0x003);
+        if (old_fcsr != new_fcsr)
+            current_delta_.register_changes.push_back({0x003, 1, old_fcsr, new_fcsr});
+    }
+
     if (!mem_wb_reg_.reg_write)
     {
         return;
@@ -772,9 +794,9 @@ void RV5StageVM_Base::serve_syscall_at_writeback()
     //    trap would. A read's a0 and memory writes, and an exit, then
     //    cannot be overtaken by an instruction that was already in flight.
     //    This is done before MEM and EX run in this Step(), so the flushed
-    //    instructions leave no memory or register effect. (A younger FP op
-    //    that was in EX in the previous cycle has already written fcsr;
-    //    that write is not undone - see known_issues 72.)
+    //    instructions leave no memory or register effect. (An FP op's flags
+    //    are written at its own writeback, so a flushed one leaves none -
+    //    known_issues 104.)
     //
     // The cost is the flush: three bubbles per ecall.
     ServeSyscall(current_delta_);
@@ -783,6 +805,59 @@ void RV5StageVM_Base::serve_syscall_at_writeback()
     id_ex_reg_.reset();
     ex_mem_reg_.reset();
     stall_cycles_ = 0; // a stall counting down was for a flushed instruction
+    redirect_pc(mem_wb_reg_.pc + 4);
+}
+
+void RV5StageVM_Base::serve_csr_at_writeback()
+{
+    // The same placement as an ecall, for the same reasons: everything
+    // older has retired, so rs1 is read from the register file with no
+    // forwarding path; the CSR is read and written here; and the younger
+    // stages are flushed and refetched from pc + 4, so an FP op after a frm
+    // write runs in the new mode and none can raise flags ahead of a read.
+    const uint32_t instruction = mem_wb_reg_.instruction;
+    const uint8_t rd = (instruction >> 7) & 0b11111;
+    const uint8_t funct3 = (instruction >> 12) & 0b111;
+    const uint8_t rs1 = (instruction >> 15) & 0b11111; // or the uimm
+    const auto csr = static_cast<size_t>((instruction >> 20) & 0xFFF);
+    const bool immediate = (funct3 & 0b100) != 0;
+    const uint8_t kind = funct3 & 0b011; // 01 write, 10 set, 11 clear
+    const uint64_t operand = immediate ? rs1 : registers_.ReadGpr(rs1);
+
+    // csrrw(i) with rd = x0 does not read; csrrs/csrrc(i) with rs1 = x0
+    // (uimm 0) do not write. Neither matters for these three CSRs except
+    // through rd, but they are the spec's rules.
+    const bool reads = !(kind == 0b01 && rd == 0);
+    const bool writes = kind == 0b01 || rs1 != 0;
+    const uint64_t old_value = registers_.ReadCsr(csr);
+
+    if (writes)
+    {
+        const uint64_t old_fcsr = registers_.ReadCsr(0x003);
+        uint64_t value = operand;
+        if (kind == 0b10)
+            value = old_value | operand;
+        else if (kind == 0b11)
+            value = old_value & ~operand;
+        registers_.WriteCsr(csr, value);
+        // Recorded on fcsr, which holds fflags and frm too, so Undo
+        // restores whichever view was written.
+        const uint64_t new_fcsr = registers_.ReadCsr(0x003);
+        if (csr <= 0x003 && old_fcsr != new_fcsr)
+            current_delta_.register_changes.push_back({0x003, 1, old_fcsr, new_fcsr});
+    }
+    if (reads && rd != 0)
+    {
+        const uint64_t old_gpr = registers_.ReadGpr(rd);
+        registers_.WriteGpr(rd, old_value);
+        if (old_gpr != old_value)
+            current_delta_.register_changes.push_back({rd, 0, old_gpr, old_value});
+    }
+
+    if_id_reg_.reset();
+    id_ex_reg_.reset();
+    ex_mem_reg_.reset();
+    stall_cycles_ = 0;
     redirect_pc(mem_wb_reg_.pc + 4);
 }
 
@@ -917,7 +992,7 @@ uint64_t RV5StageVM_Base::execute_float()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 
@@ -953,7 +1028,7 @@ uint64_t RV5StageVM_Base::execute_double()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 

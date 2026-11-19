@@ -369,7 +369,9 @@ void RVSSProcessor::ExecuteFloat()
     std::tie(execution_result_, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    // The flags go to fflags = fcsr[4:0]; writing all of fcsr cleared frm
+    // (known_issues 104). Replace semantics and encoding unchanged (72).
+    registers_.WriteCsr(0x001, fcsr_status);
 }
 
 void RVSSProcessor::ExecuteDouble()

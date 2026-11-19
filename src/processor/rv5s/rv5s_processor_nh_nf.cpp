@@ -207,17 +207,12 @@ void RV5StageProcessorNHNF::pipeline_execute()
     uint8_t opcode = instruction & 0b1111111;
     uint8_t funct3 = (instruction >> 12) & 0x7;
 
-    // An ecall/ebreak is not served here but in writeback, once everything
-    // older has retired (RV5StageVM_Base::serve_syscall_at_writeback). It
-    // used to stop the run from this stage, before EX/MEM was latched, so
-    // the instruction just before it never wrote back (known_issues 66).
-    // Now it flows down the pipe like on the other three variants: decoded
-    // as an I-type with rd = x0, it executes as a no-op.
-    if (opcode == 0b1110011 && funct3 != 0b000)
-    {
-        execute_csr();
-        return;
-    }
+    // An ecall/ebreak (known_issues 66) and a CSR instruction (104) are not
+    // served here but in writeback, once everything older has retired
+    // (serve_syscall_at_writeback, serve_csr_at_writeback). Both flow down
+    // the pipe like on the other three variants. A CSR instruction used to
+    // return here before EX/MEM was latched, so it never retired and the
+    // instruction before it went through MEM and WB twice.
 
     // Select ALU inputs
     uint64_t alu_in1 = id_ex_reg_.reg1_data;
@@ -261,6 +256,9 @@ void RV5StageProcessorNHNF::pipeline_execute()
     ex_mem_reg_.prev_frd = ex_mem_reg_.frd;
     ex_mem_reg_.pc = id_ex_reg_.pc;
     ex_mem_reg_.instruction = id_ex_reg_.instruction;
+    ex_mem_reg_.fp_status = ex_fp_status_valid_ ? ex_fp_status_ : 0;
+    ex_mem_reg_.writes_fp_status = ex_fp_status_valid_;
+    ex_fp_status_valid_ = false;
     ex_mem_reg_.alu_result = alu_result;
     ex_mem_reg_.f_alu_result = (is_f_instruction || is_d_instruction) ? alu_result : 0;
     ex_mem_reg_.rd = id_ex_reg_.rd;
@@ -376,7 +374,7 @@ uint64_t RV5StageProcessorNHNF::pipeline_execute_float()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 
@@ -412,7 +410,7 @@ uint64_t RV5StageProcessorNHNF::pipeline_execute_double()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 }//namespace Kites

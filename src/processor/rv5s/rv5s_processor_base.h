@@ -133,7 +133,15 @@ class RV5StageVM_Base : public ProcessorBase
         return id_ex.pc + static_cast<uint64_t>(static_cast<int64_t>(upper));
     }
 
-    void execute_csr() {};
+    /// The F/D op in EX hands its exception flags here; pipeline_execute
+    /// latches them into EX/MEM, and they are written at writeback.
+    void latch_fp_status(uint8_t status)
+    {
+        ex_fp_status_ = status;
+        ex_fp_status_valid_ = true;
+    }
+    uint8_t ex_fp_status_ = 0;
+    bool ex_fp_status_valid_ = false;
 
     void pipeline_memory();
     void pipeline_writeback();
@@ -143,5 +151,10 @@ class RV5StageVM_Base : public ProcessorBase
     /// An ecall/ebreak has reached writeback: serve it, then flush and
     /// refetch everything younger (known_issues 66).
     void serve_syscall_at_writeback();
+
+    /// A CSR instruction has reached writeback: everything older has
+    /// retired. Read and write the CSR, give rd the old value, then flush
+    /// and refetch everything younger, like an ecall (known_issues 104).
+    void serve_csr_at_writeback();
 };
 }//namespace Kites

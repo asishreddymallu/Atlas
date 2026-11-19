@@ -24,7 +24,7 @@ void RegisterFile::Reset()
     gpr_.fill(0);
     fpr_.fill(0.0);
     csr_.fill(0);
-    csr_[0x002] = 0b000; // Default: RNE (IEEE 754)
+    // frm = 0b000, RNE (IEEE 754), is fcsr = 0
     emit registerResetSignal();
 }
 
@@ -63,18 +63,53 @@ void RegisterFile::WriteFpr(size_t reg, uint64_t value)
     emit updateFRegister(reg, value);
 }
 
+// fflags (0x001) and frm (0x002) are views of fcsr (0x003), as RISC-V
+// defines them: fflags = fcsr[4:0], frm = fcsr[7:5], and fcsr's bits above
+// 7 read as zero. The value lives in the fcsr slot only. They used to be
+// three unrelated slots (known_issues 72 point 1, 104).
+namespace
+{
+constexpr size_t kFflags = 0x001;
+constexpr size_t kFrm = 0x002;
+constexpr size_t kFcsr = 0x003;
+} // namespace
+
 uint64_t RegisterFile::ReadCsr(size_t reg) const
 {
     if (reg >= NUM_CSR)
         throw std::out_of_range("Invalid CSR index");
-    return csr_[reg];
+    switch (reg)
+    {
+    case kFflags:
+        return csr_[kFcsr] & 0x1F;
+    case kFrm:
+        return (csr_[kFcsr] >> 5) & 0x7;
+    case kFcsr:
+        return csr_[kFcsr] & 0xFF;
+    default:
+        return csr_[reg];
+    }
 }
 
 void RegisterFile::WriteCsr(size_t reg, uint64_t value)
 {
     if (reg >= NUM_CSR)
         throw std::out_of_range("Invalid CSR index");
-    csr_[reg] = value;
+    switch (reg)
+    {
+    case kFflags:
+        csr_[kFcsr] = (csr_[kFcsr] & ~uint64_t{0x1F}) | (value & 0x1F);
+        break;
+    case kFrm:
+        csr_[kFcsr] = (csr_[kFcsr] & ~uint64_t{0xE0}) | ((value & 0x7) << 5);
+        break;
+    case kFcsr:
+        csr_[kFcsr] = value & 0xFF;
+        break;
+    default:
+        csr_[reg] = value;
+        break;
+    }
 }
 
 std::vector<uint64_t> RegisterFile::GetGprValues() const

@@ -117,8 +117,14 @@ struct EX_MEM_Register
     bool prev_mem_read  {false};  // Previous mem_read signal (for highlighting purposes)
     bool prev_mem_write {false};  // Previous mem_write signal (for highlighting purposes)
 
+    // An F/D op's exception flags, written to fflags when it retires (at WB),
+    // so a flushed op never writes them and Undo restores them (104, 115).
+    uint8_t fp_status        {0};
+    bool    writes_fp_status {false};
     void reset()
     {
+        fp_status        = 0;
+        writes_fp_status = false;
         pc          = INVALID_PC;
         instruction = NOP;
 
@@ -181,8 +187,14 @@ struct MEM_WB_Register
     bool prev_mem_to_reg {false};  // Previous mem_to_reg signal (for forwarding)
     bool prev_reg_write  {false};  // Previous reg_write signal (for forwarding)
     bool prev_freg_write {false};  // Previous FPR write enable (for forwarding)
+    // An F/D op's exception flags, written to fflags when it retires (at WB),
+    // so a flushed op never writes them and Undo restores them (104, 115).
+    uint8_t fp_status        {0};
+    bool    writes_fp_status {false};
     void reset()
     {
+        fp_status        = 0;
+        writes_fp_status = false;
         pc          = INVALID_PC;
         instruction = NOP;
 

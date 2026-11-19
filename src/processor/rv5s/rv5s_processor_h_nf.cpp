@@ -257,6 +257,9 @@ void RV5StageProcessorHNF::pipeline_execute()
     ex_mem_reg_.prev_frd = ex_mem_reg_.frd;
     ex_mem_reg_.pc = id_ex_reg_.pc;
     ex_mem_reg_.instruction = id_ex_reg_.instruction;
+    ex_mem_reg_.fp_status = ex_fp_status_valid_ ? ex_fp_status_ : 0;
+    ex_mem_reg_.writes_fp_status = ex_fp_status_valid_;
+    ex_fp_status_valid_ = false;
     ex_mem_reg_.alu_result = alu_result;
     ex_mem_reg_.f_alu_result = (is_f_instruction || is_d_instruction) ? alu_result : 0;
     ex_mem_reg_.rd = id_ex_reg_.rd;
@@ -367,7 +370,7 @@ uint64_t RV5StageProcessorHNF::pipeline_execute_float()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::fpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 
@@ -403,7 +406,7 @@ uint64_t RV5StageProcessorHNF::pipeline_execute_double()
     std::tie(alu_result, fcsr_status) =
         alu::Alu::dfpexecute(alu_operation, reg1_value, reg2_value, reg3_value, rm);
 
-    registers_.WriteCsr(0x003, fcsr_status);
+    latch_fp_status(fcsr_status);
     return alu_result;
 }
 }//namespace Kites
