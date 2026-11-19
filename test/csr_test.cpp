@@ -3409,12 +3409,12 @@ vals: .dword 0x3f800000, 0x0
     nop
     nop
     nop
-    sd x5, 8(x11)
-    nop
-    nop
-    nop
-    nop
     fdiv.s f3, f1, f2
+    nop
+    nop
+    nop
+    nop
+    sd x5, 8(x11)
     nop
     nop
     nop
@@ -4168,8 +4168,8 @@ vals: .dword 0x3f800000, 0x0
     csrrwi x0, fcsr, 0
     sd x0, 0(x11)
     csrrs x5, fflags, x0
-    sd x5, 8(x11)
     fdiv.s f3, f1, f2
+    sd x5, 8(x11)
     csrrwi x0, fflags, 0
     sd x0, 16(x11)
     csrrs x7, fflags, x0
