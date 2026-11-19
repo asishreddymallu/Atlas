@@ -90,6 +90,21 @@ bool ProcessorBase::WaitForRunIdle(int timeout_ms)
 
 bool ProcessorBase::StopAndReset(int timeout_ms)
 {
+    return StopWorker(timeout_ms, true);
+}
+
+bool ProcessorBase::StopKeepingState(int timeout_ms)
+{
+    return StopWorker(timeout_ms, false);
+}
+
+bool ProcessorBase::ProgramEnded() const
+{
+    return (exit_cycle_ && cycle_s_ >= *exit_cycle_) || RanOffTheEnd();
+}
+
+bool ProcessorBase::StopWorker(int timeout_ms, bool reset)
+{
     // 1. Claim the processor and invalidate any run that was requested
     //    before this stop. Under run_state_mutex_, so it is ordered
     //    against BeginRun: either the run marked itself busy first (and
@@ -153,6 +168,7 @@ bool ProcessorBase::StopAndReset(int timeout_ms)
     // 4. The worker is idle. step_mutex_ additionally excludes a manual
     //    Step() driven from the UI thread. The two mutexes are taken one
     //    after the other, never nested - see the header's lock order.
+    if (reset)
     {
         QMutexLocker stepLock(&step_mutex_);
         Reset();
@@ -249,6 +265,7 @@ void ProcessorBase::ClearStop()
 void ProcessorBase::LoadProgram(const AssembledProgram &program)
 {
     program_ = program;
+    exit_cycle_.reset();
     unsigned int counter = 0;
     for (const auto &instruction : program.text_buffer)
     {
@@ -626,6 +643,9 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
         // before it dumped its registers, and the test binary - instead
         // of the simulated program (known_issues 101). Stop the program
         // and keep its state, the behaviour known_issues 67 settled on.
+        // The cycle count once this step completes: the step that served
+        // the exit is where the program ended (ProgramEnded).
+        exit_cycle_ = cycle_s_ + 1;
         StopForProgramExit();
         return true;
     }

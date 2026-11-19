@@ -344,12 +344,21 @@ void ProcessorManager::run()
 
 void ProcessorManager::step()
 {
+    // At the end there is nothing to step. Stepping used to reach the reset
+    // below; now the end is a state the program stays in until Undo walks
+    // back from it or a reload, Stop or switch replaces it.
+    if (m_currentProcessor->ProgramEnded())
+        return;
     try
     {
         if (!m_currentProcessor->StepAndNotify())
         {
-            // program finished while stepping, let the run thread exit so the ui resets
-            m_currentProcessor->RequestStop();
+            // The step that ended the program. Let a Debug Run's worker
+            // leave Run(), so the window goes idle, and keep everything the
+            // program produced. This was RequestStop(), i.e. StopAndReset():
+            // it wiped the final state on the step that made it
+            // (known_issues 142).
+            m_currentProcessor->StopKeepingState();
         }
     }
     catch (const std::exception &e)
@@ -363,6 +372,11 @@ void ProcessorManager::debugRun()
     // Debug mode starts in paused/manual mode; user advances with Step.
     m_currentProcessor->ClearStop();
     m_currentProcessor->RequestPause();
+}
+
+bool ProcessorManager::programEnded() const
+{
+    return m_currentProcessor->ProgramEnded();
 }
 
 bool ProcessorManager::stop()

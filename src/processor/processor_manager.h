@@ -63,6 +63,9 @@ public:
     void debugRun();
     /**@brief Stops the worker and resets. @return false on timeout. */
     bool stop();
+    /// The program ended (ran off its end and drained, or exited) and its
+    /// final state is still on the processor.
+    bool programEnded() const;
 
     /**@brief Request a run from the UI thread. Snapshots the stop epoch
      * at REQUEST time and posts it with the invocation, so a stop issued

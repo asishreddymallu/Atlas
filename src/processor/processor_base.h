@@ -27,6 +27,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <stack>
 #include <string>
@@ -169,6 +170,18 @@ class ProcessorBase : public QObject
     // under step_mutex_ (StepAndNotify), so a plain bool.
     bool program_exited_{false};
 
+    // The cycle count once the step that served an exit had completed, or
+    // empty if no exit has been served since the last Reset. Kept as a
+    // cycle rather than a flag so that Undo before the exit un-ends the
+    // program and Redo past it re-ends it (ProgramEnded).
+    std::optional<unsigned int> exit_cycle_;
+
+    /// Past the last instruction, with nothing left in flight. rvss has
+    /// nothing in flight; the pipelines override this with their drain.
+    virtual bool RanOffTheEnd() const { return program_size_ > 0 && program_counter_ >= program_size_; }
+
+    bool StopWorker(int timeout_ms, bool reset);
+
     std::mutex input_mutex_;
     std::condition_variable input_cv_;
     std::queue<std::string> input_queue_;
@@ -281,6 +294,22 @@ class ProcessorBase : public QObject
      * cleared, because a hung UI is better than a corrupted processor.
      */
     bool StopAndReset(int timeout_ms = 3000);
+
+    /**@brief StopAndReset without the reset: the end of a program.
+     *
+     * Publishes the stop, wakes every wait and waits for the worker to
+     * leave Run(), exactly as StopAndReset does, and then leaves the
+     * registers, memory, counters and Undo history alone (known_issues
+     * 142; 67's "a finished program keeps its results" for every way a
+     * program ends). Returns false on timeout, as StopAndReset does.
+     */
+    bool StopKeepingState(int timeout_ms = 3000);
+
+    /**@brief True when the program has ended: it ran off its last
+     * instruction (and, on a pipeline, drained), or it exited by ecall in
+     * a cycle that has not been undone. Undo un-ends it; Redo re-ends it.
+     */
+    bool ProgramEnded() const;
 
     /**@brief The stop path for a caller that IS the run loop.
      *

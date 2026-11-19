@@ -1191,6 +1191,7 @@ void RVSSProcessor::Reset()
     program_counter_ = 0;
     instructions_retired_ = 0;
     cycle_s_ = 0;
+    exit_cycle_.reset();
     cpi_ = 0;
     ipc_ = 0;
     last_breakpoint_pc_ = UINT64_MAX; // Clear breakpoint tracking on reset

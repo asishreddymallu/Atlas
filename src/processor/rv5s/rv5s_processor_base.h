@@ -74,6 +74,11 @@ class RV5StageVM_Base : public ProcessorBase
 
     void print_pipeline_registers_debug();
     bool is_pipeline_drained() const;
+    /// Past the last instruction and drained: the pipeline's end.
+    bool RanOffTheEnd() const override
+    {
+        return program_size_ > 0 && program_counter_ >= program_size_ && is_pipeline_drained();
+    }
     void setProcessorState() override;
 
     // --- Read-only queries for SetActiveWireNames (known_issues 95) ---

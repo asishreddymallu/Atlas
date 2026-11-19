@@ -114,6 +114,7 @@ void RV5StageVM_Base::Reset()
     // totals.
     branch_mispredictions_ = 0;
     total_stall_cycles_    = 0;
+    exit_cycle_.reset();
     cpi_                   = 0;
     ipc_                   = 0;
     pc_redirected_        = false;

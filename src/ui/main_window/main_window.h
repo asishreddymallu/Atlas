@@ -125,6 +125,12 @@ private:
     // which of the five models was running; the window title is fixed
     // and reopening the chooser was the only way to find out.
     QLabel            *m_processorStatusLabel {nullptr};
+    // The run state beside it (objectName runStatusLabel).
+    QLabel            *m_runStatusLabel {nullptr};
+    // Set when the user pressed Stop, so runFinishedSlot can tell a
+    // stopped run from one that ended.
+    bool               m_userStopped {false};
+    void setRunStatus(const QString &text);
     ProblemsDock      *m_problemsDock     {nullptr};
     RibbonBar         *m_ribbon            {nullptr};
     QStackedWidget    *m_stackedTabs       {nullptr};

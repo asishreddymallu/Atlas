@@ -256,8 +256,17 @@ void MainWindow::setUpStatusBar()
     statusBar->addPermanentWidget(m_processorStatusLabel);
     updateProcessorStatusLabel();
 
-    QLabel *statusLabel = new QLabel("Ready", this);
-    statusBar->addPermanentWidget(statusLabel);
+    // What the program is doing: Ready, Running, Debugging, Program
+    // finished, Stopped. Was a fixed "Ready" that never changed.
+    m_runStatusLabel = new QLabel("Ready", this);
+    m_runStatusLabel->setObjectName("runStatusLabel");
+    statusBar->addPermanentWidget(m_runStatusLabel);
+}
+
+void MainWindow::setRunStatus(const QString &text)
+{
+    if (m_runStatusLabel)
+        m_runStatusLabel->setText(text);
 }
 
 void MainWindow::updateProcessorStatusLabel()
@@ -348,6 +357,8 @@ void MainWindow::setUpExecutionActions()
                     m_runAction->setText("Stop");
                     setThemedIcon(m_runAction, Icon::Stop, largeIconSize);
                     setActionHint(m_runAction, "Stop execution");
+                    m_userStopped = false;
+                    setRunStatus("Running");
                     this->run();
                 }
                 else if (m_runAction->text() == "Stop")
@@ -356,6 +367,7 @@ void MainWindow::setUpExecutionActions()
                     m_runAction->setText("Run");
                     setThemedIcon(m_runAction, Icon::Play, largeIconSize);
                     setActionHint(m_runAction, "Run program");
+                    m_userStopped = true;
                     if (!m_processorManager->stop())
                     {
                         QMessageBox::critical(this, "Error",
@@ -380,6 +392,8 @@ void MainWindow::setUpExecutionActions()
                 m_stepAction->setEnabled(true);
                 m_undoAction->setEnabled(true);
                 m_redoAction->setEnabled(true);
+                m_userStopped = false;
+                setRunStatus("Debugging");
                 this->run(true);
             });
 
@@ -1042,6 +1056,20 @@ void MainWindow::runFinishedSlot()
 
     m_pauseAction->setDisabled(true);
     m_stepAction->setDisabled(true);
+
+    // A program that ended keeps its final state (known_issues 142), and
+    // Undo/Redo walk back and forth from it, however it was run.
+    if (m_processorManager->programEnded())
+    {
+        setRunStatus("Program finished");
+        m_undoAction->setEnabled(true);
+        m_redoAction->setEnabled(true);
+    }
+    else
+    {
+        setRunStatus(m_userStopped ? "Stopped" : "Ready");
+    }
+    m_userStopped = false;
     // Undo and Redo are deliberately left as they are: the old loop matched
     // no case for them either, so a debug run that ends leaves VM history
     // navigable exactly as it did before.
