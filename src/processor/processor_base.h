@@ -188,6 +188,11 @@ class ProcessorBase : public QObject
     double ipc_{};
     unsigned int stall_cycles_{};
     unsigned int branch_mispredictions_{};
+    /// Every cycle the hazard unit has held IF/ID and put a bubble in
+    /// ID/EX, since the last Reset. stall_cycles_ above is the countdown of
+    /// the stall in progress, not a total (known_issues 80). Only the
+    /// variants with hazard detection (h_nf, h_f) ever stall.
+    unsigned int total_stall_cycles_{};
 
     std::string output_status_;
 

@@ -15,6 +15,9 @@ ProcessorTab::ProcessorTab(QWidget *parent, ProcessorManager *vmManager)
     m_vmStateTableModel = new VMStateTableModel(this, m_vmManager);
     ui->graphicsView->setScene(m_vmManager->getCircuitScene());
     ui->tableView->setModel(m_vmStateTableModel);
+    // Every clock, Undo, Redo, load and processor switch.
+    connect(m_vmManager, &ProcessorManager::processorStateChangedSignal, m_vmStateTableModel,
+            &VMStateTableModel::refresh);
     ui->tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     // this was the only table still showing its vertical header, leaving an
     // empty stub column down the left; the other five already hid theirs

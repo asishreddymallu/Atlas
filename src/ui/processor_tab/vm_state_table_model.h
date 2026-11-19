@@ -23,6 +23,9 @@ class VMStateTableModel : public QAbstractTableModel
 
   public slots:
     void vmStateChangedSlot(const QMap<QString, QVariant> &processorState);
+    /// Re-reads every row. Was never called: vmStateChangedSlot had no
+    /// connection, so the table only changed when something repainted it.
+    void refresh();
 };
 } // namespace kites
 

@@ -13,6 +13,8 @@ namespace Kites
 {
   
 class Profiler; // Forward declaration to avoid including profiler header
+class ProcessorManager;
+class ProcessorMetricsModel;
 
 namespace Ui
 {
@@ -27,6 +29,11 @@ public:
     explicit ProfilerTab(QWidget *parent = nullptr, const Profiler *profiler = nullptr);
     ~ProfilerTab();
 
+    /// Adds the run-counter table (cycles, retired, CPI, IPC, stalls,
+    /// mispredictions) above the instruction-type table, fed from the
+    /// manager's metrics() and refreshed on every state change.
+    void setProcessorManager(ProcessorManager *manager);
+
 public slots:
     void setSourceText(const QString &sourceText);
     void updateLineExecutionCount(const std::map<int, int> &lineExecutionCounts);
@@ -37,6 +44,7 @@ public slots:
 private:
     Ui::ProfilerTab *ui;
     const Profiler *m_profiler = nullptr;
+    ProcessorMetricsModel *m_metricsModel = nullptr;
 };
 } // namespace Kites
 #endif // PROFILERTAB_H

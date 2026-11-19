@@ -4,7 +4,12 @@
 #include "profiler/profiler.h"
 #include "common/instruction_types.h"
 #include "instruction_type_count_model.h"
+#include "processor/processor_manager.h"
+#include "ui/common/processor_metrics_model.h"
+#include <QHeaderView>
 #include <QLineEdit>
+#include <QTableView>
+#include <QVBoxLayout>
 
 namespace Kites
 {
@@ -37,6 +42,21 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
         connect(m_profiler, &Profiler::updateInstructionTypeCountsSignal, model,
                 &InstructionTypeCountModel::updateInstructionTypeCountsSlot);
     }
+}
+
+void ProfilerTab::setProcessorManager(ProcessorManager *manager)
+{
+    if (!manager || m_metricsModel)
+        return;
+    m_metricsModel = new ProcessorMetricsModel(this, manager);
+    auto *view     = new QTableView(this);
+    view->setObjectName("profilerMetricsTableView");
+    view->setModel(m_metricsModel);
+    view->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    applyDataTableStyle(view);
+    ui->verticalLayout_3->insertWidget(0, view);
+    connect(manager, &ProcessorManager::processorStateChangedSignal, m_metricsModel,
+            &ProcessorMetricsModel::refresh);
 }
 
 ProfilerTab::~ProfilerTab()

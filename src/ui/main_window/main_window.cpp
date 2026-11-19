@@ -854,6 +854,8 @@ void MainWindow::setUpTabs()
     m_tabs[TabIndex::CacheTabIndex]     = new CacheTab(this, m_processorManager->getMemoryController());
     m_tabs[TabIndex::CompilerTabIndex]  = new CompilerTab(this);
     m_tabs[TabIndex::ProfilerTabIndex]  = new ProfilerTab(this, m_processorManager->getProfiler());
+    static_cast<ProfilerTab *>(m_tabs[TabIndex::ProfilerTabIndex])
+        ->setProcessorManager(m_processorManager);
     // a little experiment
     connect(this, &MainWindow::processorChangedSignal,
             dynamic_cast<ProcessorTab *>(m_tabs[TabIndex::ProcessorTabIndex]),

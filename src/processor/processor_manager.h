@@ -15,6 +15,7 @@
 #include <QMutex>
 #include <QObject>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 
@@ -29,6 +30,21 @@ class RV5StageProcessorHF;
 /**
  * @brief This class is responsible for the management of the processor instance
  */
+/// Everything the Processor tab's state table and the Profiler show about
+/// the run, read in one place so the two cannot disagree.
+struct ProcessorMetrics
+{
+    unsigned int cycles{};
+    unsigned int retired{};
+    double       cpi{};
+    double       ipc{};
+    /// Empty = this model has no such counter; the note says why.
+    std::optional<unsigned int> stalls;
+    std::optional<unsigned int> mispredictions;
+    const char                 *stallsNote{""};
+    const char                 *mispredictionsNote{""};
+};
+
 class ProcessorManager : public QObject
 {
     Q_OBJECT
@@ -95,6 +111,10 @@ public:
     unsigned int getStallCycles() const;
     unsigned int getCycles() const;
     unsigned int getInstructionsRetired() const;
+    /// The run's counters as the window shows them. Stalls are the
+    /// cumulative hazard-unit stall cycles (not the countdown
+    /// getStallCycles returns, known_issues 80).
+    ProcessorMetrics metrics() const;
 private:
     void updateEditorHighlight(const std::vector<uint64_t>& programCounters);
     /// Recomputes the selection from the stored line and PCs and emits it.

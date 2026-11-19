@@ -1,4 +1,5 @@
 #include "vm_state_table_model.h"
+#include "ui/common/processor_metrics_model.h"
 #include "ui/common/table_font.h"
 
 namespace Kites
@@ -65,35 +66,26 @@ QVariant VMStateTableModel::data(const QModelIndex &index, int role) const
         return tableNumericFont();
     }
 
+    // Rows 1..6 are the run counters, read from the same snapshot and
+    // through the same helpers as the Profiler's table.
+    const auto metricRow = [](int row) { return static_cast<MetricRow>(row - 1); };
+    const bool isMetric  = index.row() >= 1 && index.row() <= static_cast<int>(MetricRow::Count);
+
+    if (role == Qt::ToolTipRole && isMetric)
+        return metricToolTip(m_vmManager->metrics(), metricRow(index.row()));
+
     if (role == Qt::DisplayRole)
     {
-        
         if (index.column() == 0)
-        {
             return keys[index.row()];
-        }
-        else if (index.column() == 1)
+        if (index.column() == 1)
         {
-            switch (static_cast<VMStateKey>(index.row()))
-            {
-                case VMStateKey::ProgramCounter:
-                    return QVariant::fromValue(
-                        static_cast<qulonglong>(m_vmManager->getProgramCounter()));
-                    // we need  to cast this explicitly because QVariant does not have an overload  
-                    //for uint64_t and it will treat it as a double 
-                case VMStateKey::Cycles:
-                    return m_vmManager->getCycles();
-                case VMStateKey::InstructionsRetired:
-                    return m_vmManager->getInstructionsRetired();
-                case VMStateKey::CPI:
-                    return m_vmManager->getCPI();
-                case VMStateKey::IPC:
-                    return m_vmManager->getIPC();
-                case VMStateKey::StallCycles:
-                    return m_vmManager->getStallCycles();
-                case VMStateKey::BranchMispredictions:
-                    return m_vmManager->getBranchMispredictions();
-            }
+            if (static_cast<VMStateKey>(index.row()) == VMStateKey::ProgramCounter)
+                // QVariant has no uint64_t overload and would take a double
+                return QVariant::fromValue(
+                    static_cast<qulonglong>(m_vmManager->getProgramCounter()));
+            if (isMetric)
+                return metricValue(m_vmManager->metrics(), metricRow(index.row()));
         }
     }
     return QVariant{};
@@ -102,6 +94,11 @@ QVariant VMStateTableModel::data(const QModelIndex &index, int role) const
 void VMStateTableModel::vmStateChangedSlot(const QMap<QString, QVariant> &processorState)
 {
     Q_UNUSED(processorState);
+    refresh();
+}
+
+void VMStateTableModel::refresh()
+{
     beginResetModel();
     endResetModel();
 }

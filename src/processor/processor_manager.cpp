@@ -88,6 +88,7 @@ void ProcessorManager::changeProcessor(ProcessorType vmType)
         m_lastProgramCounters.clear();
     }
     refreshSelectedStages();
+    emit processorStateChangedSignal(); // a new processor: new counters, new n/a rows
 }
 
 void ProcessorManager::setSelectedSourceLine(int line)
@@ -143,6 +144,7 @@ void ProcessorManager::loadProgram(const AssembledProgram &program)
     m_profiler.setInstructionToLineMapping(program);
     m_profiler.setLineNumberToInstructionTypeMapping(program);
     updateEditorHighlight({0});
+    emit processorStateChangedSignal(); // the counters are back to 0
 }
 
 void ProcessorManager::loadProgram(const std::string &sourceText)
@@ -476,6 +478,41 @@ unsigned int ProcessorManager::getStallCycles() const
 unsigned int ProcessorManager::getCycles() const
 {
     return m_currentProcessor->cycle_s_;
+}
+
+ProcessorMetrics ProcessorManager::metrics() const
+{
+    const ProcessorBase &p = *m_currentProcessor;
+    ProcessorMetrics     m;
+    m.cycles  = p.cycle_s_;
+    m.retired = p.instructions_retired_;
+    m.cpi     = p.cpi_;
+    m.ipc     = p.ipc_;
+
+    const bool singleCycle = m_currentProcessorType == ProcessorType::RVSS;
+    const bool hazardUnit  = m_currentProcessorType == ProcessorType::RV5Stage_H_NF ||
+                            m_currentProcessorType == ProcessorType::RV5Stage_H_F;
+    if (hazardUnit)
+    {
+        m.stalls     = p.total_stall_cycles_;
+        m.stallsNote = "Cycles the hazard unit held the pipeline and put a bubble in EX.";
+    }
+    else if (singleCycle)
+        m.stallsNote = "Single-cycle: every instruction finishes in its own cycle, so nothing stalls.";
+    else
+        m.stallsNote = "No hazard detection: this pipeline never stalls. Dependent "
+                       "instructions need nops instead.";
+
+    if (singleCycle)
+        m.mispredictionsNote =
+            "Single-cycle: the next PC is known before the next fetch, so nothing is predicted.";
+    else
+    {
+        m.mispredictions     = p.branch_mispredictions_;
+        m.mispredictionsNote = "Fetch assumes a branch is not taken. Each taken branch is a "
+                               "misprediction and flushes the two instructions behind it.";
+    }
+    return m;
 }
 
 unsigned int ProcessorManager::getInstructionsRetired() const
