@@ -1,23 +1,3 @@
-// #include <gtest/gtest.h>
-// #include "processor/rv5s/rv5s_processor_nh_f.h"
-// #include "assembler/assembler.h"
-// #include "utils/utils.h"
-#include "assembler/assembler.h"
-
-// Disabled: Does not compile (placed before namespace/includes, superseded by refactored tests below)
-// TEST(RV5S_NH_F_TEST,no_hazard_forwarding_test_1)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorNHF vm;
-//     std::cout << "Program Information " << std::endl;
-//     std::cout << "Program size : " <<vm.program_size_ << std::endl;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code_1.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();
-    
-//     EXPECT_EQ(vm.registers_.ReadGpr(6), 0);
-// }
-
 #include <gtest/gtest.h>
 #include "processor/rv5s/rv5s_processor_nh_f.h"
 #include "assembler/assembler.h"
@@ -98,4 +78,15 @@ TEST(RV5StageVM_NH_F_TEST, r_m_forwarding)
 {
     auto vm = runHazardProgram("../examples/R_M_hazard.s");
     EXPECT_EQ(vm->registers_.ReadGpr(9), 55);
+}
+
+// Was a commented-out draft above the #includes (it could not compile there). The draft
+// asserted x6 == 0 on pipeline_test_code_1.s, which only writes x1
+// (twelve addi x1,x1,10); the meaningful check is x1 == 120. nh-f has no hazard unit but forwards EX->EX, which is all a chain of addi needs.
+TEST(RV5S_NH_F_TEST,no_hazard_forwarding_test_1)
+{
+    auto vm = runHazardProgram("../examples/pipeline_test_code_1.s");
+
+    EXPECT_EQ(vm->registers_.ReadGpr(1), 120);
+    EXPECT_EQ(vm->registers_.ReadGpr(6), 0);
 }
