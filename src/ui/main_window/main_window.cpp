@@ -246,7 +246,7 @@ void MainWindow::setUpProblemsDock()
     m_timingDock = new QDockWidget("Pipeline timing", this);
     m_timingDock->setObjectName("timingDock");
     m_timingPanel = new TimingGridPanel(m_timingDock);
-    m_timingPanel->setUp(m_processorManager, m_stepAction, m_undoAction);
+    m_timingPanel->setUp(m_processorManager, m_stepAction, m_undoAction, m_redoAction);
     m_timingDock->setWidget(m_timingPanel);
     addDockWidget(Qt::BottomDockWidgetArea, m_timingDock);
     tabifyDockWidget(m_outputDock, m_timingDock);

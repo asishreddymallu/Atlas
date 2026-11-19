@@ -8,7 +8,10 @@
  * does. The grid is read back in the diagrams' notation
  * (timingGridDiagram), so it is compared cell by cell with the drawing.
  */
+#include "processor/memory_controller.h"
+#include "processor/processor_manager.h"
 #include "processor/processor_types.h"
+#include "processor/registers.h"
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/editor_tab/main_editor.h"
 #include "ui/main_window/main_window.h"
@@ -32,7 +35,9 @@
 #include <QTimer>
 
 #include <functional>
+#include <ostream>
 #include <string>
+#include <vector>
 
 using namespace Kites;
 
@@ -309,3 +314,202 @@ TEST(TimingGridColours, StageCellsAreAaInEveryTheme)
         }
     }
 }
+
+// ---- T3: jumping forward after Run / Undo, on all five models ------------
+// Forward moves must use Redo while the machine has undone cycles to give
+// back, and Step only for the rest: after Run to the end, Step is disabled,
+// so a jump that only knows Step cannot move forward at all.
+namespace
+{
+struct JumpModel
+{
+    const char   *name;
+    ProcessorType type;
+};
+const JumpModel kJumpModels[] = {{"rvss", ProcessorType::RVSS},
+                                 {"nh_nf", ProcessorType::RV5Stage_NH_NF},
+                                 {"nh_f", ProcessorType::RV5Stage_NH_F},
+                                 {"h_nf", ProcessorType::RV5Stage_H_NF},
+                                 {"h_f", ProcessorType::RV5Stage_H_F}};
+
+// 24 stores into a 96-byte buffer at 0x10000, padded with nops so all five
+// models compute the same values (nh_nf has no hazard unit). Well over 80
+// cycles on every model, RVSS included.
+constexpr uint64_t kBufBase  = 0x10000;
+constexpr int      kBufBytes = 96;
+const char *kStoreLoop = ".text\n"
+                         "    lui x10, 0x10\n"
+                         "    addi x11, x0, 24\n"
+                         "    addi x0, x0, 0\n"
+                         "    addi x0, x0, 0\n"
+                         "L:  sw x11, 0(x10)\n"
+                         "    addi x10, x10, 4\n"
+                         "    addi x11, x11, -1\n"
+                         "    addi x0, x0, 0\n"
+                         "    addi x0, x0, 0\n"
+                         "    bne x11, x0, L\n"
+                         "    addi x12, x0, 7\n";
+
+struct MachineState
+{
+    std::vector<uint64_t> gpr, fpr;
+    std::vector<uint8_t>  mem;
+    uint64_t              pc{};
+    unsigned              cycles{}, retired{};
+    bool                  operator==(const MachineState &) const = default;
+};
+
+MachineState capture(ProcessorManager *m)
+{
+    MachineState s;
+    for (size_t i = 0; i < 32; ++i)
+    {
+        s.gpr.push_back(m->getRegisterFile()->ReadGpr(i));
+        s.fpr.push_back(m->getRegisterFile()->ReadFpr(i));
+    }
+    for (int i = 0; i < kBufBytes; ++i)
+        s.mem.push_back(m->getMemoryController()->peekByte(kBufBase + i));
+    s.pc      = m->getProgramCounter();
+    s.cycles  = m->getCycles();
+    s.retired = m->getInstructionsRetired();
+    return s;
+}
+
+std::string describe(const MachineState &s)
+{
+    std::string out = "cycles " + std::to_string(s.cycles) + " retired " + std::to_string(s.retired) + " pc " +
+                      std::to_string(s.pc) + " x10 " + std::to_string(s.gpr[10]) + " x11 " +
+                      std::to_string(s.gpr[11]) + " x12 " + std::to_string(s.gpr[12]);
+    return out;
+}
+
+void PrintTo(const MachineState &s, std::ostream *os)
+{
+    *os << describe(s);
+}
+
+QByteArray exportBytes(GridWindow &w, const QString &path)
+{
+    if (!w.window.exportTrace(path))
+        return {};
+    QFile f(path);
+    return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+}
+
+class TimingGridJump : public ::testing::TestWithParam<size_t>
+{
+};
+} // namespace
+
+TEST_P(TimingGridJump, RunThenBackToTheMiddleThenForwardToTheEnd)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(kJumpModels[GetParam()].type);
+    ASSERT_TRUE(w.runToEnd(kStoreLoop));
+    ProcessorManager *m = w.panel->manager();
+    ASSERT_NE(m, nullptr);
+    const MachineState end = capture(m);
+    ASSERT_GT(end.cycles, 80u);
+    EXPECT_EQ(end.gpr[12], 7u) << "the program ran to its last instruction";
+    QTemporaryDir     dir;
+    const QByteArray  before = exportBytes(w, dir.filePath("before.json"));
+    ASSERT_FALSE(before.isEmpty());
+
+    ASSERT_TRUE(w.jump(end.cycles / 2));
+    EXPECT_EQ(w.panel->currentCycle(), end.cycles / 2);
+    ASSERT_TRUE(w.jump(end.cycles));
+    EXPECT_EQ(w.panel->currentCycle(), end.cycles) << "forward again, through Redo";
+    const MachineState again = capture(m);
+    EXPECT_EQ(again, end) << describe(again) << " vs " << describe(end);
+
+    // The round trip leaves the trace as it was.
+    const QByteArray after = exportBytes(w, dir.filePath("after.json"));
+    EXPECT_EQ(after.size(), before.size());
+    EXPECT_TRUE(after == before) << "the exported trace changed over the round trip";
+    EXPECT_EQ(m->trace().dropped(), 0u);
+}
+
+TEST_P(TimingGridJump, PartialRedoThenStepMatchesAStraightRun)
+{
+    MachineState jumped, straight;
+    QByteArray   jumpedTrace, straightTrace;
+    QTemporaryDir dir;
+    {
+        GridWindow w;
+        ASSERT_TRUE(w.ready());
+        w.use(kJumpModels[GetParam()].type);
+        ASSERT_TRUE(w.debugStart(kStoreLoop));
+        for (int i = 0; i < 60; ++i)
+            w.step->trigger();
+        spin(30);
+        ASSERT_EQ(w.panel->currentCycle(), 60u);
+        for (int i = 0; i < 30; ++i)
+            w.undo->trigger();
+        spin(30);
+        ASSERT_EQ(w.panel->currentCycle(), 30u);
+        ASSERT_TRUE(w.jump(80)); // 30 Redos, then 20 Steps
+        EXPECT_EQ(w.panel->currentCycle(), 80u);
+        jumped      = capture(w.panel->manager());
+        jumpedTrace = exportBytes(w, dir.filePath("jumped.json"));
+    }
+    {
+        GridWindow w;
+        ASSERT_TRUE(w.ready());
+        w.use(kJumpModels[GetParam()].type);
+        ASSERT_TRUE(w.debugStart(kStoreLoop));
+        for (int i = 0; i < 80; ++i)
+            w.step->trigger();
+        spin(30);
+        ASSERT_EQ(w.panel->currentCycle(), 80u);
+        straight      = capture(w.panel->manager());
+        straightTrace = exportBytes(w, dir.filePath("straight.json"));
+    }
+    EXPECT_EQ(jumped, straight) << describe(jumped) << " vs " << describe(straight);
+    ASSERT_FALSE(straightTrace.isEmpty());
+    EXPECT_TRUE(jumpedTrace == straightTrace) << "the trace after the jump differs from a straight run";
+}
+
+TEST_P(TimingGridJump, ForwardClampsAndNoOps)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(kJumpModels[GetParam()].type);
+    ASSERT_TRUE(w.runToEnd(kStoreLoop));
+    ProcessorManager  *m    = w.panel->manager();
+    const MachineState end  = capture(m);
+    const uint32_t     last = end.cycles;
+
+    // At the end: forward past it, and to the current cycle, change nothing.
+    ASSERT_TRUE(w.jump(last + 50));
+    EXPECT_EQ(w.panel->currentCycle(), last);
+    EXPECT_EQ(capture(m), end);
+    ASSERT_TRUE(w.jump(last));
+    EXPECT_EQ(capture(m), end);
+
+    // From the middle: to the current cycle is a no-op; past the end clamps.
+    ASSERT_TRUE(w.jump(last / 3));
+    ASSERT_EQ(w.panel->currentCycle(), last / 3);
+    const MachineState mid = capture(m);
+    ASSERT_TRUE(w.jump(last / 3));
+    EXPECT_EQ(capture(m), mid);
+    ASSERT_TRUE(w.jump(last + 100));
+    EXPECT_EQ(w.panel->currentCycle(), last) << "clamped to the last cycle";
+    EXPECT_EQ(capture(m), end);
+}
+
+TEST_P(TimingGridJump, ForwardOnANeverRunProgramSteps)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(kJumpModels[GetParam()].type);
+    ASSERT_TRUE(w.debugStart(kStoreLoop));
+    ASSERT_EQ(w.panel->currentCycle(), 0u);
+    ASSERT_TRUE(w.jump(25)); // nothing to Redo: all Steps
+    EXPECT_EQ(w.panel->currentCycle(), 25u);
+}
+
+INSTANTIATE_TEST_SUITE_P(Models, TimingGridJump, ::testing::Values(0, 1, 2, 3, 4),
+                         [](const ::testing::TestParamInfo<size_t> &info) {
+                             return std::string(kJumpModels[info.param].name);
+                         });

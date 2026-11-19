@@ -347,11 +347,13 @@ TimingGridPanel::TimingGridPanel(QWidget *parent) : QWidget(parent)
     refresh();
 }
 
-void TimingGridPanel::setUp(ProcessorManager *manager, QAction *stepAction, QAction *undoAction)
+void TimingGridPanel::setUp(ProcessorManager *manager, QAction *stepAction, QAction *undoAction,
+                            QAction *redoAction)
 {
     m_manager    = manager;
     m_stepAction = stepAction;
     m_undoAction = undoAction;
+    m_redoAction = redoAction;
     m_stepBack->setDefaultAction(undoAction); // step back IS Undo: the same action
     m_stepBack->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     if (manager)
@@ -360,13 +362,16 @@ void TimingGridPanel::setUp(ProcessorManager *manager, QAction *stepAction, QAct
     auto sync = [this]()
     {
         const bool canMove = (m_stepAction && m_stepAction->isEnabled()) ||
-                             (m_undoAction && m_undoAction->isEnabled());
+                             (m_undoAction && m_undoAction->isEnabled()) ||
+                             (m_redoAction && m_redoAction->isEnabled());
         m_jumpGo->setEnabled(canMove && !jumping());
     };
     if (stepAction)
         connect(stepAction, &QAction::changed, this, sync);
     if (undoAction)
         connect(undoAction, &QAction::changed, this, sync);
+    if (redoAction)
+        connect(redoAction, &QAction::changed, this, sync);
     sync();
     refresh();
 }
@@ -423,7 +428,8 @@ void TimingGridPanel::jumpToCycle(uint32_t cycle)
 {
     if (!m_manager || jumping())
         return;
-    m_jumpTarget = cycle;
+    m_jumpTarget  = cycle;
+    m_redoDrained  = false;
     m_jumpGo->setEnabled(false);
     QTimer::singleShot(0, this, &TimingGridPanel::jumpChunk);
 }
@@ -437,8 +443,14 @@ void TimingGridPanel::jumpChunk()
     // stays responsive between chunks, however far the jump.
     for (int i = 0; i < 200; ++i)
     {
-        const uint32_t now    = m_manager->getCycles();
-        QAction       *action = now > target ? m_undoAction.data() : now < target ? m_stepAction.data() : nullptr;
+        const uint32_t now = m_manager->getCycles();
+        // Forward: Redo first, the same action as the Redo button, while the
+        // machine has undone cycles to give back; Step for the rest. After a
+        // Run to the end Step is disabled, so Step alone could not move.
+        const bool useRedo = now < target && !m_redoDrained && m_redoAction && m_redoAction->isEnabled();
+        QAction   *action  = now > target ? m_undoAction.data()
+                             : now < target ? (useRedo ? m_redoAction.data() : m_stepAction.data())
+                                            : nullptr;
         if (!action || !action->isEnabled())
         {
             m_jumpTarget.reset();
@@ -450,6 +462,12 @@ void TimingGridPanel::jumpChunk()
         action->trigger();
         if (m_manager->getCycles() == now)
         {
+            if (useRedo)
+            {
+                // Nothing left to redo: Step from here on.
+                m_redoDrained = true;
+                continue;
+            }
             // Nothing moved (the program's end, or a read waiting for input).
             m_jumpTarget.reset();
             m_jumpGo->setEnabled(true);

@@ -127,8 +127,10 @@ class TimingGridPanel : public QWidget
     static constexpr int kVisibleCycles = 40;
 
     explicit TimingGridPanel(QWidget *parent = nullptr);
-    /// stepAction / undoAction: the window's own actions (the real machine).
-    void setUp(ProcessorManager *manager, QAction *stepAction, QAction *undoAction);
+    /// stepAction / undoAction / redoAction: the window's own actions (the
+    /// real machine). A forward jump Redoes while it can, then Steps.
+    void setUp(ProcessorManager *manager, QAction *stepAction, QAction *undoAction,
+               QAction *redoAction = nullptr);
 
     /// Re-reads the trace (the last kVisibleCycles cycles).
     void refresh();
@@ -139,7 +141,8 @@ class TimingGridPanel : public QWidget
     /// The machine's cycle count (0 with no processor).
     uint32_t currentCycle() const;
 
-    TimingGridView *view() const { return m_view; }
+    TimingGridView   *view() const { return m_view; }
+    ProcessorManager *manager() const { return m_manager; }
     QString         message() const;
     QString         explanation() const;
 
@@ -153,6 +156,7 @@ class TimingGridPanel : public QWidget
     QPointer<ProcessorManager> m_manager;
     QPointer<QAction>          m_stepAction;
     QPointer<QAction>          m_undoAction;
+    QPointer<QAction>          m_redoAction;
     QLabel                    *m_message   = nullptr;
     QScrollArea               *m_scroll    = nullptr;
     TimingGridView            *m_view      = nullptr;
@@ -161,5 +165,6 @@ class TimingGridPanel : public QWidget
     QPushButton               *m_jumpGo    = nullptr;
     QTextBrowser              *m_explain   = nullptr;
     std::optional<uint32_t>    m_jumpTarget;
+    bool                       m_redoDrained = false; ///< this jump found nothing left to Redo
 };
 } // namespace Kites
