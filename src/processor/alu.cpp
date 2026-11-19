@@ -461,15 +461,10 @@ class RoundingModeGuard
     }
     case AluOp::FDIV_S:
     {
-        if (b == 0.0f)
-        {
-            result = std::numeric_limits<float>::quiet_NaN();
-            fcsr |= FCSR_DIV_BY_ZERO;
-        }
-        else
-        {
-            result = a / b;
-        }
+        // IEEE division: x/+-0 is +-inf (FE_DIVBYZERO), 0/0 and inf/inf are
+        // NaN (FE_INVALID), canonicalized below. A zero divisor used to give
+        // a NaN for every dividend (known_issues 75).
+        result = a / b;
         break;
     }
     case AluOp::FSQRT_S:
@@ -844,15 +839,10 @@ class RoundingModeGuard
     }
     case AluOp::FDIV_D:
     {
-        if (b == 0.0)
-        {
-            result = std::numeric_limits<double>::quiet_NaN();
-            fcsr |= FCSR_DIV_BY_ZERO;
-        }
-        else
-        {
-            result = a / b;
-        }
+        // IEEE division: x/+-0 is +-inf (FE_DIVBYZERO), 0/0 and inf/inf are
+        // NaN (FE_INVALID), canonicalized below. A zero divisor used to give
+        // a NaN for every dividend (known_issues 75).
+        result = a / b;
         break;
     }
     case AluOp::FSQRT_D:
