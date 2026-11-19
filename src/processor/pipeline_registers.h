@@ -94,6 +94,9 @@ struct EX_MEM_Register
 
     uint8_t rd      {0};  // GPR Destination register index
     uint8_t prev_rd {0};  // Previous GPR Destination register index (for one cycle delay)
+    // The previous instruction itself: reg_write/freg_write alone do not say
+    // which file an F/D instruction writes (the hazard unit asks it; 78).
+    uint32_t prev_instruction {NOP};
 
     // --- FPR Results ---
     uint64_t f_alu_result {0};  // FPR Write Data (F-ALU Result, Conversions)
@@ -131,6 +134,7 @@ struct EX_MEM_Register
         alu_result = 0;
         reg2_data  = 0;
         rd         = 0;
+        prev_instruction = NOP;
         prev_rd    = 0;
 
         f_alu_result = 0;

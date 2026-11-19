@@ -420,7 +420,7 @@ void RVSSProcessor::ExecuteDouble()
 
     // The status was computed and dropped, while the pipelines wrote it
     // (known_issues 108). Same write as ExecuteFloat: fflags, recorded for
-    // Undo. It is still 72's bool, replacing rather than accruing.
+    // Undo.
     WriteFpStatus(fcsr_status);
 }
 
@@ -428,8 +428,10 @@ void RVSSProcessor::WriteFpStatus(uint8_t status)
 {
     // Recorded in the step delta, so Undo restores the flags; it was not,
     // and Undo left the last FP op's flags behind (known_issues 115).
+    // The flags accrue (OR), as RISC-V's fflags do; a status of 0 - a load,
+    // a store, an exact op - changes nothing (known_issues 72, 116).
     const uint64_t old_fcsr = registers_.ReadCsr(0x003);
-    registers_.WriteCsr(0x001, status);
+    registers_.WriteCsr(0x001, registers_.ReadCsr(0x001) | status);
     const uint64_t new_fcsr = registers_.ReadCsr(0x003);
     if (old_fcsr != new_fcsr)
         current_delta_.register_changes.push_back({0x003, 1, old_fcsr, new_fcsr});

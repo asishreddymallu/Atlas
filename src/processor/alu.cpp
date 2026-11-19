@@ -297,6 +297,17 @@ bool isNaNBits64(uint64_t bits)
 {
     return ((bits >> 52) & 0x7FF) == 0x7FF && (bits & 0xFFFFFFFFFFFFFULL) != 0;
 }
+/// A NaN whose quiet bit (the top fraction bit) is clear. Any operation on
+/// one raises NV; the compares and fmin/fmax never reach the host FPU with a
+/// NaN, so they ask this explicitly (known_issues 72).
+bool isSignalingNaN32(uint64_t bits)
+{
+    return isNaNBits32(bits) && ((bits >> 22) & 1) == 0;
+}
+bool isSignalingNaN64(uint64_t bits)
+{
+    return isNaNBits64(bits) && ((bits >> 51) & 1) == 0;
+}
 
 /**
  * @brief The ops whose NaN result must be the canonical NaN.
@@ -361,7 +372,9 @@ bool canonicalizesNaN(AluOp op)
 /// guard compared the unrounded value with static_cast<float>(INT32_MAX) -
 /// itself rounded in the current mode, to 2^31 under RNE - so 2^31, 2^32,
 /// 2^63 and 2^64 reached an out-of-range cast (UB), and fcvt.w.s sent NaN to
-/// the minimum (known_issues 73). The second member is "invalid".
+/// the minimum (known_issues 73). The second member is the flags it raises:
+/// NV when invalid (NaN, or out of range after rounding), else NX when the
+/// rounding changed the value (known_issues 72).
 enum class IntTarget
 {
     W,
@@ -370,7 +383,7 @@ enum class IntTarget
     LU
 };
 
-std::pair<uint64_t, bool> convertToInteger(double a, IntTarget target)
+std::pair<uint64_t, uint8_t> convertToInteger(double a, IntTarget target)
 {
     constexpr uint64_t kAllOnes = ~0ULL;
     double lo = 0.0;
@@ -401,24 +414,25 @@ std::pair<uint64_t, bool> convertToInteger(double a, IntTarget target)
         break;
     }
     if (std::isnan(a))
-        return {max_bits, true};
+        return {max_bits, FCSR_INVALID_OP};
     const double r = std::nearbyint(a);
     if (r < lo)
-        return {min_bits, true};
+        return {min_bits, FCSR_INVALID_OP};
     if (r >= hi_exclusive)
-        return {max_bits, true};
+        return {max_bits, FCSR_INVALID_OP};
+    const uint8_t nx = (r != a) ? FCSR_INEXACT : 0;
     switch (target)
     {
     case IntTarget::W:
-        return {static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(r))), false};
+        return {static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(r))), nx};
     case IntTarget::WU:
         return {static_cast<uint64_t>(
                     static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(r)))),
-                false};
+                nx};
     case IntTarget::L:
-        return {static_cast<uint64_t>(static_cast<int64_t>(r)), false};
+        return {static_cast<uint64_t>(static_cast<int64_t>(r)), nx};
     case IntTarget::LU:
-        return {static_cast<uint64_t>(r), false};
+        return {static_cast<uint64_t>(r), nx};
     }
     return {0, false};
 }
@@ -483,6 +497,13 @@ class RoundingModeGuard
 
     std::feclearexcept(FE_ALL_EXCEPT);
 
+    // RISC-V: 0 * inf in a fused multiply-add raises NV even when the addend
+    // is a quiet NaN; the host returns the NaN quietly (known_issues 72).
+    if ((op == AluOp::FMADD_S || op == AluOp::FMSUB_S || op == AluOp::FNMADD_S ||
+         op == AluOp::FNMSUB_S) &&
+        ((std::isinf(a) && b == 0.0f) || (a == 0.0f && std::isinf(b))))
+        fcsr |= FCSR_INVALID_OP;
+
     switch (op)
     {
     case AluOp::ADD:
@@ -538,7 +559,8 @@ class RoundingModeGuard
     }
     case AluOp::FSQRT_S:
     {
-        if (a < 0.0f)
+        // isless, not <: `<` is a signaling compare and raised NV on a quiet NaN (72)
+        if (std::isless(a, 0.0f))
         {
             result = std::numeric_limits<float>::quiet_NaN();
             fcsr |= FCSR_INVALID_OP;
@@ -551,30 +573,26 @@ class RoundingModeGuard
     }
     case AluOp::FCVT_W_S:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::W);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::W);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_WU_S:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::WU);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::WU);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_L_S:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::L);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::L);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_LU_S:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::LU);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::LU);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_S_W:
@@ -627,6 +645,8 @@ class RoundingModeGuard
     }
     case AluOp::FMIN_S:
     {
+        if (isSignalingNaN32(ina) || isSignalingNaN32(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         if (std::isnan(a) && !std::isnan(b))
         {
             result = b;
@@ -647,6 +667,8 @@ class RoundingModeGuard
     }
     case AluOp::FMAX_S:
     {
+        if (isSignalingNaN32(ina) || isSignalingNaN32(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         if (std::isnan(a) && !std::isnan(b))
         {
             result = b;
@@ -667,6 +689,8 @@ class RoundingModeGuard
     }
     case AluOp::FEQ_S:
     {
+        if (isSignalingNaN32(ina) || isSignalingNaN32(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {
@@ -680,6 +704,8 @@ class RoundingModeGuard
     }
     case AluOp::FLT_S:
     {
+        if (isNaNBits32(ina) || isNaNBits32(inb))
+            fcsr |= FCSR_INVALID_OP; // signaling compare: NV on any NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {
@@ -693,6 +719,8 @@ class RoundingModeGuard
     }
     case AluOp::FLE_S:
     {
+        if (isNaNBits32(ina) || isNaNBits32(inb))
+            fcsr |= FCSR_INVALID_OP; // signaling compare: NV on any NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {
@@ -777,8 +805,8 @@ class RoundingModeGuard
     return {out, fcsr};
 }
 
-[[nodiscard]] std::pair<uint64_t, bool> Alu::dfpexecute(AluOp op, uint64_t ina, uint64_t inb,
-                                                        uint64_t inc, uint8_t rm)
+[[nodiscard]] std::pair<uint64_t, uint8_t> Alu::dfpexecute(AluOp op, uint64_t ina, uint64_t inb,
+                                                           uint64_t inc, uint8_t rm)
 {
     double a, b, c;
     std::memcpy(&a, &ina, sizeof(double));
@@ -815,6 +843,13 @@ class RoundingModeGuard
     }
 
     std::feclearexcept(FE_ALL_EXCEPT);
+
+    // RISC-V: 0 * inf in a fused multiply-add raises NV even when the addend
+    // is a quiet NaN; the host returns the NaN quietly (known_issues 72).
+    if ((op == AluOp::FMADD_D || op == AluOp::FMSUB_D || op == AluOp::FNMADD_D ||
+         op == AluOp::FNMSUB_D) &&
+        ((std::isinf(a) && b == 0.0) || (a == 0.0 && std::isinf(b))))
+        fcsr |= FCSR_INVALID_OP;
 
     switch (op)
     {
@@ -871,7 +906,8 @@ class RoundingModeGuard
     }
     case AluOp::FSQRT_D:
     {
-        if (a < 0.0)
+        // isless, not <: `<` is a signaling compare and raised NV on a quiet NaN (72)
+        if (std::isless(a, 0.0))
         {
             result = std::numeric_limits<double>::quiet_NaN();
             fcsr |= FCSR_INVALID_OP;
@@ -884,30 +920,26 @@ class RoundingModeGuard
     }
     case AluOp::FCVT_W_D:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::W);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::W);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_WU_D:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::WU);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::WU);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_L_D:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::L);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::L);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_LU_D:
     {
-        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::LU);
-        if (invalid)
-            fcsr |= FCSR_INVALID_OP;
+        const auto [bits, flags] = convertToInteger(static_cast<double>(a), IntTarget::LU);
+        fcsr |= flags;
         return {bits, fcsr};
     }
     case AluOp::FCVT_D_W:
@@ -960,6 +992,8 @@ class RoundingModeGuard
     }
     case AluOp::FMIN_D:
     {
+        if (isSignalingNaN64(ina) || isSignalingNaN64(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         if (std::isnan(a) && !std::isnan(b))
         {
             result = b;
@@ -980,6 +1014,8 @@ class RoundingModeGuard
     }
     case AluOp::FMAX_D:
     {
+        if (isSignalingNaN64(ina) || isSignalingNaN64(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         if (std::isnan(a) && !std::isnan(b))
         {
             result = b;
@@ -1000,6 +1036,8 @@ class RoundingModeGuard
     }
     case AluOp::FEQ_D:
     {
+        if (isSignalingNaN64(ina) || isSignalingNaN64(inb))
+            fcsr |= FCSR_INVALID_OP; // NV on a signaling NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {
@@ -1013,6 +1051,8 @@ class RoundingModeGuard
     }
     case AluOp::FLT_D:
     {
+        if (isNaNBits64(ina) || isNaNBits64(inb))
+            fcsr |= FCSR_INVALID_OP; // signaling compare: NV on any NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {
@@ -1026,6 +1066,8 @@ class RoundingModeGuard
     }
     case AluOp::FLE_D:
     {
+        if (isNaNBits64(ina) || isNaNBits64(inb))
+            fcsr |= FCSR_INVALID_OP; // signaling compare: NV on any NaN (72)
         is_int_result = true;
         if (std::isnan(a) || std::isnan(b))
         {

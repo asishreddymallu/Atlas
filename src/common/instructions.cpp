@@ -1212,6 +1212,55 @@ bool readsIntegerSource(const uint32_t &instruction)
     return (funct7 & ~1u) == 0b1101000 || (funct7 & ~1u) == 0b1111000;
 }
 
+SourceRegisters sourceRegisters(uint32_t instruction)
+{
+    SourceRegisters s;
+    const uint8_t opcode = instruction & 0b1111111;
+    const uint8_t funct3 = (instruction >> 12) & 0b111;
+    switch (opcode)
+    {
+    case 0b1100111: // jalr
+    case 0b0000011: // loads
+    case 0b0010011: // OP-IMM
+    case 0b0011011: // OP-IMM-32
+    case 0b0000111: // flw / fld: the base address
+        s.rs1_gpr = true;
+        break;
+    case 0b0110011: // OP
+    case 0b0111011: // OP-32
+    case 0b1100011: // branches
+    case 0b0100011: // stores
+        s.rs1_gpr = s.rs2_gpr = true;
+        break;
+    case 0b0100111: // fsw / fsd: x base, f data
+        s.rs1_gpr = s.rs2_fpr = true;
+        break;
+    case 0b1110011: // SYSTEM: csrrw/s/c read rs1; ecall and csr*i read nothing
+        s.rs1_gpr = funct3 >= 1 && funct3 <= 3;
+        break;
+    case 0b1000011: // FMADD
+    case 0b1000111: // FMSUB
+    case 0b1001011: // FNMSUB
+    case 0b1001111: // FNMADD
+        s.rs1_fpr = s.rs2_fpr = s.rs3_fpr = true;
+        break;
+    case 0b1010011: // OP-FP; ~1 folds the single/double pair
+    {
+        const uint8_t f7 = ((instruction >> 25) & 0b1111111) & ~1u;
+        if (f7 == 0b1101000 || f7 == 0b1111000) // fcvt.{s,d}.<int>, fmv.{w,d}.x
+            s.rs1_gpr = true;
+        else if (f7 == 0b0101100 || f7 == 0b0100000 || f7 == 0b1100000 || f7 == 0b1110000)
+            s.rs1_fpr = true; // fsqrt, fcvt.s.d/d.s, fcvt.<int>.{s,d}, fclass / fmv.x.{w,d}
+        else
+            s.rs1_fpr = s.rs2_fpr = true;
+        break;
+    }
+    default: // lui, auipc, jal, fence: no register source
+        break;
+    }
+    return s;
+}
+
 std::string getExpectedSyntaxes(const std::string &opcode)
 {
     static const std::unordered_map<std::string, std::string> opcodeSyntaxMap = {

@@ -530,6 +530,25 @@ bool isDInstruction(const uint32_t &instruction);
  */
 bool readsIntegerSource(const uint32_t &instruction);
 
+/**
+ * @brief Which source fields an instruction really reads, and from which file:
+ * rs1 = bits 19:15, rs2 = bits 24:20, rs3 = bits 31:27 (R4 only).
+ *
+ * The hazard unit compared those bits of EVERY instruction against both the
+ * integer and the FP destination in flight, so an `fld f5` stalled an `addi`
+ * reading x5, and lui/auipc/jal stalled on their immediate bits (known_issues
+ * 78, 105). lui, auipc, jal, fence, ecall and the csr*i forms read nothing.
+ */
+struct SourceRegisters
+{
+    bool rs1_gpr = false;
+    bool rs2_gpr = false;
+    bool rs1_fpr = false;
+    bool rs2_fpr = false;
+    bool rs3_fpr = false;
+};
+SourceRegisters sourceRegisters(uint32_t instruction);
+
 std::string getExpectedSyntaxes(const std::string &opcode);
 
 /**

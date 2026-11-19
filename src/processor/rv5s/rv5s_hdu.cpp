@@ -11,7 +11,9 @@
 #include <iostream>
 
 
+#include "common/instructions.h"
 #include "processor/pipeline_registers.h"
+#include "processor/rv5s/rv5s_forwarding.h"
 
 namespace Kites
 {
@@ -32,46 +34,39 @@ constexpr int STALL_TWO_CYCLES = 2;
 int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_ex_reg,
                       const EX_MEM_Register &ex_mem_reg, bool is_forwarding_enabled)
 {
-    // --- 1. Extract Source Register Indices from IF/ID Instruction (Dependent) ---
-    uint32_t instruction = if_id_reg.instruction;
+    // --- 1. What the IF/ID instruction really reads ---
+    // Only the fields it reads, each in its own file. The bare bits of every
+    // instruction used to be compared against both files, so an f5 producer
+    // stalled a consumer reading x5, and lui/auipc/jal stalled on their
+    // immediate bits (known_issues 78, 105).
+    const uint32_t instruction = if_id_reg.instruction;
+    const instruction_set::SourceRegisters src = instruction_set::sourceRegisters(instruction);
+    const uint8_t rs1 = (instruction >> 15) & 0x1F;
+    const uint8_t rs2 = (instruction >> 20) & 0x1F;
+    const uint8_t rs3 = (instruction >> 27) & 0x1F;
+    auto readsGpr = [&](uint8_t rd)
+    { return rd != 0 && ((src.rs1_gpr && rd == rs1) || (src.rs2_gpr && rd == rs2)); };
+    auto readsFpr = [&](uint8_t frd)
+    {
+        return (src.rs1_fpr && frd == rs1) || (src.rs2_fpr && frd == rs2) ||
+               (src.rs3_fpr && frd == rs3);
+    };
 
-    // GPR Source Registers (rs1/rs2 fields)
-    uint8_t if_id_rs1 = (instruction >> 15) & 0x1F;
-    uint8_t if_id_rs2 = (instruction >> 20) & 0x1F;
-
-    // FPR Source Registers (frs1/frs2/frs3 fields)
-    // Note: F-type instructions reuse the rs1/rs2 bit-fields for frs1/frs2
-    uint8_t if_id_frs1 = (instruction >> 15) & 0x1F;
-    uint8_t if_id_frs2 = (instruction >> 20) & 0x1F;
-    uint8_t if_id_frs3 = (instruction >> 27) & 0x1F; // For FMA (R4 format)
-
-    // --- 2. Check for GPR Hazard (Source writes GPR, Dependent reads GPR) ---
-    // Two-cycle hazard: current EX/MEM instruction writes a GPR the IF/ID instruction reads
-    bool gpr_hazard_two_cycle = (ex_mem_reg.reg_write && (ex_mem_reg.rd != 0)) &&
-                                (ex_mem_reg.rd == if_id_rs1 || ex_mem_reg.rd == if_id_rs2);
-
-    // One-cycle hazard: previous EX/MEM instruction (now further down) writes a GPR the IF/ID
-    // instruction reads
-    bool gpr_hazard_one_cycle =
-        (ex_mem_reg.prev_reg_write && (ex_mem_reg.prev_rd != 0)) &&
-        (ex_mem_reg.prev_rd == if_id_rs1 || ex_mem_reg.prev_rd == if_id_rs2);
-
-    bool gpr_hazard = gpr_hazard_one_cycle || gpr_hazard_two_cycle;
-
-    // --- 3. Check for FPR Hazard (Source writes FPR, Dependent reads FPR) ---
-    // Note: FPR f0 is NOT hardwired to zero (unlike GPR x0), so no frd != 0 check needed.
-    // Two-cycle hazard: current EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_two_cycle =
-        (ex_mem_reg.freg_write) && (ex_mem_reg.frd == if_id_frs1 || ex_mem_reg.frd == if_id_frs2 ||
-                                    ex_mem_reg.frd == if_id_frs3);
-
-    // One-cycle hazard: previous EX/MEM instruction writes an FPR the IF/ID instruction reads
-    bool fpr_hazard_one_cycle =
-        (ex_mem_reg.prev_freg_write) &&
-        (ex_mem_reg.prev_frd == if_id_frs1 || ex_mem_reg.prev_frd == if_id_frs2 ||
-         ex_mem_reg.prev_frd == if_id_frs3);
-
-    bool fpr_hazard = fpr_hazard_one_cycle || fpr_hazard_two_cycle;
+    // --- 2./3. Producers in flight, judged by the file they really write ---
+    // reg_write and freg_write are both set for F/D instructions (79), so the
+    // instruction decides (producerWritesGpr / producerWritesFpr).
+    const bool gpr_hazard_two_cycle =
+        producerWritesGpr(ex_mem_reg.instruction, ex_mem_reg.reg_write) && readsGpr(ex_mem_reg.rd);
+    const bool gpr_hazard_one_cycle =
+        producerWritesGpr(ex_mem_reg.prev_instruction, ex_mem_reg.prev_reg_write) &&
+        readsGpr(ex_mem_reg.prev_rd);
+    const bool fpr_hazard_two_cycle =
+        producerWritesFpr(ex_mem_reg.instruction, ex_mem_reg.freg_write) && readsFpr(ex_mem_reg.frd);
+    const bool fpr_hazard_one_cycle =
+        producerWritesFpr(ex_mem_reg.prev_instruction, ex_mem_reg.prev_freg_write) &&
+        readsFpr(ex_mem_reg.prev_frd);
+    const bool gpr_hazard = gpr_hazard_one_cycle || gpr_hazard_two_cycle;
+    const bool fpr_hazard = fpr_hazard_one_cycle || fpr_hazard_two_cycle;
 
     // --- 4. Determine Stall Count ---
     // Combined hazard flag (either GPR or FPR dependency)
@@ -87,12 +82,10 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
         if (id_ex_reg.mem_read)
         {
             // Check if the load destination matches any source of the dependent instruction
-            bool gpr_load_use = (id_ex_reg.reg_write && id_ex_reg.rd != 0) &&
-                                (id_ex_reg.rd == if_id_rs1 || id_ex_reg.rd == if_id_rs2);
-
-            bool fpr_load_use = (id_ex_reg.freg_write) &&
-                                (id_ex_reg.frd == if_id_frs1 || id_ex_reg.frd == if_id_frs2 ||
-                                 id_ex_reg.frd == if_id_frs3);
+            const bool gpr_load_use =
+                producerWritesGpr(id_ex_reg.instruction, id_ex_reg.reg_write) && readsGpr(id_ex_reg.rd);
+            const bool fpr_load_use =
+                producerWritesFpr(id_ex_reg.instruction, id_ex_reg.freg_write) && readsFpr(id_ex_reg.frd);
 
             if (gpr_load_use || fpr_load_use)
             {

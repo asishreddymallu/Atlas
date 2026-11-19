@@ -252,6 +252,7 @@ void RV5StageProcessorNHNF::pipeline_execute()
     // Latch data for EX/MEM Register
     ex_mem_reg_.prev_reg_write = ex_mem_reg_.reg_write;
     ex_mem_reg_.prev_rd = ex_mem_reg_.rd;
+    ex_mem_reg_.prev_instruction = ex_mem_reg_.instruction;
     ex_mem_reg_.prev_freg_write = ex_mem_reg_.freg_write;
     ex_mem_reg_.prev_frd = ex_mem_reg_.frd;
     ex_mem_reg_.pc = id_ex_reg_.pc;

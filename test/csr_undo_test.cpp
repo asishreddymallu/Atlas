@@ -100,6 +100,15 @@ const UndoProgram kPrograms[] = {
      {"li x6, 1", "fcvt.s.w f1, x6", "fcvt.s.w f2, x0", "fdiv.s f3, f1, f2", "csrrs x5, fflags, x0",
       "csrrwi x7, frm, 3", "li x8, 3", "fcvt.s.w f4, x8", "fdiv.s f5, f1, f4",
       "csrrw x9, fcsr, x0", "fdiv.s f6, f1, f4", "li x10, 9"}},
+    // E5 (72): flags accrue - DZ, NX, then a double DZ and NV on top, an fsw
+    // that must not clear them, one read, then an exact op. Each Undo has to
+    // put back the OR it removed, not zero.
+    {"FpFlagAccrual",
+     {"li x6, 1", "li x8, 3", "li x9, -1", "lui x11, 0x10000", "fcvt.s.w f1, x6",
+      "fcvt.s.w f2, x0", "fcvt.s.w f4, x8", "fdiv.s f3, f1, f2", "fdiv.s f5, f1, f4",
+      "fcvt.d.w f6, x6", "fcvt.d.w f7, x0", "fdiv.d f8, f6, f7", "fcvt.d.w f10, x9",
+      "fsqrt.d f11, f10", "fsw f3, 0(x11)", "csrrs x5, fflags, x0", "fadd.s f12, f1, f4",
+      "li x12, 7"}},
 };
 
 std::string padded(const std::vector<std::string> &lines)

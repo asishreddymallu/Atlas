@@ -20,11 +20,13 @@
 
 namespace Kites
 {
-#define FCSR_INVALID_OP (1 << 0)  // Invalid operation
-#define FCSR_DIV_BY_ZERO (1 << 1) // Divide by zero
-#define FCSR_OVERFLOW (1 << 2)    // Overflow
-#define FCSR_UNDERFLOW (1 << 3)   // Underflow
-#define FCSR_INEXACT (1 << 4)     // Inexact result
+// RISC-V fflags = fcsr[4:0]: NX bit 0, UF 1, OF 2, DZ 3, NV 4. This was the
+// reverse order (known_issues 72).
+#define FCSR_INEXACT (1 << 0)     // NX: inexact result
+#define FCSR_UNDERFLOW (1 << 1)   // UF: tiny after rounding and inexact
+#define FCSR_OVERFLOW (1 << 2)    // OF: overflow
+#define FCSR_DIV_BY_ZERO (1 << 3) // DZ: divide by zero
+#define FCSR_INVALID_OP (1 << 4)  // NV: invalid operation
 
 namespace alu
 {
@@ -373,8 +375,8 @@ class Alu
     [[nodiscard]] static std::pair<uint64_t, uint8_t>
     fpexecute(AluOp op, uint64_t ina, uint64_t inb, uint64_t inc, uint8_t rm);
 
-    [[nodiscard]] static std::pair<uint64_t, bool> dfpexecute(AluOp op, uint64_t ina, uint64_t inb,
-                                                              uint64_t inc, uint8_t rm);
+    [[nodiscard]] static std::pair<uint64_t, uint8_t> dfpexecute(AluOp op, uint64_t ina, uint64_t inb,
+                                                                 uint64_t inc, uint8_t rm);
 
     void setFlags(bool carry, bool zero, bool negative, bool overflow);
 };
