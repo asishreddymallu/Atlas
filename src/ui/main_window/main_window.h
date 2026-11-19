@@ -17,6 +17,7 @@ class QSpinBox;
 
 namespace Kites
 {
+class OutputDock;
 QT_BEGIN_NAMESPACE
 namespace Ui
 {
@@ -130,6 +131,12 @@ private:
     // Set when the user pressed Stop, so runFinishedSlot can tell a
     // stopped run from one that ended.
     bool               m_userStopped {false};
+    // The Output panel, and a manual Step held until a read's input is
+    // entered there.
+    OutputDock        *m_outputDock {nullptr};
+    bool               m_stepAwaitingInput {false};
+    bool               m_outputDockSized {false};
+    void showOutputDock();
     void setRunStatus(const QString &text);
     ProblemsDock      *m_problemsDock     {nullptr};
     RibbonBar         *m_ribbon            {nullptr};

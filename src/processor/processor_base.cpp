@@ -19,6 +19,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <thread>
 
 namespace Kites
@@ -560,6 +561,7 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
             std::cout << "VM_STDOUT_START";
         }
         std::cout << static_cast<int64_t>(registers_.ReadGpr(10)); // Print signed integer
+        EmitProgramOutput(std::to_string(static_cast<int64_t>(registers_.ReadGpr(10))));
         if (!globals::vm_as_backend)
         {
             std::cout << "]" << std::endl;
@@ -584,6 +586,11 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
         uint64_t raw = registers_.ReadGpr(10);
         std::memcpy(&float_value, &raw, sizeof(float_value));
         std::cout << std::setprecision(std::numeric_limits<float>::max_digits10) << float_value;
+        {
+            std::ostringstream text;
+            text << std::setprecision(std::numeric_limits<float>::max_digits10) << float_value;
+            EmitProgramOutput(text.str());
+        }
         if (!globals::vm_as_backend)
         {
             std::cout << "]" << std::endl;
@@ -608,6 +615,11 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
         uint64_t raw = registers_.ReadGpr(10);
         std::memcpy(&double_value, &raw, sizeof(double_value));
         std::cout << std::setprecision(std::numeric_limits<double>::max_digits10) << double_value;
+        {
+            std::ostringstream text;
+            text << std::setprecision(std::numeric_limits<double>::max_digits10) << double_value;
+            EmitProgramOutput(text.str());
+        }
         if (!globals::vm_as_backend)
         {
             std::cout << "]" << std::endl;
@@ -624,7 +636,7 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
         {
             std::cout << "[Syscall output: ";
         }
-        PrintString(registers_.ReadGpr(10)); // Print string
+        EmitProgramOutput(PrintString(registers_.ReadGpr(10))); // Print string
         if (!globals::vm_as_backend)
         {
             std::cout << "]" << std::endl;
@@ -663,6 +675,10 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
                 std::cout << "VM_STDIN_START" << std::endl;
                 output_status_ = "VM_STDIN_START";
                 std::unique_lock<std::mutex> lock(input_mutex_);
+                // Tell the window it can offer an input line. Queued to the
+                // UI thread, so emitting under input_mutex_ cannot deadlock.
+                if (input_queue_.empty())
+                    emit inputRequestedSignal();
                 // Also wakes on stop: without this a program blocked in an
                 // ecall read could never be stopped, and StopAndReset would
                 // sit out its whole timeout.
@@ -730,9 +746,11 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
             std::cout << "VM_STDOUT_START";
             output_status_ = "VM_STDOUT_START";
             uint64_t bytes_printed = 0;
+            std::string written;
             for (uint64_t i = 0; i < length; ++i)
             {
                 char c = memory_controller_.readByte(buffer_address + i);
+                written += c;
                 // if (c == '\0') {
                 //     break;
                 // }
@@ -740,6 +758,7 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
                 bytes_printed++;
             }
             std::cout << std::flush;
+            EmitProgramOutput(written);
             output_status_ = "VM_STDOUT_END";
             std::cout << "VM_STDOUT_END" << std::endl;
 
@@ -791,16 +810,50 @@ bool ProcessorBase::TakeProgramExit()
     return exited;
 }
 
-void ProcessorBase::PrintString(uint64_t address)
+std::string ProcessorBase::PrintString(uint64_t address)
 {
+    std::string printed;
     while (true)
     {
         char c = memory_controller_.readByte(address);
         if (c == '\0')
             break;
         std::cout << c;
+        printed += c;
         address++;
     }
+    return printed;
+}
+
+void ProcessorBase::EmitProgramOutput(const std::string &text)
+{
+    // std::cout above stays as it was: kites-cli and the tests read it.
+    // This is the window's copy (known_issues 140).
+    if (!text.empty())
+        emit programOutputSignal(QString::fromStdString(text));
+}
+
+bool ProcessorBase::NextStepWaitsForInput()
+{
+    if (!NextStepServesEcall())
+        return false;
+    // Every instruction older than the ecall has retired, so a7 and a0 are
+    // the values the service will read.
+    if (registers_.ReadGpr(17) != SYSCALL_READ || registers_.ReadGpr(10) != 0)
+        return false;
+    std::lock_guard<std::mutex> lock(input_mutex_);
+    return input_queue_.empty();
+}
+
+bool ProcessorBase::NextStepServesEcall()
+{
+    // rvss: the instruction at the PC executes, ecall included, next step.
+    if (program_counter_ >= program_size_)
+        return false;
+    uint32_t instruction = 0;
+    for (int i = 3; i >= 0; --i)
+        instruction = (instruction << 8) | memory_controller_.peekByte(program_counter_ + static_cast<uint64_t>(i));
+    return instruction == 0x00000073u; // ecall
 }
 
 void ProcessorBase::DumpState(const std::filesystem::path &filename)

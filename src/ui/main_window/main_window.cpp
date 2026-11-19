@@ -12,6 +12,7 @@
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/memory_tab/memory_tab.h"
 #include "ui/processor_tab/processor_tab.h"
+#include "ui/output_panel/output_dock.h"
 #include "ui/profiler_tab/profiler_tab.h"
 #include "ui/ribbon/ribbon_group.h"
 #include "ui/ribbon/ribbon_page.h"
@@ -227,6 +228,43 @@ void MainWindow::setUpProblemsDock()
     QMenu *viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(toggleAction);
 
+    // The Output panel (known_issues 140): what the program prints, and the
+    // line an ecall read asks for. Beside Problems in the bottom area.
+    m_outputDock = new OutputDock(this);
+    addDockWidget(Qt::BottomDockWidgetArea, m_outputDock);
+    tabifyDockWidget(m_problemsDock, m_outputDock);
+    m_outputDock->hide(); // shown when the program prints or reads
+    QAction *outputToggle = m_outputDock->toggleViewAction();
+    outputToggle->setText("Output");
+    setActionHint(outputToggle, "Show or hide the program's output");
+    viewMenu->addAction(outputToggle);
+    // Queued: the processor emits these on the worker thread during a Run.
+    connect(m_processorManager, &ProcessorManager::programOutputSignal, m_outputDock,
+            [this](const QString &text)
+            {
+                showOutputDock();
+                m_outputDock->appendOutput(text);
+            },
+            Qt::QueuedConnection);
+    connect(m_processorManager, &ProcessorManager::inputRequestedSignal, m_outputDock,
+            [this]()
+            {
+                showOutputDock();
+                m_outputDock->requestInput();
+            },
+            Qt::QueuedConnection);
+    connect(m_outputDock, &OutputDock::inputSubmitted, this,
+            [this](const QString &line)
+            {
+                m_processorManager->pushInput(line.toStdString());
+                // A Step that would have waited for this input runs now.
+                if (m_stepAwaitingInput)
+                {
+                    m_stepAwaitingInput = false;
+                    m_processorManager->step();
+                }
+            });
+
     auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
     if (!editorTab)
         return;
@@ -261,6 +299,23 @@ void MainWindow::setUpStatusBar()
     m_runStatusLabel = new QLabel("Ready", this);
     m_runStatusLabel->setObjectName("runStatusLabel");
     statusBar->addPermanentWidget(m_runStatusLabel);
+}
+
+void MainWindow::showOutputDock()
+{
+    if (!m_outputDock)
+        return;
+    const bool firstTime = m_outputDock->isHidden() && !m_outputDockSized;
+    m_outputDock->show();
+    m_outputDock->raise();
+    if (firstTime)
+    {
+        // Left to itself the dock takes half the window, and the ribbon
+        // drops its labels for want of height (offscreen shot, U6). A few
+        // lines of output and the input line are enough to start with.
+        resizeDocks({m_outputDock}, {170}, Qt::Vertical);
+        m_outputDockSized = true;
+    }
 }
 
 void MainWindow::setRunStatus(const QString &text)
@@ -444,7 +499,24 @@ void MainWindow::setUpExecutionActions()
                 m_redoAction->setEnabled(true);
             });
 
-    connect(m_stepAction, &QAction::triggered, this, [this]() { m_processorManager->step(); });
+    connect(m_stepAction, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_stepAwaitingInput)
+                    return; // the step is already waiting for the input line
+                // A manual step runs on the UI thread. A step that serves an
+                // ecall read with no input queued would block it in the
+                // read's wait, and nobody could type (known_issues 144). Ask
+                // first; the step runs when the line is entered.
+                if (m_processorManager->nextStepWaitsForInput() && m_outputDock)
+                {
+                    m_stepAwaitingInput = true;
+                    showOutputDock();
+                    m_outputDock->requestInput();
+                    return;
+                }
+                m_processorManager->step();
+            });
     connect(m_undoAction, &QAction::triggered, this, [this]() { m_processorManager->undo(); });
     connect(m_redoAction, &QAction::triggered, this, [this]() { m_processorManager->redo(); });
 }
@@ -904,6 +976,8 @@ bool MainWindow::tryParseAndLoadProgram()
     editor->switchToExpandedView(); // switch to the expanded view 
                                     //to show expanded pseudoinstructions
     editor->resetErrorLines();    // we reset previous error lines
+    if (m_outputDock)
+        m_outputDock->clearOutput(); // every Run, Debug Run and reload starts clean
     editor->setCanWrite(false);   // we disable writing in editor while vm is running
     if (m_saveAction)
         m_saveAction->setEnabled(false); // read-only editor: a disabled QAction also
@@ -1061,6 +1135,9 @@ void MainWindow::runFinishedSlot()
 
     m_pauseAction->setDisabled(true);
     m_stepAction->setDisabled(true);
+    m_stepAwaitingInput = false;
+    if (m_outputDock)
+        m_outputDock->endInput(); // a Stop ends a read's wait; close its line
 
     // A program that ended keeps its final state (known_issues 142), and
     // Undo/Redo walk back and forth from it, however it was run.

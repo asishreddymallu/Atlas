@@ -66,6 +66,8 @@ public:
     /// The program ended (ran off its end and drained, or exited) and its
     /// final state is still on the processor.
     bool programEnded() const;
+    /// The next manual step would block waiting for ecall read input.
+    bool nextStepWaitsForInput();
 
     /**@brief Request a run from the UI thread. Snapshots the stop epoch
      * at REQUEST time and posts it with the invocation, so a stop issued
@@ -153,6 +155,8 @@ signals:
     void runFinishedSignal();
     void processorStateChangedSignal();
     void processorPausedAtBreakpointSignal();
+    void programOutputSignal(const QString &text);
+    void inputRequestedSignal();
     // sourceLine is 1-based, or -1 if the failing PC couldn't be mapped back to a source line.
     void runErrorSignal(const QString &errorMessage, int sourceLine);
     void updateDisassemblySignal(const QString &disassemblyText);

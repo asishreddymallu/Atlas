@@ -75,6 +75,12 @@ class RV5StageVM_Base : public ProcessorBase
     void print_pipeline_registers_debug();
     bool is_pipeline_drained() const;
     /// Past the last instruction and drained: the pipeline's end.
+    /// An ecall is served when it reaches writeback, i.e. at the next step
+    /// if it is in MEM/WB now.
+    bool NextStepServesEcall() override
+    {
+        return mem_wb_reg_.pc != INVALID_PC && mem_wb_reg_.instruction == 0x00000073u;
+    }
     bool RanOffTheEnd() const override
     {
         return program_size_ > 0 && program_counter_ >= program_size_ && is_pipeline_drained();

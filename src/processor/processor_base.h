@@ -179,6 +179,9 @@ class ProcessorBase : public QObject
     /// Past the last instruction, with nothing left in flight. rvss has
     /// nothing in flight; the pipelines override this with their drain.
     virtual bool RanOffTheEnd() const { return program_size_ > 0 && program_counter_ >= program_size_; }
+    /// The next step serves an ecall: rvss executes the one at the PC; the
+    /// pipelines override this with the one in MEM/WB.
+    virtual bool NextStepServesEcall();
 
     bool StopWorker(int timeout_ms, bool reset);
 
@@ -311,6 +314,13 @@ class ProcessorBase : public QObject
      */
     bool ProgramEnded() const;
 
+    /**@brief True when the next step serves an ecall read (a7 = 63, fd 0)
+     * and no input is queued, so that step would block its thread until
+     * input arrives. The window asks this before a manual step, which runs
+     * on the UI thread (known_issues 144).
+     */
+    bool NextStepWaitsForInput();
+
     /**@brief The stop path for a caller that IS the run loop.
      *
      * The exit service (StopForProgramExit) calls this from inside
@@ -379,7 +389,10 @@ class ProcessorBase : public QObject
     virtual void SetActiveWireNames() = 0;
     virtual void setProcessorState() = 0;
 
-    void PrintString(uint64_t address);
+    /// Prints a NUL-terminated string to std::cout and returns it.
+    std::string PrintString(uint64_t address);
+    /// The window's copy of what the program printed (programOutputSignal).
+    void EmitProgramOutput(const std::string &text);
 
     virtual void Run()      = 0;
     virtual void DebugRun() = 0;
@@ -411,6 +424,12 @@ class ProcessorBase : public QObject
     // we emit this signal when vm is paused at breakpoint
     //  so that gui can chane paused button to resume
     void processorPausedAtBreakpointSignal();
+    /// Text the program printed (print int/float/double/string, write to
+    /// fd 1), exactly as printed. Emitted on whichever thread serves the
+    /// ecall; connect with Qt::QueuedConnection.
+    void programOutputSignal(const QString &text);
+    /// An ecall read is about to wait for input (the queue is empty).
+    void inputRequestedSignal();
 };
 
 }  // namespace Kites

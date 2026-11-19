@@ -50,8 +50,13 @@ ProcessorManager::ProcessorManager(QObject *parent, ProcessorType vmType) : QObj
             &ProcessorManager::processorClockedSlot, Qt::DirectConnection);
     connect(m_currentProcessor.get(), &ProcessorBase::processorClockedSignal, this,
             &ProcessorManager::processorClockedSignal, Qt::DirectConnection);
+    // As in changeProcessor: program output and input requests (140).
+    connect(m_currentProcessor.get(), &ProcessorBase::programOutputSignal, this,
+            &ProcessorManager::programOutputSignal, Qt::DirectConnection);
+    connect(m_currentProcessor.get(), &ProcessorBase::inputRequestedSignal, this,
+            &ProcessorManager::inputRequestedSignal, Qt::DirectConnection);
 
-    connect(this, &ProcessorManager::processorClockedSignal,&m_profiler, 
+    connect(this, &ProcessorManager::processorClockedSignal,&m_profiler,
             &Profiler::processorClockedSlot, Qt::DirectConnection);
 }
 
@@ -79,6 +84,12 @@ void ProcessorManager::changeProcessor(ProcessorType vmType)
             &ProcessorManager::processorPausedAtBreakpointSignal, Qt::DirectConnection);
     connect(m_currentProcessor.get(), &ProcessorBase::processorClockedSignal, this,
             &ProcessorManager::processorClockedSignal, Qt::DirectConnection);
+    // Program output and input requests, for the window's Output panel
+    // (known_issues 140). Forwarded as they come; the window queues them.
+    connect(m_currentProcessor.get(), &ProcessorBase::programOutputSignal, this,
+            &ProcessorManager::programOutputSignal, Qt::DirectConnection);
+    connect(m_currentProcessor.get(), &ProcessorBase::inputRequestedSignal, this,
+            &ProcessorManager::inputRequestedSignal, Qt::DirectConnection);
     // create new connections for the new VM
 
     // The new processor has run nothing: no stage holds an instruction, so
@@ -372,6 +383,11 @@ void ProcessorManager::debugRun()
     // Debug mode starts in paused/manual mode; user advances with Step.
     m_currentProcessor->ClearStop();
     m_currentProcessor->RequestPause();
+}
+
+bool ProcessorManager::nextStepWaitsForInput()
+{
+    return m_currentProcessor->NextStepWaitsForInput();
 }
 
 bool ProcessorManager::programEnded() const
