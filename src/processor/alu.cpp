@@ -354,6 +354,75 @@ bool canonicalizesNaN(AluOp op)
     }
 }
 
+/// fcvt.{w,wu,l,lu}.{s,d} by the RISC-V table: round in the current
+/// (already set) mode first, then range-check the ROUNDED value against the
+/// type's exact bounds. NaN gives the largest value, -inf the smallest, an
+/// out-of-range result saturates, 32-bit results are sign-extended. The old
+/// guard compared the unrounded value with static_cast<float>(INT32_MAX) -
+/// itself rounded in the current mode, to 2^31 under RNE - so 2^31, 2^32,
+/// 2^63 and 2^64 reached an out-of-range cast (UB), and fcvt.w.s sent NaN to
+/// the minimum (known_issues 73). The second member is "invalid".
+enum class IntTarget
+{
+    W,
+    WU,
+    L,
+    LU
+};
+
+std::pair<uint64_t, bool> convertToInteger(double a, IntTarget target)
+{
+    constexpr uint64_t kAllOnes = ~0ULL;
+    double lo = 0.0;
+    double hi_exclusive = 0.0;
+    uint64_t min_bits = 0;
+    uint64_t max_bits = 0;
+    switch (target)
+    {
+    case IntTarget::W:
+        lo = -2147483648.0;
+        hi_exclusive = 2147483648.0;
+        min_bits = static_cast<uint64_t>(static_cast<int64_t>(INT32_MIN));
+        max_bits = static_cast<uint64_t>(INT32_MAX);
+        break;
+    case IntTarget::WU:
+        hi_exclusive = 4294967296.0;
+        max_bits = kAllOnes; // 0xFFFFFFFF sign-extended
+        break;
+    case IntTarget::L:
+        lo = -9223372036854775808.0;
+        hi_exclusive = 9223372036854775808.0;
+        min_bits = static_cast<uint64_t>(INT64_MIN);
+        max_bits = static_cast<uint64_t>(INT64_MAX);
+        break;
+    case IntTarget::LU:
+        hi_exclusive = 18446744073709551616.0;
+        max_bits = kAllOnes;
+        break;
+    }
+    if (std::isnan(a))
+        return {max_bits, true};
+    const double r = std::nearbyint(a);
+    if (r < lo)
+        return {min_bits, true};
+    if (r >= hi_exclusive)
+        return {max_bits, true};
+    switch (target)
+    {
+    case IntTarget::W:
+        return {static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(r))), false};
+    case IntTarget::WU:
+        return {static_cast<uint64_t>(
+                    static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(r)))),
+                false};
+    case IntTarget::L:
+        return {static_cast<uint64_t>(static_cast<int64_t>(r)), false};
+    case IntTarget::LU:
+        return {static_cast<uint64_t>(r), false};
+    }
+    return {0, false};
+}
+
 /// Restores the calling thread's rounding mode on every way out of
 /// fpexecute/dfpexecute. Both set the host mode from rm, and restored it by
 /// hand on only some return paths: the fld/fsd address add returned early
@@ -482,76 +551,31 @@ class RoundingModeGuard
     }
     case AluOp::FCVT_W_S:
     {
-        if (!std::isfinite(a) || a > static_cast<float>(INT32_MAX) ||
-            a < static_cast<float>(INT32_MIN))
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::W);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            auto res = static_cast<int64_t>(static_cast<int32_t>(a > 0 ? INT32_MAX : INT32_MIN));
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<int32_t>(std::nearbyint(a));
-            auto res = static_cast<int64_t>(ires); // sign-extend
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_WU_S:
     {
-        if (!std::isfinite(a) || a > static_cast<float>(UINT32_MAX) || a < 0.0f)
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::WU);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            uint32_t saturate = (a < 0.0f) ? 0 : UINT32_MAX;
-            auto res = static_cast<int64_t>(static_cast<int32_t>(saturate)); // sign-extend
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<uint32_t>(std::nearbyint(a));
-            auto res = static_cast<int64_t>(static_cast<int32_t>(ires)); // sign-extend
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_L_S:
     {
-        if (!std::isfinite(a) || a > static_cast<float>(INT64_MAX) ||
-            a < static_cast<float>(INT64_MIN))
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::L);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            int64_t saturate = (a < 0.0f) ? INT64_MIN : INT64_MAX;
-            return {static_cast<uint64_t>(saturate), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<int64_t>(std::nearbyint(a));
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(ires), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_LU_S:
     {
-        if (!std::isfinite(a) || a > static_cast<float>(UINT64_MAX) || a < 0.0f)
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::LU);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            uint64_t saturate = (a < 0.0f) ? 0 : UINT64_MAX;
-            return {saturate, fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<uint64_t>(std::nearbyint(a));
-            fesetround(original_rm);
-            return {ires, fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_S_W:
     {
@@ -860,77 +884,31 @@ class RoundingModeGuard
     }
     case AluOp::FCVT_W_D:
     {
-        if (!std::isfinite(a) || a > static_cast<double>(INT32_MAX) ||
-            a < static_cast<double>(INT32_MIN))
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::W);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            int32_t saturate = (a < 0.0) ? INT32_MIN : INT32_MAX;
-            auto res = static_cast<int64_t>(saturate); // sign-extend to XLEN
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<int32_t>(std::nearbyint(a));
-            auto res = static_cast<int64_t>(ires); // sign-extend to XLEN
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_WU_D:
     {
-        if (!std::isfinite(a) || a > static_cast<double>(UINT32_MAX) || a < 0.0)
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::WU);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            uint32_t saturate = (a < 0.0) ? 0 : UINT32_MAX;
-            auto res = static_cast<int64_t>(static_cast<int32_t>(saturate)); // sign-extend per spec
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<uint32_t>(std::nearbyint(a));
-            auto res = static_cast<int64_t>(static_cast<int32_t>(ires)); // sign-extend
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(res), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_L_D:
     {
-        if (!std::isfinite(a) || a > static_cast<double>(INT64_MAX) ||
-            a < static_cast<double>(INT64_MIN))
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::L);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            int64_t saturate = (a < 0.0) ? INT64_MIN : INT64_MAX;
-            return {static_cast<uint64_t>(saturate), fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<int64_t>(std::nearbyint(a));
-            fesetround(original_rm);
-            return {static_cast<uint64_t>(ires), fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_LU_D:
     {
-        if (!std::isfinite(a) || a > static_cast<double>(UINT64_MAX) || a < 0.0)
-        {
+        const auto [bits, invalid] = convertToInteger(static_cast<double>(a), IntTarget::LU);
+        if (invalid)
             fcsr |= FCSR_INVALID_OP;
-            fesetround(original_rm);
-            uint64_t saturate = (a < 0.0) ? 0 : UINT64_MAX;
-            return {saturate, fcsr};
-        }
-        else
-        {
-            auto ires = static_cast<uint64_t>(std::nearbyint(a));
-            fesetround(original_rm);
-            return {ires, fcsr};
-        }
-        break;
+        return {bits, fcsr};
     }
     case AluOp::FCVT_D_W:
     {
