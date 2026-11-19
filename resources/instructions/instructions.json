@@ -105,7 +105,8 @@
         "fmv.w.x",
         "feq.s",
         "flt.s",
-        "fle.s"
+        "fle.s",
+        "fclass.s"
     ],
     "DInstruction": [
         "fld",
@@ -136,6 +137,7 @@
         "fcvt.wu.d",
         "feq.d",
         "fle.d",
+        "fclass.d",
         "flt.d",
         "fmax.d",
         "fmin.d"

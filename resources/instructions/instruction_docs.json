@@ -731,9 +731,7 @@
       "category": "float-classify",
       "format": "fclass.s rd, fs1",
       "summary": "rd = a one-hot mask saying what kind of number fs1 is (infinity, normal, subnormal, zero, NaN, and its sign)",
-      "example": "fclass.s x5, f1",
-      "support": "unsupported",
-      "reason": "Parses, but the code generator has no encoding for it and throws 'Invalid instruction type'."
+      "example": "fclass.s x5, f1"
     },
     "class.s": {
       "ext": "F",
@@ -1423,9 +1421,7 @@
       "category": "float-classify",
       "format": "fclass.d rd, fs1",
       "summary": "rd = a one-hot mask saying what kind of number fs1 is",
-      "example": "fclass.d x5, f1",
-      "support": "unsupported",
-      "reason": "Parses, but the code generator has no encoding for it and throws 'Invalid instruction type'."
+      "example": "fclass.d x5, f1"
     },
     "fence_i": {
       "ext": "Zifencei",
