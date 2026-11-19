@@ -3255,7 +3255,7 @@ Mixing them would make both unreviewable.
 
 ---
 
-## 72. `fflags` is never written, and the flags it would hold are not RISC-V's
+## 72. FIXED: `fflags` is never written, and the flags it would hold are not RISC-V's
 
 Four independent defects, all measured over the 1530 survey runs.
 
@@ -3312,6 +3312,41 @@ Measured after E4, identical on rvss, nh-nf and h-f:
 
 A further consequence of "replace" is 116: FP loads and stores clear
 the flags.
+
+
+**Fixed in E5 (`5940e0f`; test `d2f6ce0`).** All of it, on all five models at once:
+- **Bit order:** NX 0, UF 1, OF 2, DZ 3, NV 4 (`alu.h:25`).
+- **Accrual:** the status is OR-ed into `fflags`. On the pipelines this happens at retirement (`rv5s_processor_base.cpp:705`), on rvss in `WriteFpStatus` (`rvss_processor.cpp:429`). The Undo record is unchanged, and the old value goes into it.
+- **Full D flags:** `dfpexecute` returns `uint8_t` (`alu.h:378`).
+- **Flag values against the spec.** Five corrections were needed beyond the plumbing:
+  - `fcvt` to an integer raises NX when in range and inexact (`alu.cpp:423`);
+  - `feq` raises NV on a signaling NaN, `flt`/`fle` on any NaN, and `fmin`/`fmax` on a signaling NaN (`alu.cpp:648`-`:722`, and the D twins). These never reach the host FPU with a NaN;
+  - `fsqrt` of a **quiet** NaN raised NV. The negative guard `a < 0.0f` compiles to a signaling compare, which raises invalid on any NaN; it is now `std::isless` (`alu.cpp:563`, and the D twin);
+  - FMA `0 * inf + qNaN` raised nothing, and RISC-V requires NV. The host returns the NaN quietly, so there is now an explicit check (`alu.cpp:500`, `:847`).
+
+Measured after E5, identical on all five models (from `Fflags`):
+
+| op | before | after (RISC-V) |
+|---|---|---|
+| `fdiv.s 1, 0` | `0x02` | DZ `0x08` |
+| `fdiv.s 0, 0` | `0x01` | NV `0x10` |
+| `fdiv.s 1, 3` | `0x10` | NX `0x01` |
+| `fdiv.d 1, 0` / `0, 0` | `0x01` / `0x01` | `0x08` / `0x10` |
+| `fsqrt.s` of qNaN | `0x01` | 0 |
+| `fmadd.s 0, inf, qNaN` | 0 | `0x10` |
+
+**Tests.** `test/fflags_test.cpp`: 20 programs × 5 models, 2888 flag words from `~/atlas-verify/e5/gen_fflags.py` (oracle `fpo.py`: exact `Fraction` arithmetic, all five modes, tininess after rounding).
+- The cases cover fadd/fsub/fmul/fdiv/fsqrt and the four FMAs in .s and .d; every conversion; the compares, min/max, sign injection, fclass and fmv.x.
+- Inputs: exact, inexact, overflow, underflow into subnormals, zeros, infinities, and quiet and signaling NaNs.
+- Modes rne/rtz/rdn/rup, and rmm only off ties (113).
+- `Accrual` ORs several ops into one read, keeps 31 across exact ops, and keeps DZ/NX across `fsw`/`flw`/`fsd`/`fld` (116).
+- `CsrUndo …/FpFlagAccrual` covers Undo across accrued flags.
+
+**Red** at `d2f6ce0`: 95 of the 100. `ConvertD3` passed only because a D op's old bool 1 equals NX.
+
+**Test changed:** `DoubleFlags.FflagsAfterEachDoubleOp/DoubleOpsWriteFflags/*` (5). It set `fflags` to 31 and expected the replacing bool, which under accrual would read 31 every time. It now clears `fflags` and expects each op's full flags (`~/atlas-verify/e5/gen_dflags.py`).
+
+**Readers of the old layout:** none outside the ALU. No UI view decodes the bits; the register views show `fcsr` as a number. The docs JSON names `fflags` only in CSR examples. `FCSR_*` is used only in `alu.cpp`.
 
 ---
 
@@ -3676,7 +3711,7 @@ current processor, and it needs its own design.
 
 ---
 
-## 78. The hazard unit reads every instruction's rs1 as an f index too, and stalls on a bare index match
+## 78. FIXED: The hazard unit reads every instruction's rs1 as an f index too, and stalls on a bare index match
 
 `check_data_hazard` (`src/processor/rv5s/rv5s_hdu.cpp:39-46`) pulls both
 readings out of the same five bits, for every instruction, whatever its
@@ -3739,6 +3774,31 @@ only to instructions that read F registers at those positions.
 Not fixed: this stage was told to measure it and leave it. Note that
 `stall_cycles_` reads 0 in all four runs, so the counter does not track
 these stalls; the cycle count is the measurement.
+
+
+**Fixed in E5 (`06c9034`; test `3568935`), together with 105.** The hazard unit now asks:
+- which of rs1, rs2 and rs3 the consumer really reads, and from which file: `instruction_set::sourceRegisters` (`instructions.cpp:1215`). lui, auipc, jal, fence, ecall and the `csr*i` forms read nothing;
+- which file the producer in flight really writes: `producerWritesGpr` / `producerWritesFpr`, on the EX/MEM instruction, a new `EX_MEM::prev_instruction` (`pipeline_registers.h:99`), and the ID/EX instruction for load-use (`rv5s_hdu.cpp:43`, `:85`).
+
+Cycles, measured at the red commit and after. The expected counts come from `~/atlas-verify/e5/gen_hdu.py`: pipeline rules applied to spec read/write sets, not from the code.
+
+| case (`HduFalseStall`) | h_nf before → after | h_f before → after |
+|---|---|---|
+| `ld x5` → `addi x6, x5, 1` (real) | 25 → 25 | 22 → 22 |
+| `fld f5` → `addi x6, x5, 1` | 25 → **23** | 22 → **21** |
+| `ld x5` → `fadd.d f6, f5, f7` | 28 → **24** | 23 → **22** |
+| `ld x5` → `lui x6, 0x28` | 25 → **23** | 22 → **21** |
+| `ld x5` → `auipc x6, 0x28` | 25 → **23** | 22 → **21** |
+| `ld x8` → `jal x0, 8` | 28 → **26** | 25 → **24** |
+| `flw f5` → `fadd.s f6, f5, f1` (real) | 28 → **26** | 23 → 23 |
+| `addi x5` → `lui x6, 0x28` | 25 → **23** | 21 → 21 |
+| `fadd.d f5` → `addi x6, x5, 1` | 25 → **23** | 21 → 21 |
+
+The real dependencies still stall exactly as the rules say. The `flw` case's h_nf drop is a further false stall the test caught: the following `addi x6, x0, 6` has 6 in bits 24:20, which matched the fadd's f6.
+
+Values are unchanged on rvss, h_nf and h_f in every case. Livesweep and modelsweep (unpadded hazard chains, all five models) keep their md5s.
+
+The forwarding units still match the immediate bits of lui/auipc/jal and forward an operand that is then discarded (105). That does not change values or timing, and is left as it is.
 
 ---
 
@@ -5217,7 +5277,7 @@ implemented.
 
 ---
 
-## 105. The hazard unit stalls lui, auipc and jal on their immediate bits
+## 105. FIXED: The hazard unit stalls lui, auipc and jal on their immediate bits
 
 `check_data_hazard` reads bits 19:15 and 24:20 of every instruction as
 rs1 and rs2 (`rv5s_hdu.cpp:39-40`). For lui and auipc those are bits of
@@ -5248,6 +5308,31 @@ On the forwarding variants the forwarding units also match those bits
 (`nh_f.cpp:270-300`). The forwarded operand is then discarded: lui and
 auipc override the ALU result, and jal's link and target do not use it.
 No value changes. Not fixed: E2 records it.
+
+
+**Fixed in E5 (`06c9034`; test `3568935`), together with 105.** The hazard unit now asks:
+- which of rs1, rs2 and rs3 the consumer really reads, and from which file: `instruction_set::sourceRegisters` (`instructions.cpp:1215`). lui, auipc, jal, fence, ecall and the `csr*i` forms read nothing;
+- which file the producer in flight really writes: `producerWritesGpr` / `producerWritesFpr`, on the EX/MEM instruction, a new `EX_MEM::prev_instruction` (`pipeline_registers.h:99`), and the ID/EX instruction for load-use (`rv5s_hdu.cpp:43`, `:85`).
+
+Cycles, measured at the red commit and after. The expected counts come from `~/atlas-verify/e5/gen_hdu.py`: pipeline rules applied to spec read/write sets, not from the code.
+
+| case (`HduFalseStall`) | h_nf before → after | h_f before → after |
+|---|---|---|
+| `ld x5` → `addi x6, x5, 1` (real) | 25 → 25 | 22 → 22 |
+| `fld f5` → `addi x6, x5, 1` | 25 → **23** | 22 → **21** |
+| `ld x5` → `fadd.d f6, f5, f7` | 28 → **24** | 23 → **22** |
+| `ld x5` → `lui x6, 0x28` | 25 → **23** | 22 → **21** |
+| `ld x5` → `auipc x6, 0x28` | 25 → **23** | 22 → **21** |
+| `ld x8` → `jal x0, 8` | 28 → **26** | 25 → **24** |
+| `flw f5` → `fadd.s f6, f5, f1` (real) | 28 → **26** | 23 → 23 |
+| `addi x5` → `lui x6, 0x28` | 25 → **23** | 21 → 21 |
+| `fadd.d f5` → `addi x6, x5, 1` | 25 → **23** | 21 → 21 |
+
+The real dependencies still stall exactly as the rules say. The `flw` case's h_nf drop is a further false stall the test caught: the following `addi x6, x0, 6` has 6 in bits 24:20, which matched the fadd's f6.
+
+Values are unchanged on rvss, h_nf and h_f in every case. Livesweep and modelsweep (unpadded hazard chains, all five models) keep their md5s.
+
+The forwarding units still match the immediate bits of lui/auipc/jal and forward an operand that is then discarded (105). That does not change values or timing, and is left as it is.
 
 ---
 
@@ -5644,7 +5729,7 @@ Each records the `fcsr` change.
 
 ---
 
-## 116. FP loads and stores clear `fflags`
+## 116. FIXED: FP loads and stores clear `fflags`
 
 `flw`, `fsw`, `fld` and `fsd` go through the FP execute path for their
 address add, and that path writes its status (0) to `fflags`. RISC-V
@@ -5665,6 +5750,11 @@ It is 72's "replace", reaching instructions that should raise nothing.
 A fix belongs with 72 (accrue): OR-ing a 0 status changes nothing.
 Recorded, not fixed.
 
+
+**Fixed in E5 by 72's accrual (`5940e0f`).** A load or store's status is 0, and OR-ing 0 changes nothing. No special case was needed.
+
+Measured after E5 on all five models (`Fflags/Accrual`): `fdiv.s 1, 0` then `fsw` leaves `fflags` at `0x08`. So does `fsw`, `flw`, `fsd`, `fld` after it. `fdiv.d 1, 3` then `fsd`, `fld` leaves `0x01`. Before E5, `fsw` took it to 0.
+
 ---
 
 ## 117. `cycle`, `instret` and numeric CSR addresses do not assemble
@@ -5678,3 +5768,16 @@ Only `fflags`, `frm` and `fcsr` are CSR names (`csr_to_address`,
 Recorded in E4 as decided, not implemented. `rdcycle`/`rdinstret`
 would need both the names and live counters.
 
+---
+
+## 118. The livesweep and modelsweep gates cannot see flags or cycles
+
+Each record reads one target register: GPR or FPR, from `ReadGpr`/`ReadFpr` (`harness/livesweep/main.cpp:67`, `harness/modelsweep/main.cpp:87`). Neither reads `fcsr` nor the cycle count.
+
+So E5's flag change (72) and stall change (78/105) left both md5s unchanged. That is right, since no register value changed, but it also means neither gate could have caught a regression in flags or timing.
+
+What covered those instead:
+- `Fflags`, `HduFalseStall`, `rv5s_control_flow_test`;
+- the isasweep, which compares `fcsr` across all five models and checks `fflags` against `fpo.py` after each F/D op.
+
+Recorded (E5); the harness is out of tree.
