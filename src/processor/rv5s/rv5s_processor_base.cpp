@@ -224,6 +224,8 @@ bool RV5StageVM_Base::hazardUnitWillStall(bool forwarding) const
     EX_MEM_Register ex_mem   = ex_mem_reg_;
     ex_mem.prev_reg_write    = ex_mem_reg_.reg_write;
     ex_mem.prev_rd           = ex_mem_reg_.rd;
+    ex_mem.prev_instruction  = ex_mem_reg_.instruction;
+    ex_mem.instruction       = id_ex.instruction;
     ex_mem.prev_freg_write   = ex_mem_reg_.freg_write;
     ex_mem.prev_frd          = ex_mem_reg_.frd;
     ex_mem.reg_write         = id_ex.reg_write;
