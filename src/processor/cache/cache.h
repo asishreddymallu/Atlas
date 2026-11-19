@@ -127,6 +127,8 @@ public:
     [[nodiscard]]size_t getHitCount()  const;
     [[nodiscard]]size_t getMissCount() const;
     [[nodiscard]]size_t getWriteBackCount() const;
+    // Fills that replaced a valid line (filling an invalid way is not an eviction).
+    [[nodiscard]]size_t getEvictionCount() const;
     [[nodiscard]]double getHitRate()   const;
     [[nodiscard]]double getMissRate()  const;
     [[nodiscard]]size_t getSetCount()  const;

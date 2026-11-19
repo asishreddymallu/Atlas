@@ -746,6 +746,10 @@ size_t Cache::getWriteBackCount() const
 {
     return m_writeBackCount;
 }
+size_t Cache::getEvictionCount() const
+{
+    return 0; // not counted yet
+}
 double Cache::getHitRate() const
 {
     size_t total = m_hitCount + m_missCount;
