@@ -56,6 +56,8 @@ struct CacheChange
     size_t newMissCount{0};
     size_t oldWriteBackCount{0};
     size_t newWriteBackCount{0};
+    size_t oldEvictionCount{0};
+    size_t newEvictionCount{0};
     uint64_t oldTimestamp{0};
     uint64_t newTimestamp{0};
 };
@@ -193,6 +195,7 @@ private:
     size_t m_hitCount  {0};
     size_t m_missCount {0};
     size_t m_writeBackCount {0};
+    size_t m_evictionCount {0};
     // common setup function
     void setupCache(size_t cache_size, size_t lineSizeInBytes,size_t wayCount);
     //TODO get this buffer size from config

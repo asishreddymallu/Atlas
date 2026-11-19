@@ -244,6 +244,7 @@ size_t Cache::evictCacheLine(size_t setIndex)
     // Notify policy of eviction and write back if dirty
     CacheLineView victim_view = line_views[victim];
     m_ReplacementPolicy->onEvict(victim_view, request, context);
+    ++m_evictionCount; // every way is valid here, so this fill replaces a valid line
 
     if (ways[victim].dirty && m_writePolicy == WritePolicy::WriteBack)
     {
@@ -332,6 +333,7 @@ void Cache::beginStep()
     m_pendingChange.oldHitCount       = m_hitCount;
     m_pendingChange.oldMissCount      = m_missCount;
     m_pendingChange.oldWriteBackCount = m_writeBackCount;
+    m_pendingChange.oldEvictionCount  = m_evictionCount;
     m_pendingChange.oldTimestamp      = m_timestampCounter;
     m_recording                       = true;
 }
@@ -349,6 +351,7 @@ void Cache::commitStep()
     m_pendingChange.newHitCount       = m_hitCount;
     m_pendingChange.newMissCount      = m_missCount;
     m_pendingChange.newWriteBackCount = m_writeBackCount;
+    m_pendingChange.newEvictionCount  = m_evictionCount;
     m_pendingChange.newTimestamp      = m_timestampCounter;
     m_undoBuffer.push(std::move(m_pendingChange));
     m_pendingChange = CacheChange{};
@@ -390,6 +393,7 @@ void Cache::restoreStep(const CacheChange &change, bool toNew)
     m_hitCount         = toNew ? change.newHitCount : change.oldHitCount;
     m_missCount        = toNew ? change.newMissCount : change.oldMissCount;
     m_writeBackCount   = toNew ? change.newWriteBackCount : change.oldWriteBackCount;
+    m_evictionCount    = toNew ? change.newEvictionCount : change.oldEvictionCount;
     m_timestampCounter = toNew ? change.newTimestamp : change.oldTimestamp;
 
     // Repaint only: a restore is not an access, so no hit/miss signals.
@@ -678,6 +682,7 @@ void Cache::reset()
     m_hitCount = 0;
     m_missCount = 0;
     m_writeBackCount = 0;
+    m_evictionCount = 0;
     clearHistory();
     updateStats();
 }
@@ -703,6 +708,7 @@ void Cache::updateStats()
     stats.hitCount         = m_hitCount;
     stats.missCount        = m_missCount;
     stats.writeBackCount   = m_writeBackCount;
+    stats.evictionCount    = m_evictionCount;
     stats.hitRate          = m_hitCount + m_missCount > 0 ?
                              static_cast<double>(m_hitCount) / (m_hitCount + m_missCount): 0.0;
     stats.cacheSizeInBytes = m_setCount * m_wayCount * m_lineSizeInBytes;
@@ -748,7 +754,7 @@ size_t Cache::getWriteBackCount() const
 }
 size_t Cache::getEvictionCount() const
 {
-    return 0; // not counted yet
+    return m_evictionCount;
 }
 double Cache::getHitRate() const
 {
