@@ -1315,10 +1315,8 @@ InstructionType getInstructionType(const std::string &instruction)
         return InstructionType::J_TYPE;
     // if (isValidPseudoInstruction(instruction))
     //     return InstructionType::PSEUDO;
-    // if (isValidCSRRTypeInstruction(instruction))
-    //     return InstructionType::CSR_R_TYPE;
-    // if (isValidCSRITypeInstruction(instruction))
-    //     return InstructionType::CSR_I_TYPE;
+    if (isValidCSRInstruction(instruction))
+        return InstructionType::CSR_TYPE;
     if (isValidFDRTypeInstruction(instruction))
         return InstructionType::F_TYPE;
     if (isValidFDR1TypeInstruction(instruction))

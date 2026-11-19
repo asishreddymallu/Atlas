@@ -73,15 +73,17 @@ QVariant InstructionTypeCountModel::data(const QModelIndex &index, int role) con
     Column column = static_cast<Column>(index.column());
     if (column == Column::InstructionType)
     {
-        std::string typeName = instr::instructionTypeNames[static_cast<size_t>(index.row())];
-        return QString::fromStdString(typeName);
+        return QString::fromStdString(
+            instr::instructionTypeName(static_cast<instr::InstructionType>(index.row())));
         
     }
     else if (column == Column::InstructionCount)
     {
         // Return the count
-        size_t count = m_instructionTypeCounts[static_cast<size_t>(index.row())];
-        return QString::number(count);
+        const auto row = static_cast<size_t>(index.row());
+        return row < m_instructionTypeCounts.size()
+                   ? QString::number(m_instructionTypeCounts[row])
+                   : QVariant();
     }
 
     return QVariant();

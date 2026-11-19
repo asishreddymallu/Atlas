@@ -55,7 +55,9 @@ int Profiler::getLineExecutionCount(int lineNumber) const
 void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &program)
 {
     m_lineNumberToinstructionType.clear();
-    qDebug() << "Setting line number to instruction type mapping for program" ;
+    // A load replaces the program, so its counts replace the last one's
+    // (they used to accumulate: known_issues 85).
+    m_instructionTypeCounts.fill(0);
     for (const auto &[icUnit, _] : program.intermediate_code)
     {
         const auto lineNumber = icUnit.getLineNumber();
@@ -64,10 +66,17 @@ void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &pro
         {
             instr::InstructionType instrType = instr::getInstructionType(mnemonic);
             m_lineNumberToinstructionType[lineNumber] = instrType;
-            m_instructionTypeCounts[toIndex(instrType)]++;
+            // Checked, not trusted: every enumerator is inside the count
+            // now, but an out-of-range value must land on "Other" rather
+            // than past the array (the Run abort this replaced).
+            const size_t index = toIndex(instrType);
+            m_instructionTypeCounts[index < m_instructionTypeCounts.size()
+                                        ? index
+                                        : toIndex(instr::InstructionType::UNKNOWN)]++;
         }
     }
     emit updateLineInstructionTypeSignal(m_lineNumberToinstructionType);
+    emit updateInstructionTypeCountsSignal();
 }
 
 void Profiler::processorClockedSlot(const ProcessorState &processorState)

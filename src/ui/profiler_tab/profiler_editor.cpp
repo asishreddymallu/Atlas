@@ -152,8 +152,8 @@ void ProfilerEditor::updateLineInstructionTypeSlot
     {
         int lineNumber = pair.first;
         instruction_set::InstructionType instrType = pair.second;
-        m_lineNumberToInstructionType[lineNumber] = 
-        instruction_set::instructionTypeNames[toIndex(instrType)];
+        m_lineNumberToInstructionType[lineNumber] =
+            instruction_set::instructionTypeName(instrType);
     }
     viewport()->update();
 }
