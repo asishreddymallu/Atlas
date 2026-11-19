@@ -35,8 +35,8 @@
 
 ## Known Baseline Issues & Verified Facts
 1. **Test Suite Status & Harness Resolution**:
-   - Total registered tests: **158** (the earlier audit claim of 126 was incorrect).
-   - Test execution result: **158/158 pass** under `ctest --test-dir build-tests`.
+   - Total registered tests: **4,090** (T3; 158 at the original audit).
+   - Test execution result: **4,090/4,090 pass** under serial `ctest --test-dir build-tests`. Do not use `ctest -j`: the GUI tests share `test/vm_state/temp.asm` and flake in parallel (known_issues 150, `docs/TESTING.md`).
    - *Harness Root Cause 1*: `test/test_main.cpp` originally lacked a `QApplication`. Constructing any RVSS/RV5S processor builds a `QGraphicsScene`, which crashed with `SIGSEGV` when uninitialized in headless environments. Fixed with an offscreen headless `QApplication` in `test_main.cpp`.
    - *Harness Root Cause 2*: Tests open `"../examples/..."` (~100 occurrences), requiring execution with working directory set to `test/`. CTest sets this automatically via `gtest_discover_tests` `WORKING_DIRECTORY`.
    - Earlier "43 pass / 115 fail" figures were due to running without QApplication / wrong working directory, not simulator logic bugs.

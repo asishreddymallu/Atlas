@@ -6243,3 +6243,81 @@ Seen in the T1 offscreen shots (`~/atlas-shots/t1-grid/profiler_*.png`).
 **Open:** widening the pane (the splitter's start sizes) or moving the
 tag into a tooltip are layout decisions left to the user. Every row's
 tooltip starts with its tag and says what the number is.
+
+## 148. FIXED: Jumping forward on the timing grid after Run or Undo stopped dead
+
+After a Run to the end and a jump back (the grid's "Jump to cycle"),
+jumping forward did not move. `TimingGridPanel::jumpChunk` used Step for
+every forward move, and Step is disabled once the program has ended;
+Redo, which was enabled and held the undone cycles, was never tried. On
+h_f the store loop of the new tests stayed at cycle 111 of 222.
+
+**Fixed in T3** (`src/ui/timing_grid/timing_grid.cpp`): a forward jump
+triggers the window's own Redo action while it advances the machine,
+then Step for the rest. No engine change. Pinned by
+`Models/TimingGridJump.*` on all five models:
+`RunThenBackToTheMiddleThenForwardToTheEnd` (registers, memory, PC,
+cycles and the exported trace JSON byte-identical after the round trip,
+`dropped() == 0`), `PartialRedoThenStepMatchesAStraightRun` (60 Steps,
+30 Undos, jump to 80 equals a straight run to 80, trace included),
+`ForwardClampsAndNoOps` and `ForwardOnANeverRunProgramSteps`.
+
+## 149. FIXED: A bare ProcessorManager threw on a checkout without test/vm_state/
+
+`ProcessorManager`'s constructor builds an `RVSSProcessor`, whose own
+constructor writes `vm_state/registers_dump.json` and the state dump.
+Only `MainWindow`'s constructor called `setupVmStateDirectory()`, so on a
+fresh checkout `ExecutionTrace.{UndoTruncatesAndRedoReRecordsTheSameCycles,
+JsonRoundTrip, ExportWritesTheFile, RvssRecordsOneOccupiedStagePerCycle}`
+and the three `ProfilerProvenance` tests threw "Unable to open file".
+Earlier runs leave `test/vm_state/` behind, which hid it.
+
+**Fixed in T3** (`src/processor/processor_manager.cpp`): the constructor
+calls `setupVmStateDirectory()` before it creates the first processor.
+Checked with the folder moved aside and in place.
+
+## 150. The GUI tests flake under `ctest -j`: they share `test/vm_state/temp.asm`
+
+**Open.** Every test process runs with working directory `test/`, and
+`invokation_path` is the working directory, so all of them share
+`test/vm_state/`. A Run in the window writes the editor's text to
+`temp.asm` and assembles it back (`main_window.cpp`, around line 1039);
+`ProcessorManager::loadProgram(std::string)` does the same.
+
+**Measured in T3.** With the T1 and T3 GUI tests at `ctest -j24`, 1 to 4
+tests fail per run, all in `Pipelines/TimingGridGui.*` and
+`Models/TimingGridJump.*`; serially 0 in 8,560 repeats. An `LD_PRELOAD`
+shim that logged every open of `temp.asm` (pid, test, ns time) over 8
+runs showed, in 8 of the 17 failures, another test process opening it
+for writing between the failing test's write and its read, 130 to 450 us
+apart. Examples: `TheGridIsTheHandDrawnDiagram/nh_nf` overwritten by
+`TimingGridJump.ForwardClampsAndNoOps/rvss`;
+`TheGridIsTheHandDrawnDiagram/h_nf` by
+`TimingGridJump.RunThenBackToTheMiddleThenForwardToTheEnd/nh_nf`. A
+clobber by a test writing the same program did not fail. The other
+failures are consistent with a truncation during the read itself, which
+the shim does not time. Failing tests draw a program they never typed
+(a taken branch in a load-use test) or an empty one.
+
+Run ctest serially (`docs/TESTING.md`). A fix would give each test
+process its own `vm_state/`, or a `RESOURCE_LOCK` on the GUI tests.
+
+## 151. A long timing-grid jump: 3.3 s down to 1.7 s; the 1 s target is not met
+
+Jumping from cycle 16,843 to 8,421 of `examples/cache_lab/matmul_ijk.s`
+on h_f (8,422 Undos, offscreen window) took 3.27 s, with event-loop
+turns up to 80 ms. Measured split: Undo alone 0.20 s (24 us each); the
+per-cycle slots inside each Undo 0.75 s more; then 1.9 s of queued
+timing-grid refreshes, one grid rebuild per cycle.
+
+**Changed in T3** (`timing_grid.cpp`): the grid does not refresh while a
+jump is in flight and refreshes once when it lands, and each chunk is
+8 ms of moves (`kJumpChunkMs`) rather than 200 moves. Now 1.72 s back to
+8,421 and 1.6-1.7 s forward to 16,843, longest turn 14 ms.
+
+**Open:** the rest is the manager's per-cycle work inside every Undo
+(about 0.62 s: the Profiler's counters, the editor and disassembly
+highlight mapping, stage selection), the window's highlight receivers
+(about 0.13 s) and about 5 ms of repaint per turn. Reaching 1 s would
+mean deferring that per-cycle work in `ProcessorManager` during a jump,
+which T3 did not change.
