@@ -27,7 +27,43 @@ QString  metricLabel(MetricRow row);
 QVariant metricValue(const ProcessorMetrics &metrics, MetricRow row);
 QString  metricToolTip(const ProcessorMetrics &metrics, MetricRow row);
 
-/// The Profiler's counter table.
+/// The Profiler's rows (WP-05): the counters above plus the stall and
+/// flush splits from the trace. The Processor tab's state table keeps
+/// MetricRow.
+enum class ProfilerRow
+{
+    Cycles = 0,
+    Retired,
+    CPI,
+    IPC,
+    Stalls,
+    StallsLoadUse,
+    StallsRawNoForwarding,
+    Flushed,
+    FlushedBranch,
+    FlushedJump,
+    FlushedTrap,
+    Mispredictions,
+    Count
+};
+
+/// Where a number comes from: counted by the simulator, or derived from
+/// counted numbers by a formula.
+enum class Provenance
+{
+    Measured,
+    Modelled
+};
+
+QString    profilerRowLabel(ProfilerRow row);
+QVariant   profilerRowValue(const ProcessorMetrics &metrics, ProfilerRow row);
+QString    profilerRowToolTip(const ProcessorMetrics &metrics, ProfilerRow row);
+Provenance profilerRowProvenance(ProfilerRow row);
+/// "[Measured]" or "[Modelled]".
+QString    provenanceTag(Provenance provenance);
+QString    provenanceToolTip(Provenance provenance);
+
+/// The Profiler's counter table: Counter | Value | Source.
 class ProcessorMetricsModel : public QAbstractTableModel
 {
     Q_OBJECT

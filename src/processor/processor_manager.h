@@ -44,6 +44,15 @@ struct ProcessorMetrics
     std::optional<unsigned int> mispredictions;
     const char                 *stallsNote{""};
     const char                 *mispredictionsNote{""};
+    /// WP-05, from the trace. The stall split is there when stalls is
+    /// (load-use + RAW without forwarding == stalls); the flush split on
+    /// every pipeline (branch + jump + CSR/ecall == flushed).
+    std::optional<unsigned int> stallsLoadUse;
+    std::optional<unsigned int> stallsRawNoForwarding;
+    std::optional<unsigned int> flushed;
+    std::optional<unsigned int> flushedBranch;
+    std::optional<unsigned int> flushedJump;
+    std::optional<unsigned int> flushedTrap;
 };
 
 class ProcessorManager : public QObject

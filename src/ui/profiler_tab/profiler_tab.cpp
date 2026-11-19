@@ -52,10 +52,13 @@ void ProfilerTab::setProcessorManager(ProcessorManager *manager)
     auto *view     = new QTableView(this);
     view->setObjectName("profilerMetricsTableView");
     view->setModel(m_metricsModel);
-    // The names are the long column ("Branch mispredictions"); with both
-    // columns stretched they were cut to "Branch misp...".
-    view->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
-    view->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    // Value and Source (WP-05's [Measured]/[Modelled]) are sized to their
+    // contents, so a number and its tag are always whole; the name takes
+    // what is left of this narrow pane and elides last. With the name sized
+    // to contents the third column pushed Value out of view.
+    view->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    view->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    view->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     applyDataTableStyle(view);
     ui->verticalLayout_3->insertWidget(0, view);
     connect(manager, &ProcessorManager::processorStateChangedSignal, m_metricsModel,

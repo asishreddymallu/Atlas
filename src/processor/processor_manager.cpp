@@ -524,8 +524,18 @@ ProcessorMetrics ProcessorManager::metrics() const
     const bool singleCycle = m_currentProcessorType == ProcessorType::RVSS;
     const bool hazardUnit  = m_currentProcessorType == ProcessorType::RV5Stage_H_NF ||
                             m_currentProcessorType == ProcessorType::RV5Stage_H_F;
+    const TraceTotals split = p.TraceTotalsNow();
+    if (!singleCycle)
+    {
+        m.flushedBranch = split.flushedBranch;
+        m.flushedJump   = split.flushedJump;
+        m.flushedTrap   = split.flushedTrap;
+        m.flushed       = split.flushedBranch + split.flushedJump + split.flushedTrap;
+    }
     if (hazardUnit)
     {
+        m.stallsLoadUse         = split.stallLoadUse;
+        m.stallsRawNoForwarding = split.stallRawNoForward;
         m.stalls     = p.total_stall_cycles_;
         m.stallsNote = "Cycles the hazard unit held the pipeline and put a bubble in EX.";
     }

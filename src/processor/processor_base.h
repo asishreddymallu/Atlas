@@ -246,6 +246,10 @@ class ProcessorBase : public QObject
     /// ID/EX, EX/MEM and MEM/WB; 0 = none. The next fetch gets trace_next_id_.
     std::array<uint32_t, kTraceStages> trace_ids_{};
     uint32_t trace_next_id_{1};
+    /// The stall and flush split of the whole run (WP-05), kept with the
+    /// trace: every recorded cycle adds to it, Undo takes it back off. Not
+    /// limited to the ring's 100,000 cycles.
+    TraceTotals trace_totals_{};
     /// RVSS: records a cycle in which one instruction (at delta.old_pc)
     /// occupied the single stage, and keeps the record in the delta.
     void TraceSingleCycle(StepDelta &delta, uint32_t instruction)
@@ -265,6 +269,7 @@ class ProcessorBase : public QObject
         trace_.clear();
         trace_ids_.fill(0);
         trace_next_id_ = 1;
+        trace_totals_  = TraceTotals{};
     }
 
     /// The stage table's cells for the state the processor is in now. The
@@ -419,6 +424,8 @@ class ProcessorBase : public QObject
   public:
     /// The per-cycle trace (WP-02). Safe to read from any thread.
     const ExecutionTrace &Trace() const { return trace_; }
+    /// The run's stall and flush split, from the trace (WP-05).
+    TraceTotals TraceTotalsNow() const { return trace_totals_; }
 
     virtual void SetActiveWireNames() = 0;
     virtual void setProcessorState() = 0;

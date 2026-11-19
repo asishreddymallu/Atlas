@@ -6166,3 +6166,19 @@ The Python rules count only the stalls of instructions that retire, so
 **Open, a design question:** should Stall cycles count only stalls that
 cost a cycle? The trace keeps both visible: the stalled cell of a
 squashed row is drawn stalled and then crossed out.
+
+## 147. The Profiler's counter names elide in its narrow pane
+
+T1 added a third column to the Profiler's counter table: Source, with
+[Measured] or [Modelled] (WP-05). The table sits in a pane about 250 px
+wide at a 1400 px window. With the names sized to their contents, the
+Source column pushed Value out of view. So Value and Source are now
+sized to their contents and the name column takes the rest and elides:
+"Instructions retired" reads "Instr…" and the indented split rows
+("load-use", "RAW, no forwarding") are shortened too.
+
+Seen in the T1 offscreen shots (`~/atlas-shots/t1-grid/profiler_*.png`).
+
+**Open:** widening the pane (the splitter's start sizes) or moving the
+tag into a tooltip are layout decisions left to the user. Every row's
+tooltip starts with its tag and says what the number is.

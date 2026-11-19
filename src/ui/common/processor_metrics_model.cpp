@@ -53,6 +53,115 @@ QString metricToolTip(const ProcessorMetrics &m, MetricRow row)
     return {};
 }
 
+namespace
+{
+QVariant optionalValue(const std::optional<unsigned int> &v)
+{
+    return v ? QVariant(*v) : QVariant(QStringLiteral("n/a"));
+}
+} // namespace
+
+QString profilerRowLabel(ProfilerRow row)
+{
+    switch (row)
+    {
+    case ProfilerRow::Cycles: return metricLabel(MetricRow::Cycles);
+    case ProfilerRow::Retired: return metricLabel(MetricRow::Retired);
+    case ProfilerRow::CPI: return metricLabel(MetricRow::CPI);
+    case ProfilerRow::IPC: return metricLabel(MetricRow::IPC);
+    case ProfilerRow::Stalls: return metricLabel(MetricRow::Stalls);
+    case ProfilerRow::StallsLoadUse: return QStringLiteral("    load-use");
+    case ProfilerRow::StallsRawNoForwarding: return QStringLiteral("    RAW, no forwarding");
+    case ProfilerRow::Flushed: return QStringLiteral("Flushed cycles");
+    case ProfilerRow::FlushedBranch: return QStringLiteral("    taken branches");
+    case ProfilerRow::FlushedJump: return QStringLiteral("    jumps");
+    case ProfilerRow::FlushedTrap: return QStringLiteral("    CSR and ecall");
+    case ProfilerRow::Mispredictions: return metricLabel(MetricRow::Mispredictions);
+    case ProfilerRow::Count: break;
+    }
+    return {};
+}
+
+QVariant profilerRowValue(const ProcessorMetrics &m, ProfilerRow row)
+{
+    switch (row)
+    {
+    case ProfilerRow::Cycles: return metricValue(m, MetricRow::Cycles);
+    case ProfilerRow::Retired: return metricValue(m, MetricRow::Retired);
+    case ProfilerRow::CPI: return metricValue(m, MetricRow::CPI);
+    case ProfilerRow::IPC: return metricValue(m, MetricRow::IPC);
+    case ProfilerRow::Stalls: return metricValue(m, MetricRow::Stalls);
+    case ProfilerRow::StallsLoadUse: return optionalValue(m.stallsLoadUse);
+    case ProfilerRow::StallsRawNoForwarding: return optionalValue(m.stallsRawNoForwarding);
+    case ProfilerRow::Flushed: return optionalValue(m.flushed);
+    case ProfilerRow::FlushedBranch: return optionalValue(m.flushedBranch);
+    case ProfilerRow::FlushedJump: return optionalValue(m.flushedJump);
+    case ProfilerRow::FlushedTrap: return optionalValue(m.flushedTrap);
+    case ProfilerRow::Mispredictions: return metricValue(m, MetricRow::Mispredictions);
+    case ProfilerRow::Count: break;
+    }
+    return {};
+}
+
+QString profilerRowToolTip(const ProcessorMetrics &m, ProfilerRow row)
+{
+    QString what;
+    switch (row)
+    {
+    case ProfilerRow::Cycles: what = metricToolTip(m, MetricRow::Cycles); break;
+    case ProfilerRow::Retired: what = metricToolTip(m, MetricRow::Retired); break;
+    case ProfilerRow::CPI: what = metricToolTip(m, MetricRow::CPI); break;
+    case ProfilerRow::IPC: what = metricToolTip(m, MetricRow::IPC); break;
+    case ProfilerRow::Stalls: what = metricToolTip(m, MetricRow::Stalls); break;
+    case ProfilerRow::StallsLoadUse:
+        what = m.stallsLoadUse ? QStringLiteral("Stall cycles behind a load whose value a reader needs at once "
+                                                "(forwarding cannot help). From the pipeline trace.")
+                               : QString::fromUtf8(m.stallsNote);
+        break;
+    case ProfilerRow::StallsRawNoForwarding:
+        what = m.stallsRawNoForwarding
+                   ? QStringLiteral("Stall cycles waiting for a producer to write back, with no forwarding. "
+                                    "From the pipeline trace.")
+                   : QString::fromUtf8(m.stallsNote);
+        break;
+    case ProfilerRow::Flushed:
+        what = m.flushed ? QStringLiteral("Pipeline slots emptied by redirects: 3 per taken branch (resolved in "
+                                          "MEM), 2 per jump (EX), 4 per CSR instruction or ecall (WB). Counted "
+                                          "from the pipeline trace.")
+                         : QStringLiteral("Single-cycle: nothing is in flight, so nothing is flushed.");
+        break;
+    case ProfilerRow::FlushedBranch:
+    case ProfilerRow::FlushedJump:
+    case ProfilerRow::FlushedTrap:
+        what = m.flushed ? QStringLiteral("Part of Flushed cycles. From the pipeline trace.")
+                         : QStringLiteral("Single-cycle: nothing is in flight, so nothing is flushed.");
+        break;
+    case ProfilerRow::Mispredictions: what = metricToolTip(m, MetricRow::Mispredictions); break;
+    case ProfilerRow::Count: break;
+    }
+    return provenanceTag(profilerRowProvenance(row)) + " " + what;
+}
+
+Provenance profilerRowProvenance(ProfilerRow row)
+{
+    // CPI and IPC are ratios of two counted numbers; everything else is
+    // counted by the simulator as it runs.
+    return row == ProfilerRow::CPI || row == ProfilerRow::IPC ? Provenance::Modelled : Provenance::Measured;
+}
+
+QString provenanceTag(Provenance provenance)
+{
+    return provenance == Provenance::Measured ? QStringLiteral("[Measured]") : QStringLiteral("[Modelled]");
+}
+
+QString provenanceToolTip(Provenance provenance)
+{
+    return provenance == Provenance::Measured
+               ? QStringLiteral("Counted by the simulator, cycle by cycle.")
+               : QStringLiteral("Derived from counted numbers by a formula (CPI = cycles / retired, IPC = "
+                                "retired / cycles).");
+}
+
 ProcessorMetricsModel::ProcessorMetricsModel(QObject *parent, ProcessorManager *manager)
     : QAbstractTableModel(parent), m_manager(manager)
 {
@@ -62,12 +171,12 @@ ProcessorMetricsModel::ProcessorMetricsModel(QObject *parent, ProcessorManager *
 
 int ProcessorMetricsModel::rowCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : static_cast<int>(MetricRow::Count);
+    return parent.isValid() ? 0 : static_cast<int>(ProfilerRow::Count);
 }
 
 int ProcessorMetricsModel::columnCount(const QModelIndex &parent) const
 {
-    return parent.isValid() ? 0 : 2;
+    return parent.isValid() ? 0 : 3;
 }
 
 QVariant ProcessorMetricsModel::headerData(int section, Qt::Orientation orientation,
@@ -75,19 +184,31 @@ QVariant ProcessorMetricsModel::headerData(int section, Qt::Orientation orientat
 {
     if (role != Qt::DisplayRole || orientation != Qt::Horizontal)
         return {};
-    return section == 0 ? QStringLiteral("Counter") : QStringLiteral("Value");
+    switch (section)
+    {
+    case 0: return QStringLiteral("Counter");
+    case 1: return QStringLiteral("Value");
+    default: return QStringLiteral("Source");
+    }
 }
 
 QVariant ProcessorMetricsModel::data(const QModelIndex &index, int role) const
 {
-    if (!index.isValid() || index.row() >= static_cast<int>(MetricRow::Count))
+    if (!index.isValid() || index.row() >= static_cast<int>(ProfilerRow::Count))
         return {};
-    const auto row = static_cast<MetricRow>(index.row());
+    const auto       row        = static_cast<ProfilerRow>(index.row());
+    const Provenance provenance = profilerRowProvenance(row);
     switch (role)
     {
     case Qt::DisplayRole:
-        return index.column() == 0 ? QVariant(metricLabel(row)) : metricValue(m_metrics, row);
-    case Qt::ToolTipRole: return metricToolTip(m_metrics, row);
+        switch (index.column())
+        {
+        case 0: return profilerRowLabel(row);
+        case 1: return profilerRowValue(m_metrics, row);
+        default: return provenanceTag(provenance);
+        }
+    case Qt::ToolTipRole:
+        return index.column() == 2 ? provenanceToolTip(provenance) : profilerRowToolTip(m_metrics, row);
     case Qt::TextAlignmentRole:
         return index.column() == 1 ? QVariant(int(Qt::AlignRight | Qt::AlignVCenter))
                                    : QVariant(int(Qt::AlignLeft | Qt::AlignVCenter));

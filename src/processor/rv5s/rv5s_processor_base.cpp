@@ -1139,6 +1139,7 @@ void RV5StageVM_Base::Undo()
     // The trace goes back with the machine: the undone cycle's record goes,
     // and the instance ids are those before it.
     trace_.truncateAfter(cycle_s_);
+    addToTotals(trace_totals_, last.trace, -1);
     for (size_t s = 0; s < kTraceStages; ++s)
         trace_ids_[s] = last.trace.occ[s].id;
     // IF's id was carried in only if a stall held that fetch; one the cycle
@@ -1212,6 +1213,7 @@ void RV5StageVM_Base::Redo()
     // Redo re-records the cycle it restores: the same record the step made.
     trace_.truncateAfter(next.trace.cycle - 1);
     trace_.push(next.trace);
+    addToTotals(trace_totals_, next.trace, +1);
     trace_ids_     = next.trace.postIds;
     trace_next_id_ = next.trace.nextIdAfter;
 
@@ -1601,6 +1603,7 @@ void RV5StageVM_Base::trace_finalize()
     t.postIds      = post;
     t.nextIdAfter  = trace_next_id_;
     trace_ids_     = post;
+    addToTotals(trace_totals_, t, +1);
     trace_.push(t);
 }
 }//namespace Kites

@@ -130,30 +130,34 @@ bool ExecutionTrace::last(TraceCycle &out) const
     return true;
 }
 
+void addToTotals(TraceTotals &t, const TraceCycle &r, int sign)
+{
+    auto add = [sign](unsigned &v, unsigned n) { v = sign > 0 ? v + n : v - n; };
+    if (r.stalled)
+    {
+        switch (r.stall.reason)
+        {
+        case StallReason::LoadUse: add(t.stallLoadUse, 1); break;
+        case StallReason::RawNoForwarding: add(t.stallRawNoForward, 1); break;
+        default: add(t.stallUnknown, 1); break;
+        }
+    }
+    const auto n = static_cast<unsigned>(r.redirect.squashed.size());
+    switch (r.redirect.kind)
+    {
+    case RedirectKind::Branch: add(t.flushedBranch, n); break;
+    case RedirectKind::Jump: add(t.flushedJump, n); break;
+    case RedirectKind::Csr:
+    case RedirectKind::Ecall: add(t.flushedTrap, n); break;
+    case RedirectKind::None: break;
+    }
+}
+
 TraceTotals traceTotals(const std::vector<TraceCycle> &records)
 {
     TraceTotals t;
     for (const TraceCycle &r : records)
-    {
-        if (r.stalled)
-        {
-            switch (r.stall.reason)
-            {
-            case StallReason::LoadUse: ++t.stallLoadUse; break;
-            case StallReason::RawNoForwarding: ++t.stallRawNoForward; break;
-            default: ++t.stallUnknown; break;
-            }
-        }
-        const auto n = static_cast<unsigned>(r.redirect.squashed.size());
-        switch (r.redirect.kind)
-        {
-        case RedirectKind::Branch: t.flushedBranch += n; break;
-        case RedirectKind::Jump: t.flushedJump += n; break;
-        case RedirectKind::Csr:
-        case RedirectKind::Ecall: t.flushedTrap += n; break;
-        case RedirectKind::None: break;
-        }
-    }
+        addToTotals(t, r, +1);
     return t;
 }
 } // namespace Kites

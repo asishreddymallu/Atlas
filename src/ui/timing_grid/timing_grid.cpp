@@ -231,7 +231,10 @@ void TimingGridView::paintEvent(QPaintEvent *)
     const ThemeManager &theme = ThemeManager::getInstance();
     const QColor        base  = surface();
     const QColor        text  = theme.getTextColor();
-    const QColor        muted = QApplication::palette().color(QPalette::PlaceholderText);
+    // Header numbers and flushed labels use the theme's text colour, not the
+    // placeholder grey: that read at well under 4.5:1 on Tokyo Night. The
+    // strike-through, not a fainter colour, marks a flushed row.
+    const QColor        muted = text;
     const QColor        grid  = blend(text, base, 0.15);
     p.fillRect(rect(), base);
     const int lw   = labelWidth();
