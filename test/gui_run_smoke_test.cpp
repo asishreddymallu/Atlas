@@ -150,24 +150,17 @@ const std::vector<Program> &programs()
          "    fclass.s a3, f3\n"   // +inf is class bit 7 = 0x80
          "    csrwi frm, 1\n"
          "    csrr a2, frm\n",     // 1 (RTZ)
-         // a1 is not checked here. By the spec it is 0x08 (fflags accrue,
-         // and fmv.x.w raises nothing). Here the fmv.x.w between the fdiv
-         // and the read replaces fflags with its own 0: known_issues 72,
-         // engine-side. DivByZeroRaisesDz below reads it right behind the
-         // fdiv.
-         {{a0, 0x7F800000u}, {a2, 1}, {a3, 0x80}}},
+         // fflags accrue: the fmv.x.w between the fdiv and the read raises
+         // nothing and clears nothing, so a1 is still DZ.
+         {{a0, 0x7F800000u}, {a1, 0x08}, {a2, 1}, {a3, 0x80}}},
         {"DivByZeroRaisesDz",
          ".text\n"
          "    li t0, 1\n"
          "    fcvt.s.w f1, t0\n"   // 1.0
          "    fcvt.s.w f2, x0\n"   // +0.0
          "    fdiv.s f3, f1, f2\n" // 1/+0: DZ, fflags bit 3
-         // By the spec a1 = 0x08 (DZ is fflags bit 3). Today every model
-         // gives 0x02, known_issues 72 part 2 (the flag bits are in reverse
-         // order; engine-side). The test below checks that a flag is
-         // raised, and leaves the value to that fix.
-         "    csrrs a1, fflags, x0\n",
-         {}},
+         "    csrrs a1, fflags, x0\n", // 0x08
+         {{a1, 0x08}}},
         {"EcallPrintThenExit",
          ".text\n"
          "    li a0, 42\n"
@@ -400,8 +393,6 @@ TEST_P(GuiRunSmoke, EveryProgramRunsToTheEndWithTheRightRegisters)
             continue;
         for (const auto &[reg, value] : program.expected)
             EXPECT_EQ(w.gpr(reg), value) << "x" << reg;
-        if (std::string(program.name) == "DivByZeroRaisesDz")
-            EXPECT_NE(w.gpr(a1), 0u) << "fdiv by zero raised no flag";
     }
     EXPECT_TRUE(w.modals.seen.isEmpty()) << w.modals.seen.join(" | ").toStdString();
 }
@@ -447,6 +438,7 @@ TEST_P(GuiRunSmoke, StepUndoRedoStopAndSwitch)
         w.use(next);
         ASSERT_TRUE(w.runToEnd(padFor(next, programs()[0].source)));
         EXPECT_EQ(w.gpr(a0), 0x7F800000u);
+        EXPECT_EQ(w.gpr(a1), 0x08u);
         EXPECT_EQ(w.gpr(a2), 1u);
         EXPECT_EQ(w.gpr(a3), 0x80u);
     }
