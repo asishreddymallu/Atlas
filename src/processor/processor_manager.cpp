@@ -32,6 +32,9 @@ namespace Kites
 {
 ProcessorManager::ProcessorManager(QObject *parent, ProcessorType vmType) : QObject(parent)
 {
+    // Before the first processor below: its constructor dumps registers and
+    // state into vm_state/, which a clean checkout does not have yet.
+    setupVmStateDirectory();
     // first we register all the VMs
     // m_profiler = std::make_unique<Profiler>();
 
