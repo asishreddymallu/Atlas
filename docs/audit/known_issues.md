@@ -3839,6 +3839,16 @@ save and restore it (`rv5s_processor_base.cpp:897`, `:958`) as part of
 the step delta, so changing its meaning changes what those replay. A
 cumulative counter would want to be a second field.
 
+### U5 (`ee94683`)
+
+A total now exists beside the countdown, as this entry suggested.
+`total_stall_cycles_` counts every cycle h_nf or h_f puts a bubble in
+ID/EX, and it is saved in the step delta for Undo and Redo.
+`ProcessorManager::metrics()` reports it. The Processor tab's
+"StallCycles" row and the Profiler's "Stall cycles" row now show the
+total, and n/a on the three models without a hazard unit.
+`getStallCycles()` still returns the countdown.
+
 ---
 
 ## 81. FIXED: the circuit view lit a forwarding wire that was not forwarding
@@ -4173,7 +4183,7 @@ the producer has written back (`:106-117`); and
 
 ---
 
-## 85. The Profiler's own counters are dead: one is never written, one only grows, and nothing resets either
+## 85. FIXED: The Profiler's own counters are dead: one is never written, one only grows, and nothing resets either
 
 `Profiler` (`src/profiler/profiler.h`) keeps three maps and a count
 array. Two of the four are not maintained.
@@ -4237,6 +4247,32 @@ int executedLine = m_instructionNumberToLineNumber
 
 so a PC with no mapping - `INVALID_PC / 4` on any pipeline bubble -
 inserts a new entry and reports line 0 rather than being skipped.
+
+### Fixed in U5 (`d47dbcc`, `be73b34`; tests `4205d96`, `0ef563a`)
+
+All four defects, and three more that the red test found:
+- The counts accumulated: `d47dbcc` zeroes them on each mapping.
+- `updateInstructionTypeCountsSignal` had no emitter: `d47dbcc` emits it.
+- The profiler now owns the line counts (`be73b34`). It counts
+  **retirement**, from the change in `ProcessorState::instructionsRetired`,
+  with the retiring PC in `ProcessorState::retiredPC`.
+- Undo takes the undone retires back, and Redo (flagged by
+  `ProcessorManager::redo`) replays them.
+- `find` replaces `operator[]`, so a bubble's PC no longer counts as line 0.
+- `Reset()` is called by `loadProgram` and `changeProcessor`, and
+  `resetProfilerView` clears the gutter.
+
+The three found on the way:
+- Undo and Redo emit `processorClockedSignal`
+  (`rvss_processor.cpp:1109`, `:1177`; `rv5s_processor_base.cpp:1124`,
+  `:1185`), so each added a count.
+- A Run that is stopped emits one more clock, which also added a count.
+- The pipelines counted `id_ex_reg_.pc`, which a taken branch can still
+  flush.
+
+Measured by `ProfilerLineCounts` (25 cases, 20 red at `0ef563a`): the
+line counts add up to InstructionsRetired after every Step, Undo and Redo,
+on all five models.
 
 ---
 
@@ -5723,3 +5759,63 @@ enumerates every mnemonic in those maps. All four are pinned there as
 its case fails until it is given a profiler type.
 
 Not fixed: assembler work, outside a UI stage.
+
+---
+
+## 142. Stepping the last instruction resets the processor in the same step
+
+`ProcessorManager::step()` calls `RequestStop()` whenever
+`StepAndNotify()` returns false (`processor_manager.cpp:338-349`).
+`RequestStop()` runs `StopAndReset()`, which ends in `Reset()`
+(`processor_base.cpp:191-215`, `:154-158`).
+
+Both families return false on the step that **completes** the program,
+not on the step after it:
+- rvss returns `program_counter_ < program_size_` after the step
+  (`rvss_processor.cpp:1041`);
+- rv5s returns false once the PC is past the end and the pipeline has
+  drained (`rv5s_processor_base.cpp:83`).
+
+So the step that retires the last instruction also wipes the registers,
+the counters and the Undo history. Entry 67 (and the note under 83)
+describes a reset when stepping *past* the end. It happens one step
+earlier than that.
+
+**Measured** in U5 on the 24-instruction loop of
+`test/profiler_line_counts_test.cpp`, through `ProcessorManager::step`:
+- rvss: retired reads 23 after step 23, then 0 after step 24;
+- h_f: 23 after cycle 32, then 0 (and cycle 0) after cycle 33.
+
+In the window, a Debug Run stepped to its end leaves every register
+reading 0 and an Undo with nothing to undo, on all five models. This was
+found by a probe in `gui_run_smoke_test.cpp`, removed before commit.
+
+Not fixed: the end-of-program policy belongs with 67, and the change
+needs a stop that does not reset. The tests that step stop one retire
+short of the end, and say why.
+
+---
+
+## 143. An ecall or CSR instruction costs four cycles on the pipelines, not the three the comments say
+
+`serve_ecall_at_writeback` says "The cost is the flush: three bubbles per
+ecall" (`rv5s_processor_base.cpp:814`). E4's CSR service is placed the
+same way. The header of `rv5s_processor_nh_nf.cpp:7-8` gives JAL/JALR
+"1 bubble" and a B-type "2 bubbles".
+
+Measured in U5 by `ProfilerCounters` (`test/profiler_counters_oracle_test.cpp`),
+the same on all four pipelines:
+
+| | lost cycles | rule: decided in stage S loses S-1 |
+|---|---|---|
+| taken branch (MEM) | 3 | 3 |
+| jal (EX) | 2 | 2 |
+| ecall, CSR (WB) | 4 | 4 |
+
+So the machine follows one consistent rule. A redirect never fetches its
+target in the same cycle, so every younger instruction is lost, plus that
+cycle's fetch slot. The comments undercount by one. The U5 brief's "3
+bubbles" for ecall and CSR came from the same comment.
+
+Not changed: the behaviour is consistent, and only the comments are wrong.
+Fixing them is engine-side.
