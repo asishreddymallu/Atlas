@@ -550,6 +550,24 @@ TEST_P(GuiRunSmoke, SteppedToTheEndTheWindowKeepsTheFinalState)
     EXPECT_TRUE(w.modals.seen.isEmpty()) << w.modals.seen.join(" | ").toStdString();
 }
 
+TEST_P(GuiRunSmoke, UndoIsNotOfferedWhileARunIsGoing)
+{
+    // After a finished program Undo and Redo are offered (142). Starting the
+    // next Run must take them back: Undo on the UI thread under a running
+    // worker is the collision known_issues 62 is about. Found by the
+    // transcript gate in U6 (rows 04-run-again, 05-stopped, 06-after-stop).
+    Window w;
+    ASSERT_TRUE(w.ready());
+    w.use(typeNamed(GetParam()));
+    ASSERT_TRUE(w.runToEnd(kEndProgram));
+    ASSERT_TRUE(w.undo->isEnabled()) << "a finished program should offer Undo";
+    w.run->trigger(); // a fresh Run
+    EXPECT_FALSE(w.undo->isEnabled()) << "Undo is offered while the Run is going";
+    EXPECT_FALSE(w.redo->isEnabled()) << "Redo is offered while the Run is going";
+    ASSERT_TRUE(waitUntil([&] { return w.debug->isEnabled() && w.run->text() == "Run"; }));
+    EXPECT_TRUE(w.undo->isEnabled()) << "the finished Run should offer Undo again";
+}
+
 TEST_P(GuiRunSmoke, AStoppedRunIsNotAFinishedOne)
 {
     Window w;
