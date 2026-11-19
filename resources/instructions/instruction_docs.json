@@ -1432,6 +1432,62 @@
       "support": "unsupported",
       "reason": "Parses, but the code generator has no encoding for it ('Invalid instruction type'). Note the underscore: RISC-V spells it fence.i."
     },
+    "csrr": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrr rd, csr",
+      "summary": "rd = the CSR (reads it, writes nothing)",
+      "example": "csrr x5, fflags",
+      "expandsTo": "csrrs rd, csr, x0"
+    },
+    "csrw": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrw csr, rs",
+      "summary": "the CSR = rs",
+      "example": "csrw frm, x6",
+      "expandsTo": "csrrw x0, csr, rs"
+    },
+    "csrs": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrs csr, rs",
+      "summary": "set the CSR bits that are set in rs",
+      "example": "csrs fflags, x6",
+      "expandsTo": "csrrs x0, csr, rs"
+    },
+    "csrc": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrc csr, rs",
+      "summary": "clear the CSR bits that are set in rs",
+      "example": "csrc fflags, x6",
+      "expandsTo": "csrrc x0, csr, rs"
+    },
+    "csrwi": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrwi csr, uimm",
+      "summary": "the CSR = uimm (0..31)",
+      "example": "csrwi frm, 1",
+      "expandsTo": "csrrwi x0, csr, uimm"
+    },
+    "csrsi": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrsi csr, uimm",
+      "summary": "set the CSR bits that are set in uimm (0..31)",
+      "example": "csrsi fflags, 1",
+      "expandsTo": "csrrsi x0, csr, uimm"
+    },
+    "csrci": {
+      "ext": "pseudo",
+      "category": "pseudo",
+      "format": "csrci csr, uimm",
+      "summary": "clear the CSR bits that are set in uimm (0..31)",
+      "example": "csrci fflags, 31",
+      "expandsTo": "csrrci x0, csr, uimm"
+    },
     "call": {
       "ext": "pseudo",
       "category": "pseudo",

@@ -193,7 +193,15 @@ Assembled assembleText(const QString &text, const QString &dir, const QString &n
         {
             out.mnemonics << QString::fromLatin1(unit.first.opcode.data());
             QStringList ops;
-            for (const auto &field : {unit.first.rd, unit.first.rs1, unit.first.rs2})
+            if (unit.first.rd[0] != '\0')
+                ops << QString::fromLatin1(unit.first.rd.data());
+            // A CSR instruction's csr field sits between rd and rs1 in the
+            // source (csrrw rd, csr, rs1); the Zicsr pseudos' expansions name it.
+            if (unit.first.csr != 0)
+                for (const auto &[csrName, address] : csr_to_address)
+                    if (static_cast<uint32_t>(address) == unit.first.csr)
+                        ops << QString::fromStdString(csrName);
+            for (const auto &field : {unit.first.rs1, unit.first.rs2})
                 if (field[0] != '\0')
                     ops << QString::fromLatin1(field.data());
             if (unit.first.imm[0] != '\0')

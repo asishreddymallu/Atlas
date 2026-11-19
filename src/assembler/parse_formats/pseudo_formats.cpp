@@ -970,6 +970,83 @@ bool Parser::parse_pseudo()
         return false;
     }
 
+    // The standard Zicsr pseudo-instructions, each one CSR instruction with
+    // rd or rs1 = x0 (known_issues 104): csrr rd, c = csrrs rd, c, x0;
+    // csrw/csrs/csrc c, rs = csrrw/csrrs/csrrc x0, c, rs; csrwi/csrsi/csrci
+    // c, imm = csrrwi/csrrsi/csrrci x0, c, imm.
+    else if (currentToken().value == "csrr" || currentToken().value == "csrw" ||
+             currentToken().value == "csrs" || currentToken().value == "csrc" ||
+             currentToken().value == "csrwi" || currentToken().value == "csrsi" ||
+             currentToken().value == "csrci")
+    {
+        const std::string name = currentToken().value;
+        const bool is_read = name == "csrr";
+        const bool is_immediate = name.back() == 'i';
+        const TokenType operand_type = is_immediate ? TokenType::NUM : TokenType::GP_REGISTER;
+        const Token &first = peekToken(1);
+        const Token &third = peekToken(3);
+        const bool shape_ok =
+            first.line_number == currentToken().line_number &&
+            first.type == (is_read ? TokenType::GP_REGISTER : TokenType::CSR_REGISTER) &&
+            peekToken(2).line_number == currentToken().line_number &&
+            peekToken(2).type == TokenType::COMMA &&
+            third.line_number == currentToken().line_number &&
+            third.type == (is_read ? TokenType::CSR_REGISTER : operand_type) &&
+            (peekToken(4).type == TokenType::EOF_ ||
+             peekToken(4).line_number != currentToken().line_number);
+        if (!shape_ok)
+        {
+            return false;
+        }
+
+        ICUnit block;
+        block.setLineNumber(currentToken().line_number);
+        block.setInstructionIndex(instruction_index_);
+        if (is_read)
+        {
+            block.setOpcode("csrrs");
+            block.setRd(reg_alias_to_name.at(first.value));
+            block.setCsr(csr_to_address.at(third.value));
+            block.setRs1("x0");
+        }
+        else
+        {
+            const std::string base = name == "csrw" || name == "csrwi"   ? "csrrw"
+                                     : name == "csrs" || name == "csrsi" ? "csrrs"
+                                                                         : "csrrc";
+            block.setOpcode(is_immediate ? base + "i" : base);
+            block.setRd("x0");
+            block.setCsr(csr_to_address.at(first.value));
+            if (is_immediate)
+            {
+                const int64_t imm = std::stoll(third.value);
+                if (imm < 0 || imm > 31)
+                {
+                    recordError(ParseError(third.line_number, third.column_number,
+                                           third.end_column, "Immediate value out of range",
+                                           DiagnosticSeverity::Error,
+                                           DiagnosticCategory::Assembler));
+                    errors_.all_errors.emplace_back(errors::ImmediateOutOfRangeError(
+                        "Immediate value out of range", "Expected: 0 <= imm <= 31", filename_,
+                        third.line_number, third.column_number,
+                        GetLineFromFile(filename_, third.line_number)));
+                    skipCurrentLine();
+                    return true;
+                }
+                block.setImm(std::to_string(imm));
+            }
+            else
+            {
+                block.setRs1(reg_alias_to_name.at(third.value));
+            }
+        }
+        intermediate_code_.emplace_back(block, true);
+        instruction_number_line_number_mapping_[instruction_index_] = block.getLineNumber();
+        instruction_index_++;
+        skipCurrentLine();
+        return true;
+    }
+
     // jal // this might need looking into
     else if (currentToken().value == "jal")
     {

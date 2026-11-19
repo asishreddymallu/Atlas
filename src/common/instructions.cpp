@@ -360,7 +360,7 @@ static const std::unordered_set<std::string> valid_instructions = {
 
     "la", "nop", "li", "mv", "not", "neg", "negw", "sext.w", "seqz", "snez", "sltz", "sgtz", "beqz",
     "bnez", "blez", "bgez", "bltz", "bgtz", "bgt", "ble", "bgtu", "bleu", "j", "jr", "ret", "call",
-    "tail", "fence", "fence_i",
+    "tail", "fence", "fence_i", "csrr", "csrw", "csrs", "csrc", "csrwi", "csrsi", "csrci",
 
     "mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu", "mulw", "divw", "divuw", "remw",
     "remuw",
@@ -444,6 +444,7 @@ static const std::unordered_set<std::string> PseudoInstructions = {
     "la",   "nop",  "li",   "mv",   "not",  "neg",  "negw", "sext.w", "seqz",    "snez",
     "sltz", "sgtz", "beqz", "bnez", "blez", "bgez", "bltz", "bgtz",   "bgt",     "ble",
     "bgtu", "bleu", "j",    "jr",   "ret",  "call", "tail", "fence",  "fence_i",
+    "csrr", "csrw", "csrs", "csrc", "csrwi", "csrsi", "csrci",
 };
 
 static const std::unordered_set<std::string> BaseExtensionInstructions = {
@@ -868,6 +869,13 @@ std::unordered_map<std::string, std::vector<SyntaxType>> instruction_syntax_map 
     {"tail", {SyntaxType::PSEUDO}},
     {"fence", {SyntaxType::PSEUDO}},
     {"fence_i", {SyntaxType::PSEUDO}},
+    {"csrr", {SyntaxType::PSEUDO}},
+    {"csrw", {SyntaxType::PSEUDO}},
+    {"csrs", {SyntaxType::PSEUDO}},
+    {"csrc", {SyntaxType::PSEUDO}},
+    {"csrwi", {SyntaxType::PSEUDO}},
+    {"csrsi", {SyntaxType::PSEUDO}},
+    {"csrci", {SyntaxType::PSEUDO}},
 
     ///////////////////////////////////////////////////////////////////////////////////
     {"mul", {SyntaxType::O_GPR_C_GPR_C_GPR}},
@@ -1227,6 +1235,13 @@ std::string getExpectedSyntaxes(const std::string &opcode)
         {"la", "la <reg>, <text label>"},
         {"call", "call <text label>"},
         {"tail", "tail <text label>"},
+        {"csrr", "csrr <reg>, <csr>"},
+        {"csrw", "csrw <csr>, <reg>"},
+        {"csrs", "csrs <csr>, <reg>"},
+        {"csrc", "csrc <csr>, <reg>"},
+        {"csrwi", "csrwi <csr>, <0..31>"},
+        {"csrsi", "csrsi <csr>, <0..31>"},
+        {"csrci", "csrci <csr>, <0..31>"},
         {"fence", "fence"}};
 
     auto opcodeIt = opcodeSyntaxMap.find(opcode);

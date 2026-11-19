@@ -168,6 +168,13 @@
         "j",
         "jr",
         "call",
-        "tail"
+        "tail",
+        "csrr",
+        "csrw",
+        "csrs",
+        "csrc",
+        "csrwi",
+        "csrsi",
+        "csrci"
     ]
 }
