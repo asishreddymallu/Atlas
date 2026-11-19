@@ -4194,6 +4194,8 @@ the processors would have to call `beginStep()`/`commitStep()` around
 each step and `undoStep()`/`redoStep()` from `Undo`/`Redo`, and `Undo`
 would then rewind the bytes without going through the cache at all.
 
+**E8 (still open).** Re-checked: the four functions still have no callers. E8's eviction count is in the same history (`CacheChange::old/newEvictionCount`), so wiring the history would rewind it too; until then Undo inflates it like the other counters.
+
 ---
 
 ## 84. FIXED: the processor chooser matched its own rows by text, and preselected by enum order
@@ -5935,6 +5937,65 @@ At k = 3 the producer has retired, so this is inside nh_f's contract. Not invest
 The E6 prompt's rule said 3 for CSR and ecall. The sweep measured 4 for every CSR instruction (the first run's uniform +1 per CSR). The analytic model uses 4, consistently with the code's own convention. `ecall` goes through the same redirect, but it was **not measured**: the sweep has no ecall.
 
 Whether a WB-resolved redirect should fetch in the same cycle, which would make it 3, is a design question.
+
+---
+
+## 130. A no-write-allocate store miss reaches the next level as four byte writes
+
+**Recorded, and asked (E8).** On a store miss under no-write-allocate, `Cache::writeGeneric` forwards the value **one byte at a time** (`cache.cpp:551-564`, `m_nextLevelMemoryRef.writeByte` per byte). When the next level is the L2, each byte is a separate L2 access: one missed `sw` is counted as **four** L2 accesses, and under the L2's own no-write-allocate all four are misses.
+
+Found by the E8 cache lab (`~/atlas-verify/e8`), which compares every level with a textbook model where one store is one access:
+
+| benchmark, rvss, L1 write-through + no-write-allocate | L2 hits | L2 misses |
+|---|---|---|
+| matmul_ijk, simulator | 184 (dm256) | **783** |
+| matmul_ijk, model | 184 | 207 |
+
+783 - 207 = 576 = 192 missed stores x 3. Every configuration with write-through + no-write-allocate shows the same +576 on both matmul benchmarks. The loads-only benchmarks and the write-back + write-allocate configuration agree exactly. The L1 counts are right: the L1 counts the store once.
+
+The byte loop exists for a store that straddles two lines with one of them cached. A fix would forward one sized write when no byte of the access is cached. That changes the L2 numbers the UI shows, so it is a question: should one store be one L2 access?
+
+---
+
+## 131. `CacheConfig::lineCount` holds the number of sets, and the UI's "2^n Lines" sets it
+
+**Recorded (E8).** `Cache::reconfigure` passes `newConfig.lineCount` to `setupCache` as the **set count** (`cache.cpp:80`), and `getConfig` returns `m_setCount` in it (`cache.cpp:791`). The Cache tab's "2^n Lines" spin box fills that field (`cache_config_widget.cpp:75`). So "Lines" means sets, and the total number of lines is sets x ways.
+
+What the tab shows is consistent with that:
+- the "Size" field is sets x ways x line bytes, **in bytes** (`cache.cpp:708`, shown at `cache_config_widget.cpp:127`);
+- the table has sets x ways rows (`cache_model.cpp:47`).
+
+A 1024-byte cache with 16-byte lines is therefore 64 rows whatever the associativity: 64 sets x 1 way, 32 x 2 or 16 x 4. Only the label and the field name are wrong. The E8 probe and `test/cache_lab_test.cpp` comment it where they build a `CacheConfig`. Renaming the field is out of scope for E8.
+
+---
+
+## 132. The pipelines count wrong-path instruction fetches in the instruction cache
+
+**Recorded (E8).** Every pipeline's `pipeline_fetch` reads the instruction cache on every cycle that is not stalled (for example `rv5s_processor_h_f.cpp:290`). A stalled cycle does not refetch (`:283`). So the instructions fetched behind a taken branch, which are flushed later, are counted as accesses.
+
+Measured on the cache lab (I$ 64 sets x 4 ways x 16 B; the same on all four pipelines):
+
+| benchmark | taken branches | rvss I$ hits | extra pipeline I$ accesses |
+|---|---|---|---|
+| stride_1 | 1023 | 10249 | +2046 |
+| temporal_repeat | 255 | 2590 | +504 |
+| matmul_ijk / jik | 574 | 15089 | +1134 |
+
+That is **2 per taken branch**, except where the fall-through is past the end of the program; no fetch happens there. All extra accesses hit here, because the fall-through lines are already cached, so misses equal rvss. In a program whose wrong path touches a new line, they would also cause misses and evictions.
+
+This is what the hardware would do, so it is not called a bug. A lab that quotes I$ figures should take them from rvss or say which model.
+
+---
+
+## 133. There is no random replacement policy
+
+**Recorded (E8).** `ReplacementPolicy` is LRU, FIFO or Custom (`cacheconfig.h:19-24`). A random policy would be a Lua script or a new built-in. The lab compares LRU and FIFO only. `examples/custom-replacement-scripts/` now has `lru.lua` and `fifo.lua`, which give exactly the built-in counts (`CacheLabLuaPolicy.*`), beside the original `lfu.lua`.
+
+---
+
+## 134. `examples/cache_test_simple.asm` never ends
+
+**Recorded (E8).** It ends with `end: beq x0, x0, end`, a self-loop, so Run does not return. It is kept in place, as asked. The cache-lab programs in `examples/cache_lab/` end by running off the end of the program.
 
 ---
 

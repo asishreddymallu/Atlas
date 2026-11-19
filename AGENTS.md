@@ -41,8 +41,8 @@
    - *Harness Root Cause 2*: Tests open `"../examples/..."` (~100 occurrences), requiring execution with working directory set to `test/`. CTest sets this automatically via `gtest_discover_tests` `WORKING_DIRECTORY`.
    - Earlier "43 pass / 115 fail" figures were due to running without QApplication / wrong working directory, not simulator logic bugs.
 2. **Windows Header Portability**: `test/test_main.cpp` originally included `<windows.h>` unconditionally. Guarded with `#ifdef _WIN32 ... #endif` on Linux.
-3. **Undefined Behavior in `getDiagnostics`**: In `src/assembler/assembler.cpp` (lines 135-154), the body of `getDiagnostics` is commented out with no return statement (`-Wreturn-type`). It has zero callers across the codebase and the editor does not depend on it (live editor diagnostics currently use an internal empty vector in `LanguageService`).
+3. **`getDiagnostics` removed (E8)**: its body was commented out, with no return statement (`-Wreturn-type` plus two `-Wunused-parameter`), and it had zero callers. It was deleted; the assembler corpus is byte-identical.
 4. **Build Warnings**: 23 compiler and linker warning lines under GCC 16 on Fedora 44 (detailed in `docs/audit/baseline_warnings.txt`).
-5. **Disabled Tests (18 total)**:
-   - **9 Commented-out `TEST` macros**: 6 in `test/rv5s_test.cpp`, 1 in `test/rv5s_h_f_test.cpp`, 1 in `test/rv5s_h_nf_test.cpp`, 1 in `test/rv5s_nh_f_test.cpp`.
-   - **9 `#if 0` blocks**: 3 in `test/cache_policies_test.cpp`, 1 in `test/cache_test.cpp`, 2 in `test/pseudo_inst_test.cpp`, 3 in `test/rv5s_f_extension_test.cpp`.
+5. **Disabled Tests (5 remaining, of 18; E8)**:
+   - The 8 commented-out pipeline `TEST`s and the 4 `#if 0` replacement-policy tests were re-enabled in E8 (see `docs/audit/disabled_tests.md`).
+   - **5 `#if 0` blocks remain**: 2 in `test/pseudo_inst_test.cpp` (do not compile), 3 in `test/rv5s_f_extension_test.cpp` (FP hazard cases).
