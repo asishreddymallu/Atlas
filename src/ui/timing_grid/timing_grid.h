@@ -125,6 +125,8 @@ class TimingGridPanel : public QWidget
     Q_OBJECT
   public:
     static constexpr int kVisibleCycles = 40;
+    /// Work per event-loop turn while jumping (one frame is ~16 ms).
+    static constexpr int kJumpChunkMs = 8;
 
     explicit TimingGridPanel(QWidget *parent = nullptr);
     /// stepAction / undoAction / redoAction: the window's own actions (the

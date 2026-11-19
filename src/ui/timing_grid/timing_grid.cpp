@@ -17,6 +17,7 @@
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QTextBrowser>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -398,6 +399,11 @@ void TimingGridPanel::refresh()
         m_message->setText("No processor.");
         return;
     }
+    // Every Undo, Redo and Step queues a refresh. During a jump that was one
+    // grid rebuild per cycle, nearly all of a long jump's time; the jump
+    // refreshes once when it lands instead.
+    if (jumping())
+        return;
     const ExecutionTrace &trace = m_manager->trace();
     const TraceMeta       meta  = m_manager->traceMeta();
     if (meta.singleCycle)
@@ -439,9 +445,11 @@ void TimingGridPanel::jumpChunk()
     if (!m_jumpTarget || !m_manager)
         return;
     const uint32_t target = *m_jumpTarget;
-    // A bounded number of moves per event-loop turn: the window repaints and
-    // stays responsive between chunks, however far the jump.
-    for (int i = 0; i < 200; ++i)
+    // About kJumpChunkMs of moves per event-loop turn: the window repaints
+    // and stays responsive between chunks, however far the jump.
+    QElapsedTimer chunk;
+    chunk.start();
+    while (chunk.elapsed() < kJumpChunkMs)
     {
         const uint32_t now = m_manager->getCycles();
         // Forward: Redo first, the same action as the Redo button, while the
