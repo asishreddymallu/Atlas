@@ -39,6 +39,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QLabel>
 #include <QMessageBox>
 #include <QTimer>
 #include <QPlainTextEdit>
@@ -467,6 +468,121 @@ TEST_P(GuiRunSmoke, AnEcallReadWaitsAndStopEndsIt)
     EXPECT_EQ(w.run->text(), "Stop") << "the read did not wait for input";
     EXPECT_TRUE(w.stop()) << "Stop did not end a run waiting in an ecall read";
     EXPECT_TRUE(w.modals.seen.isEmpty()) << w.modals.seen.join(" | ").toStdString();
+}
+
+// ---------------------------------------------------------------------------
+// U6 Part B: the end of a program keeps its state (known_issues 142; 67
+// extended). Debug Run and Step to the end, then Undo/Redo, Step, Run again;
+// Stop in the middle; an ecall exit. Same program on all five models,
+// padded; register values by hand:
+//   t0 = 5, t1 = t0 + 2 = 7, t2 = t0 + t1 = 12.
+namespace
+{
+const char *kEndProgram = ".text\n"
+                          "    addi t0, x0, 5\n"
+                          "    nop\n    nop\n    nop\n    nop\n"
+                          "    addi t1, t0, 2\n"
+                          "    nop\n    nop\n    nop\n    nop\n"
+                          "    add t2, t0, t1\n";
+// a0 = 3, a7 = 10 (exit); t3 = 9 after the exit must never run.
+const char *kExitProgram = ".text\n"
+                           "    addi a0, x0, 3\n"
+                           "    nop\n    nop\n    nop\n    nop\n"
+                           "    addi a7, x0, 10\n"
+                           "    nop\n    nop\n    nop\n    nop\n"
+                           "    ecall\n"
+                           "    addi t3, x0, 9\n";
+constexpr int t0r = 5, t1r = 6, t2r = 7, t3r = 28;
+
+QLabel *runStatus(MainWindow &window) { return window.findChild<QLabel *>("runStatusLabel"); }
+
+/// Debug Run, then Step until the window goes idle. Returns the registers
+/// before the step that ended it.
+std::vector<uint64_t> debugStepToTheEnd(Window &w, const char *source)
+{
+    w.editor->setPlainText(QString::fromUtf8(source));
+    QApplication::processEvents();
+    w.debug->trigger();
+    EXPECT_TRUE(waitUntil([&] { return w.step->isEnabled(); }));
+    std::vector<uint64_t> beforeLast = w.allGprs(), previous = w.allGprs();
+    for (int i = 0; i < 300 && w.run->text() == "Stop"; ++i)
+    {
+        beforeLast = previous;
+        w.step->trigger();
+        spin(15);
+        previous = w.allGprs();
+    }
+    waitUntil([&] { return w.debug->isEnabled() && w.run->text() == "Run"; });
+    return beforeLast;
+}
+} // namespace
+
+TEST_P(GuiRunSmoke, SteppedToTheEndTheWindowKeepsTheFinalState)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    w.use(typeNamed(GetParam()));
+
+    const auto beforeLast = debugStepToTheEnd(w, kEndProgram);
+    ASSERT_EQ(w.run->text(), "Run") << "the stepped program never ended";
+    EXPECT_EQ(w.gpr(t0r), 5u);
+    EXPECT_EQ(w.gpr(t1r), 7u);
+    EXPECT_EQ(w.gpr(t2r), 12u) << "the final state was wiped on the step that produced it";
+    QLabel *status = runStatus(w.window);
+    ASSERT_NE(status, nullptr) << "no status label named runStatusLabel";
+    EXPECT_EQ(status->text(), "Program finished");
+    EXPECT_FALSE(w.step->isEnabled()) << "Step is still offered after the end";
+
+    const auto atEnd = w.allGprs();
+    ASSERT_TRUE(w.undo->isEnabled());
+    w.undo->trigger();
+    spin(50);
+    EXPECT_EQ(w.allGprs(), beforeLast) << "Undo after the end";
+    w.redo->trigger();
+    spin(50);
+    EXPECT_EQ(w.allGprs(), atEnd) << "Redo after the Undo";
+
+    // Run again from the end: a fresh run, the same result.
+    w.run->trigger();
+    ASSERT_TRUE(waitUntil([&] { return w.debug->isEnabled() && w.run->text() == "Run"; }));
+    EXPECT_EQ(w.gpr(t2r), 12u);
+    EXPECT_EQ(status->text(), "Program finished");
+    EXPECT_TRUE(w.modals.seen.isEmpty()) << w.modals.seen.join(" | ").toStdString();
+}
+
+TEST_P(GuiRunSmoke, AStoppedRunIsNotAFinishedOne)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    w.use(typeNamed(GetParam()));
+    w.editor->setPlainText(QString::fromUtf8(kEndProgram));
+    QApplication::processEvents();
+    w.debug->trigger();
+    ASSERT_TRUE(waitUntil([&] { return w.step->isEnabled(); }));
+    for (int i = 0; i < 3; ++i)
+    {
+        w.step->trigger();
+        spin(15);
+    }
+    ASSERT_TRUE(w.stop()) << "Stop in the middle did not return the window to idle";
+    QLabel *status = runStatus(w.window);
+    ASSERT_NE(status, nullptr);
+    EXPECT_EQ(status->text(), "Stopped");
+}
+
+TEST_P(GuiRunSmoke, ASteppedExitKeepsItsStateToo)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    w.use(typeNamed(GetParam()));
+    debugStepToTheEnd(w, kExitProgram);
+    ASSERT_EQ(w.run->text(), "Run");
+    EXPECT_EQ(w.gpr(10), 3u);
+    EXPECT_EQ(w.gpr(17), 10u);
+    EXPECT_EQ(w.gpr(t3r), 0u) << "an instruction after the exit ran";
+    QLabel *status = runStatus(w.window);
+    ASSERT_NE(status, nullptr);
+    EXPECT_EQ(status->text(), "Program finished");
 }
 
 INSTANTIATE_TEST_SUITE_P(AllModels, GuiRunSmoke, ::testing::ValuesIn(allModelNames()), paramName);
