@@ -39,6 +39,7 @@ class RV5StageProcessorNHF : public RV5StageVM_Base
         std::cout << "RV5StageProcessorNHF" << std::endl;
     }
     void SetActiveWireNames() override;
+    bool TraceForwarding() const override { return true; }
 
   private:
     // --- Private methods for each pipeline stage ---

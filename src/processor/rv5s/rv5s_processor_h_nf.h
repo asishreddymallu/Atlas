@@ -35,6 +35,7 @@ class RV5StageProcessorHNF : public RV5StageVM_Base
         std::cout << "RV5StageProcessorHNF" << std::endl;
     }
     void SetActiveWireNames() override;
+    bool TraceHazardUnit() const override { return true; }
 
   private:
     // The Hazard Detection Unit instance

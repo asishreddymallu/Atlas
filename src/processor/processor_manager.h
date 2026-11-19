@@ -8,6 +8,7 @@
 #include "common/assembled_program.h"
 #include "config/config.h"
 #include "processor/processor_base.h"
+#include "processor/trace_json.h"
 #include "processor_types.h"
 #include "profiler/profiler.h"
 #include "ui/processor_tab/circuit_scene.h"
@@ -120,6 +121,17 @@ public:
     /// cumulative hazard-unit stall cycles (not the countdown
     /// getStallCycles returns, known_issues 80).
     ProcessorMetrics metrics() const;
+
+    /// WP-02: the current processor's per-cycle trace (thread-safe reads).
+    const ExecutionTrace &trace() const;
+    /// The model's name and flags as the JSON export states them.
+    TraceMeta traceMeta() const;
+    /// The whole trace as schema "atlas.trace/1" (trace_json.h).
+    QJsonObject traceJson() const;
+    /// Writes traceJson() to path. On failure returns false and says why.
+    bool exportTraceJson(const QString &path, QString *error = nullptr) const;
+    /// The program the trace's PCs refer to (source lines and text).
+    const AssembledProgram &currentProgram() const { return m_currentProgram; }
 private:
     void updateEditorHighlight(const std::vector<uint64_t>& programCounters);
     /// Recomputes the selection from the stored line and PCs and emits it.

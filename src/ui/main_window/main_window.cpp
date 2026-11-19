@@ -841,6 +841,20 @@ void MainWindow::setUpMenubar()
     fileMenu->addAction(openAction);
     fileMenu->addAction(saveAction);
     fileMenu->addSeparator();
+    // WP-02: the per-cycle trace of the current run, as JSON.
+    QAction *exportTraceAction = new QAction("Export trace...", this);
+    exportTraceAction->setObjectName("exportTraceAction");
+    setActionHint(exportTraceAction, "Save the pipeline trace of this run as JSON");
+    connect(exportTraceAction, &QAction::triggered, this,
+            [this]()
+            {
+                const QString path = QFileDialog::getSaveFileName(
+                    this, "Export trace", "trace.json", "JSON (*.json)");
+                if (!path.isEmpty())
+                    exportTrace(path);
+            });
+    fileMenu->addAction(exportTraceAction);
+    fileMenu->addSeparator();
     fileMenu->addAction(exitAction);
     ////////////Setting Menu////////////////
     settingsMenu->addMenu(preferencesMenu);
@@ -1195,5 +1209,14 @@ MainWindow::~MainWindow()
         m_processorThread->wait();
     }
     // delete ui;
+}
+
+bool MainWindow::exportTrace(const QString &path)
+{
+    QString error;
+    if (m_processorManager->exportTraceJson(path, &error))
+        return true;
+    QMessageBox::warning(this, "Export trace", "Could not write the trace:\n" + error);
+    return false;
 }
 } // namespace Kites

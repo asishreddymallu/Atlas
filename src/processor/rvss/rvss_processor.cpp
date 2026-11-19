@@ -937,6 +937,7 @@ void RVSSProcessor::DebugRun()
             std::cout << "Program Counter: " << program_counter_ << std::endl;
 
             current_delta_.new_pc = program_counter_;
+            TraceSingleCycle(current_delta_, current_instruction_);
             // history_.push(current_delta_);
             undo_stack_.push(current_delta_);
             while (!redo_stack_.empty())
@@ -994,6 +995,8 @@ void RVSSProcessor::Step()
         std::cout << "Program Counter: " << std::hex << program_counter_ << std::dec << std::endl;
 
         current_delta_.new_pc = program_counter_;
+
+        TraceSingleCycle(current_delta_, current_instruction_);
 
         // history_.push(current_delta_);
 
@@ -1102,6 +1105,8 @@ void RVSSProcessor::Undo()
     program_counter_ = last.old_pc;
     instructions_retired_--;
     cycle_s_--;
+    trace_.truncateAfter(cycle_s_);
+    trace_next_id_ = last.trace.nextIdBefore;
     std::cout << "Program Counter: " << program_counter_ << std::endl;
 
     redo_stack_.push(last);
@@ -1175,6 +1180,9 @@ void RVSSProcessor::Redo()
     program_counter_ = next.new_pc;
     instructions_retired_++;
     cycle_s_++;
+    trace_.truncateAfter(cycle_s_ - 1);
+    trace_.push(next.trace);
+    trace_next_id_ = next.trace.nextIdAfter;
     DumpRegisters(globals::registers_dump_file_path, registers_);
     DumpState(globals::vm_state_dump_file_path);
     std::cout << "Program Counter: " << program_counter_ << std::endl;
@@ -1214,5 +1222,6 @@ void RVSSProcessor::Reset()
     current_delta_.new_pc = 0;
     undo_stack_ = std::stack<StepDelta>();
     redo_stack_ = std::stack<StepDelta>();
+    ResetTrace();
 }
 }//namespaace Kites

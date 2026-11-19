@@ -72,6 +72,20 @@ class RV5StageVM_Base : public ProcessorBase
     void begin_step_delta();
     void finalize_step_delta();
 
+    // --- WP-02 trace (execution_trace.h). Read-only on the machine. ---
+    /// Does this variant have a hazard unit / forwarding? Only the trace
+    /// asks; the datapath of each variant is unchanged.
+    virtual bool TraceHazardUnit() const { return false; }
+    virtual bool TraceForwarding() const { return false; }
+    /// Called by begin_step_delta: the cycle's occupants, its RAW
+    /// dependences, forwarding paths and the redirect it will make, all from
+    /// the registers as they stand before the step.
+    void trace_begin();
+    /// Called by finalize_step_delta: what actually happened (stall,
+    /// squashes), the instance ids after the step, then the push.
+    void trace_finalize();
+    TraceCycle trace_pending_{};
+
     void print_pipeline_registers_debug();
     bool is_pipeline_drained() const;
     /// Past the last instruction and drained: the pipeline's end.

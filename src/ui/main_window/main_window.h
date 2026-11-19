@@ -53,6 +53,9 @@ public:
     /// Out-of-range indices are ignored.
     void setCurrentTab(TabIndex index);
 
+    /// File > Export trace...: writes the current trace (WP-02) as JSON.
+    bool exportTrace(const QString &path);
+
     /// The visible tab. The content stack holds this; nothing caches it.
     TabIndex currentTab() const;
 

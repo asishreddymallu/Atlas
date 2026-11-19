@@ -6123,3 +6123,46 @@ and the Step action's lambda.
 
 A Run, or a resumed Debug Run, waits on the worker thread as before, and
 the input line serves it the same way.
+
+## 145. A taken branch "flushes the two instructions behind it", but costs three cycles
+
+The Profiler's tooltip for Branch mispredictions
+(`processor_manager.cpp`, `ProcessorManager::metrics`) says a taken
+branch "flushes the two instructions behind it". That is true of what
+the machine holds: when the branch is in MEM, `pipeline_memory` resets
+IF/ID and ID/EX, the two younger instructions. But the same cycle's
+fetch is skipped as well (`fetch_and_advance_pc`, `rv5s_processor_base.cpp:519-523`):
+the target is fetched the cycle after. So a taken branch costs three
+cycles, as E6's analytic model has it (+3), not two.
+
+The T1 ExecutionTrace draws that skipped fetch the way a textbook
+diagram does: the instruction at the PC is in IF that cycle and is
+squashed with the other two. Its `redirect.squashed` therefore has three
+slots for a branch, two for a jump (resolved in EX) and four for a
+CSR instruction or ecall (served in WB, see 143). The Profiler's new
+"Flushed cycles" row counts those slots.
+
+**Open:** the mispredictions tooltip's "two instructions" is left as it
+is (T1 changes no existing text). The Flushed cycles tooltip says three.
+
+## 146. The hazard unit stalls a wrong-path instruction, and Stall cycles counts it
+
+On h_nf, an instruction fetched after a taken branch can stall in ID on
+a dependence, one or two cycles, before the branch reaches MEM and
+flushes it. (h_f could do the same behind a load; none of T1's programs
+shows it, so that is not measured.) `total_stall_cycles_` counts those
+cycles, so Stall cycles includes stalls of instructions that never
+retire. They cost nothing extra: they overlap the branch's three lost
+cycles.
+
+**Measured** in T1 by the generated timing programs
+(`test/timing_cases.inc`): gen24, gen58, gen60 and gen63 on h_nf. In
+gen24, `addi x5, x7, 1` after `beq x8, x8, L4` waits one cycle in ID,
+then the branch squashes it. The machine and the trace both count the
+cycle (the trace's stall total equals the Profiler's on every program).
+The Python rules count only the stalls of instructions that retire, so
+`execution_trace_test.cpp` compares those.
+
+**Open, a design question:** should Stall cycles count only stalls that
+cost a cycle? The trace keeps both visible: the stalled cell of a
+squashed row is drawn stalled and then crossed out.

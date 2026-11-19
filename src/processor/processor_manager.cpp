@@ -9,6 +9,8 @@
  */
 
 #include "processor/processor_factory.h"
+#include <QFile>
+#include <QJsonDocument>
 #include "processor/rv5s/rv5s_processor_h_f.h"
 #include "processor/rv5s/rv5s_processor_h_nf.h"
 #include "processor/rv5s/rv5s_processor_nh_f.h"
@@ -548,6 +550,57 @@ ProcessorMetrics ProcessorManager::metrics() const
 unsigned int ProcessorManager::getInstructionsRetired() const
 {
     return m_currentProcessor->instructions_retired_;
+}
+
+const ExecutionTrace &ProcessorManager::trace() const
+{
+    return m_currentProcessor->Trace();
+}
+
+TraceMeta ProcessorManager::traceMeta() const
+{
+    TraceMeta meta;
+    switch (m_currentProcessorType)
+    {
+    case ProcessorType::RVSS: meta.model = QStringLiteral("rvss"); break;
+    case ProcessorType::RV5Stage_NH_NF: meta.model = QStringLiteral("nh_nf"); break;
+    case ProcessorType::RV5Stage_H_NF: meta.model = QStringLiteral("h_nf"); break;
+    case ProcessorType::RV5Stage_NH_F: meta.model = QStringLiteral("nh_f"); break;
+    case ProcessorType::RV5Stage_H_F: meta.model = QStringLiteral("h_f"); break;
+    default: meta.model = QStringLiteral("unknown"); break;
+    }
+    meta.singleCycle     = m_currentProcessorType == ProcessorType::RVSS;
+    meta.hazardDetection = m_currentProcessorType == ProcessorType::RV5Stage_H_NF ||
+                           m_currentProcessorType == ProcessorType::RV5Stage_H_F;
+    meta.forwarding = m_currentProcessorType == ProcessorType::RV5Stage_NH_F ||
+                      m_currentProcessorType == ProcessorType::RV5Stage_H_F;
+    meta.capacity = trace().capacity();
+    meta.dropped  = trace().dropped();
+    return meta;
+}
+
+QJsonObject ProcessorManager::traceJson() const
+{
+    return traceToJson(trace().all(), traceMeta(), m_currentProgram);
+}
+
+bool ProcessorManager::exportTraceJson(const QString &path, QString *error) const
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        if (error)
+            *error = file.errorString();
+        return false;
+    }
+    const QByteArray bytes = QJsonDocument(traceJson()).toJson(QJsonDocument::Indented);
+    if (file.write(bytes) != bytes.size())
+    {
+        if (error)
+            *error = file.errorString();
+        return false;
+    }
+    return true;
 }
 
 }//namespace Kites

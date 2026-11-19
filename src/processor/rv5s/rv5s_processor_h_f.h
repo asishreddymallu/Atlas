@@ -35,6 +35,8 @@ class RV5StageProcessorHF : public RV5StageVM_Base
     }
 
     void SetActiveWireNames() override;
+    bool TraceHazardUnit() const override { return true; }
+    bool TraceForwarding() const override { return true; }
 
   private:
     // The Hazard Detection Unit instance

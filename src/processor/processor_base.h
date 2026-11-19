@@ -10,6 +10,7 @@
 #include "common/assembled_program.h"
 #include "memory_controller.h"
 #include "processor/circuit_stage.h"
+#include "processor/execution_trace.h"
 #include "processor/processor_state.h"
 #include "processor/registers.h"
 #include "ui/processor_tab/circuit_scene.h"
@@ -78,6 +79,8 @@ struct StepDelta
     unsigned int new_total_stall_cycles{};
     std::vector<RegisterChange> register_changes{};
     std::vector<MemoryChange> memory_changes{};
+    /// The trace record this step made (WP-02); Redo pushes it again.
+    TraceCycle trace{};
 };
 
 /**
@@ -236,6 +239,34 @@ class ProcessorBase : public QObject
     /// the stage added to its mask; a backbone name is never tagged.
     void lightWire(const QString &name, WireStage stage);
 
+    /// WP-02: one record per cycle, written by the step hooks, read by the
+    /// window and the JSON export. Reads state only; see execution_trace.h.
+    ExecutionTrace trace_;
+    /// Instance ids of the instructions now in IF (held by a stall), IF/ID,
+    /// ID/EX, EX/MEM and MEM/WB; 0 = none. The next fetch gets trace_next_id_.
+    std::array<uint32_t, kTraceStages> trace_ids_{};
+    uint32_t trace_next_id_{1};
+    /// RVSS: records a cycle in which one instruction (at delta.old_pc)
+    /// occupied the single stage, and keeps the record in the delta.
+    void TraceSingleCycle(StepDelta &delta, uint32_t instruction)
+    {
+        TraceCycle record;
+        record.cycle        = cycle_s_;
+        record.singleCycle  = true;
+        record.nextIdBefore = trace_next_id_;
+        record.occ[0]       = TraceOccupant{delta.old_pc, instruction, trace_next_id_++};
+        record.nextIdAfter  = trace_next_id_;
+        delta.trace         = record;
+        trace_.push(record);
+    }
+    /// Forgets the trace and the instance ids (every Reset).
+    void ResetTrace()
+    {
+        trace_.clear();
+        trace_ids_.fill(0);
+        trace_next_id_ = 1;
+    }
+
     /// The stage table's cells for the state the processor is in now. The
     /// pipelined models return their four pipeline registers, RVSS the
     /// instruction it just executed.
@@ -386,6 +417,9 @@ class ProcessorBase : public QObject
     void EndStopInProgress();
 
   public:
+    /// The per-cycle trace (WP-02). Safe to read from any thread.
+    const ExecutionTrace &Trace() const { return trace_; }
+
     virtual void SetActiveWireNames() = 0;
     virtual void setProcessorState() = 0;
 

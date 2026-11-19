@@ -2,6 +2,8 @@
 #include "common/instructions.h"
 #include "processor/rv5s/rv5s_processor_base.h"
 #include "processor/rv5s/rv5s_hdu.h"
+#include "processor/rv5s/rv5s_forwarding.h"
+#include <algorithm>
 #include <thread>
 
 namespace Kites
@@ -129,6 +131,7 @@ void RV5StageVM_Base::Reset()
     ex_mem_reg_.reset();
     mem_wb_reg_.reset();
     current_delta_ = RV5StageStepDelta{};
+    ResetTrace();
     undo_stack_ = std::stack<RV5StageStepDelta>();
     redo_stack_ = std::stack<RV5StageStepDelta>();
     processor_state_.reset();
@@ -148,6 +151,7 @@ void RV5StageVM_Base::begin_step_delta()
     current_delta_.pipeline_register_change.old_id_ex_reg  = id_ex_reg_;
     current_delta_.pipeline_register_change.old_ex_mem_reg = ex_mem_reg_;
     current_delta_.pipeline_register_change.old_mem_wb_reg = mem_wb_reg_;
+    trace_begin();
 }
 
 void RV5StageVM_Base::finalize_step_delta()
@@ -163,6 +167,9 @@ void RV5StageVM_Base::finalize_step_delta()
     current_delta_.pipeline_register_change.new_id_ex_reg  = id_ex_reg_;
     current_delta_.pipeline_register_change.new_ex_mem_reg = ex_mem_reg_;
     current_delta_.pipeline_register_change.new_mem_wb_reg = mem_wb_reg_;
+
+    trace_finalize();
+    current_delta_.trace = trace_pending_;
 
     undo_stack_.push(current_delta_);
     while (!redo_stack_.empty())
@@ -1129,6 +1136,17 @@ void RV5StageVM_Base::Undo()
     ex_mem_reg_ = last.pipeline_register_change.old_ex_mem_reg;
     mem_wb_reg_ = last.pipeline_register_change.old_mem_wb_reg;
 
+    // The trace goes back with the machine: the undone cycle's record goes,
+    // and the instance ids are those before it.
+    trace_.truncateAfter(cycle_s_);
+    for (size_t s = 0; s < kTraceStages; ++s)
+        trace_ids_[s] = last.trace.occ[s].id;
+    // IF's id was carried in only if a stall held that fetch; one the cycle
+    // handed out itself (>= nextIdBefore) did not exist before it.
+    if (trace_ids_[0] >= last.trace.nextIdBefore)
+        trace_ids_[0] = 0;
+    trace_next_id_ = last.trace.nextIdBefore;
+
     redo_stack_.push(last);
 
     cpi_ = instructions_retired_
@@ -1190,6 +1208,12 @@ void RV5StageVM_Base::Redo()
     id_ex_reg_ = next.pipeline_register_change.new_id_ex_reg;
     ex_mem_reg_ = next.pipeline_register_change.new_ex_mem_reg;
     mem_wb_reg_ = next.pipeline_register_change.new_mem_wb_reg;
+
+    // Redo re-records the cycle it restores: the same record the step made.
+    trace_.truncateAfter(next.trace.cycle - 1);
+    trace_.push(next.trace);
+    trace_ids_     = next.trace.postIds;
+    trace_next_id_ = next.trace.nextIdAfter;
 
     undo_stack_.push(next);
 
@@ -1266,5 +1290,317 @@ void RV5StageVM_Base::print_pipeline_registers_debug()
     // Same logic preserved exactly
 
     std::cout << "└──────────────────────────────────────────────────────────┘\n";
+}
+
+// ---------------------------------------------------------------------------
+// WP-02 trace. Everything below reads the machine; nothing writes it.
+// ---------------------------------------------------------------------------
+namespace
+{
+struct Producer
+{
+    uint32_t instruction;
+    uint8_t  rd;
+    uint8_t  frd;
+    bool     reg_write;
+    bool     freg_write;
+    bool     load;
+};
+
+/// The registers an instruction really reads (sourceRegisters), as
+/// (file, index, operand) triples.
+struct Source
+{
+    RegFile file;
+    uint8_t reg;
+    uint8_t operand;
+};
+std::vector<Source> sourcesOf(uint32_t instruction)
+{
+    std::vector<Source> out;
+    if (instruction == NOP)
+        return out;
+    const instruction_set::SourceRegisters src = instruction_set::sourceRegisters(instruction);
+    const auto rs1 = static_cast<uint8_t>((instruction >> 15) & 0x1F);
+    const auto rs2 = static_cast<uint8_t>((instruction >> 20) & 0x1F);
+    const auto rs3 = static_cast<uint8_t>((instruction >> 27) & 0x1F);
+    if (src.rs1_gpr && rs1 != 0)
+        out.push_back({RegFile::X, rs1, 1});
+    if (src.rs2_gpr && rs2 != 0)
+        out.push_back({RegFile::X, rs2, 2});
+    if (src.rs1_fpr)
+        out.push_back({RegFile::F, rs1, 1});
+    if (src.rs2_fpr)
+        out.push_back({RegFile::F, rs2, 2});
+    if (src.rs3_fpr)
+        out.push_back({RegFile::F, rs3, 3});
+    return out;
+}
+
+bool writes(const Producer &p, const Source &s)
+{
+    if (s.file == RegFile::X)
+        return p.rd != 0 && p.rd == s.reg && producerWritesGpr(p.instruction, p.reg_write);
+    return p.frd == s.reg && producerWritesFpr(p.instruction, p.freg_write);
+}
+
+RedirectKind wbRedirect(const MEM_WB_Register &wb)
+{
+    if (wb.pc == INVALID_PC || (wb.instruction & 0b1111111) != 0b1110011)
+        return RedirectKind::None;
+    return ((wb.instruction >> 12) & 0b111) == 0 ? RedirectKind::Ecall : RedirectKind::Csr;
+}
+} // namespace
+
+void RV5StageVM_Base::trace_begin()
+{
+    TraceCycle &t  = trace_pending_;
+    t              = TraceCycle{};
+    t.cycle        = cycle_s_ + 1;
+    t.nextIdBefore = trace_next_id_;
+
+    // Occupants: the register in front of each stage, before the step.
+    auto occupant = [&](size_t stage, uint64_t pc, uint32_t instruction)
+    {
+        TraceOccupant o;
+        if (pc == INVALID_PC)
+            return o;
+        o.pc          = pc;
+        o.instruction = instruction;
+        o.id          = trace_ids_[stage] ? trace_ids_[stage] : trace_next_id_++;
+        return o;
+    };
+    const bool fetches = program_counter_ < program_size_;
+    // The word about to be fetched, from the loaded program, not through
+    // the instruction cache: a read there would count as an access.
+    const size_t word = static_cast<size_t>(program_counter_ / 4);
+    t.occ[0] = fetches ? occupant(0, program_counter_,
+                                  word < program_.text_buffer.size() ? program_.text_buffer[word] : NOP)
+                       : TraceOccupant{};
+    t.occ[1] = occupant(1, if_id_reg_.pc, if_id_reg_.instruction);
+    t.occ[2] = occupant(2, id_ex_reg_.pc, id_ex_reg_.instruction);
+    t.occ[3] = occupant(3, ex_mem_reg_.pc, ex_mem_reg_.instruction);
+    t.occ[4] = occupant(4, mem_wb_reg_.pc, mem_wb_reg_.instruction);
+
+    // The redirect this step makes, in the order Step() runs the stages:
+    // WB (ecall/CSR) first, then MEM (taken branch), then EX (jump).
+    t.redirect.kind = wbRedirect(mem_wb_reg_);
+    size_t resolver = 4;
+    if (t.redirect.kind == RedirectKind::None && branchRedirectsNextStep())
+    {
+        t.redirect.kind = RedirectKind::Branch;
+        resolver        = 3;
+    }
+    else if (t.redirect.kind == RedirectKind::None && jumpRedirectsNextStep())
+    {
+        t.redirect.kind = RedirectKind::Jump;
+        resolver        = 2;
+    }
+    if (t.redirect.kind != RedirectKind::None)
+    {
+        t.redirect.byId = t.occ[resolver].id;
+        t.redirect.byPc = t.occ[resolver].pc;
+    }
+    const bool wbFlush     = t.redirect.kind == RedirectKind::Csr || t.redirect.kind == RedirectKind::Ecall;
+    const bool branchFlush = t.redirect.kind == RedirectKind::Branch;
+
+    // RAW dependences of the instruction in ID on producers in EX and MEM,
+    // on the registers the hazard check sees (hazardUnitWillStall): a
+    // redirect this step clears the consumer before the check.
+    const bool hdu = TraceHazardUnit();
+    const bool fwd = TraceForwarding();
+    if (!t.occ[1].bubble() && t.redirect.kind == RedirectKind::None)
+    {
+        const Producer ex{id_ex_reg_.instruction, id_ex_reg_.rd,         id_ex_reg_.frd,
+                          id_ex_reg_.reg_write,   id_ex_reg_.freg_write, id_ex_reg_.mem_read};
+        const Producer mem{ex_mem_reg_.instruction, ex_mem_reg_.rd,         ex_mem_reg_.frd,
+                           ex_mem_reg_.reg_write,   ex_mem_reg_.freg_write, ex_mem_reg_.mem_read};
+        for (const Source &src : sourcesOf(if_id_reg_.instruction))
+        {
+            // One entry per register: `add x6, x5, x5` depends on x5 once.
+            const bool listed = std::any_of(t.raw.begin(), t.raw.end(), [&](const TraceRaw &r)
+                                            { return r.file == src.file && r.reg == src.reg; });
+            if (listed)
+                continue;
+            for (size_t stage : {size_t{2}, size_t{3}})
+            {
+                const Producer &p = stage == 2 ? ex : mem;
+                if (t.occ[stage].bubble() || !writes(p, src))
+                    continue;
+                TraceRaw r;
+                r.file                = src.file;
+                r.reg                 = src.reg;
+                r.producerStage       = static_cast<TraceStage>(stage);
+                r.producerId          = t.occ[stage].id;
+                r.producerPc          = t.occ[stage].pc;
+                r.producerInstruction = t.occ[stage].instruction;
+                r.producerIsLoad      = p.load;
+                const bool loadInEx   = stage == 2 && p.load;
+                if (hdu)
+                    r.resolution = (!fwd || loadInEx) ? RawResolution::Stall : RawResolution::Forward;
+                else
+                    r.resolution = (fwd && !loadInEx) ? RawResolution::Forward : RawResolution::Unhandled;
+                t.raw.push_back(r);
+                break; // the nearest producer is the one that matters
+            }
+        }
+    }
+
+    // Forwarding paths into the instruction in EX (forwarding variants):
+    // EX/MEM is the instruction in MEM, MEM/WB the one in WB - the
+    // selection and priority of the execute stages and rv5s_forwarding.h.
+    if (fwd && !t.occ[2].bubble() && !wbFlush && !branchFlush)
+    {
+        const Producer mem{ex_mem_reg_.instruction, ex_mem_reg_.rd,         ex_mem_reg_.frd,
+                           ex_mem_reg_.reg_write,   ex_mem_reg_.freg_write, ex_mem_reg_.mem_read};
+        const Producer wb{mem_wb_reg_.instruction, mem_wb_reg_.rd,         mem_wb_reg_.frd,
+                          mem_wb_reg_.reg_write,   mem_wb_reg_.freg_write, mem_wb_reg_.mem_to_reg};
+        for (const Source &src : sourcesOf(id_ex_reg_.instruction))
+        {
+            for (size_t stage : {size_t{3}, size_t{4}})
+            {
+                const Producer &p = stage == 3 ? mem : wb;
+                if (t.occ[stage].bubble() || !writes(p, src))
+                    continue;
+                TraceForward f;
+                f.operand        = src.operand;
+                f.file           = src.file;
+                f.reg            = src.reg;
+                f.from           = static_cast<TraceStage>(stage);
+                f.producerId     = t.occ[stage].id;
+                f.producerPc     = t.occ[stage].pc;
+                f.producerIsLoad = p.load;
+                t.fwd.push_back(f);
+                break;
+            }
+        }
+    }
+
+    // Kept for trace_finalize: a stall already counting down.
+    t.stall.continuing = stall_cycles_ > 0;
+}
+
+void RV5StageVM_Base::trace_finalize()
+{
+    TraceCycle &t = trace_pending_;
+    const RV5StageStepDelta &d = current_delta_;
+
+    // A stall is what the machine's own counter says, nothing else.
+    t.stalled = d.new_total_stall_cycles > d.old_total_stall_cycles;
+    if (!t.stalled)
+    {
+        t.stall = TraceStall{};
+    }
+    else if (t.stall.continuing)
+    {
+        TraceCycle previous;
+        if (trace_.last(previous) && previous.stalled)
+        {
+            t.stall            = previous.stall;
+            t.stall.continuing = true;
+        }
+        else
+        {
+            t.stall            = TraceStall{};
+            t.stall.reason     = StallReason::Unknown;
+            t.stall.continuing = true;
+        }
+    }
+    else
+    {
+        t.stall = TraceStall{};
+        t.stall.reason = StallReason::Unknown;
+        for (const TraceRaw &r : t.raw)
+        {
+            if (r.resolution != RawResolution::Stall)
+                continue;
+            t.stall.reason        = TraceForwarding() ? StallReason::LoadUse : StallReason::RawNoForwarding;
+            t.stall.length        = (!TraceForwarding() && r.producerStage == TraceStage::EX) ? 2 : 1;
+            t.stall.producerStage = r.producerStage;
+            t.stall.producerId    = r.producerId;
+            t.stall.producerPc    = r.producerPc;
+            t.stall.producerInstruction = r.producerInstruction;
+            t.stall.file          = r.file;
+            t.stall.reg           = r.reg;
+            break;
+        }
+    }
+
+    // Where each occupant went: one stage on, held (stall), or squashed.
+    const auto &n = d.pipeline_register_change;
+    std::array<uint32_t, kTraceStages> post{};
+    std::vector<TraceOccupant> squashed;
+    auto lost = [&](const TraceOccupant &o) { squashed.push_back(o); };
+    // IF
+    if (!t.occ[0].bubble())
+    {
+        if (n.new_if_id_reg.pc == t.occ[0].pc)
+            post[1] = t.occ[0].id;
+        else if (t.redirect.kind == RedirectKind::None && program_counter_ == t.occ[0].pc)
+            post[0] = t.occ[0].id;
+        else
+            lost(t.occ[0]);
+    }
+    // ID
+    if (!t.occ[1].bubble())
+    {
+        if (n.new_id_ex_reg.pc == t.occ[1].pc)
+            post[2] = t.occ[1].id;
+        else if (t.stalled && n.new_if_id_reg.pc == t.occ[1].pc)
+            post[1] = t.occ[1].id;
+        else
+            lost(t.occ[1]);
+    }
+    // EX, MEM
+    if (!t.occ[2].bubble())
+    {
+        if (n.new_ex_mem_reg.pc == t.occ[2].pc)
+            post[3] = t.occ[2].id;
+        else
+            lost(t.occ[2]);
+    }
+    if (!t.occ[3].bubble())
+    {
+        if (n.new_mem_wb_reg.pc == t.occ[3].pc)
+            post[4] = t.occ[3].id;
+        else
+            lost(t.occ[3]);
+    }
+    // WB retires.
+
+    // The squashed list holds every slot the redirect emptied, bubbles
+    // included, youngest first, so its length is the cycles it cost. A squash
+    // with no redirect would be listed under None, which the tests reject.
+    size_t emptied = 0;
+    switch (t.redirect.kind)
+    {
+    case RedirectKind::Jump: emptied = 2; break;
+    case RedirectKind::Branch: emptied = 3; break;
+    case RedirectKind::Csr:
+    case RedirectKind::Ecall: emptied = 4; break;
+    case RedirectKind::None: emptied = 0; break;
+    }
+    for (size_t s = 0; s < emptied; ++s)
+    {
+        if (t.occ[s].bubble())
+            t.redirect.squashed.push_back(TraceOccupant{});
+        else
+        {
+            const bool wasLost = std::find(squashed.begin(), squashed.end(), t.occ[s]) != squashed.end();
+            t.redirect.squashed.push_back(wasLost ? t.occ[s] : TraceOccupant{});
+        }
+    }
+    for (const TraceOccupant &o : squashed)
+    {
+        const bool listed =
+            std::find(t.redirect.squashed.begin(), t.redirect.squashed.end(), o) != t.redirect.squashed.end();
+        if (!listed)
+            t.redirect.squashed.push_back(o); // outside the redirect's reach: a test fails on it
+    }
+
+    t.postIds      = post;
+    t.nextIdAfter  = trace_next_id_;
+    trace_ids_     = post;
+    trace_.push(t);
 }
 }//namespace Kites
