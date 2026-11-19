@@ -81,21 +81,21 @@ const char *processorNote(bool pipeline, bool hazard, bool forwarding)
     }
     if (hazard && forwarding)
     {
-        return "Forwards results, and stalls one cycle when a load is used right away.\n"
+        return "Forwards; stalls 1 cycle on a load-use.\n"
                "Nothing to pad.";
     }
     if (hazard)
     {
-        return "No forwarding: stalls until the producer reaches write-back.\n"
+        return "Stalls until the value reaches write-back.\n"
                "Nothing to pad.";
     }
     if (forwarding)
     {
-        return "Forwards results but never stalls: a load needs 1 nop before its use.\n"
-               "Other dependent pairs need no nops.";
+        return "No stalls: a load needs 1 nop before use.\n"
+               "All else is forwarded; no nops.";
     }
-    return "No stalls, no forwarding: a value is ready at write-back, so its reader needs 2 nops.\n"
-           "li of a large value and la give wrong results here.";
+    return "Ready at write-back: a reader needs 2 nops.\n"
+           "Large li and la give wrong results.";
 }
 
 } // namespace Kites

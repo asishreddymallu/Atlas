@@ -190,17 +190,17 @@ TEST(ProcessorChoice, TheNoteSaysWhatEachCombinationCosts)
     EXPECT_EQ(std::string(processorNote(false, true, true)),
               "Every instruction finishes in one cycle; there are no pipeline hazards.");
     EXPECT_EQ(std::string(processorNote(true, true, true)),
-              "Forwards results, and stalls one cycle when a load is used right away.\n"
+              "Forwards; stalls 1 cycle on a load-use.\n"
               "Nothing to pad.");
     EXPECT_EQ(std::string(processorNote(true, true, false)),
-              "No forwarding: stalls until the producer reaches write-back.\n"
+              "Stalls until the value reaches write-back.\n"
               "Nothing to pad.");
     EXPECT_EQ(std::string(processorNote(true, false, true)),
-              "Forwards results but never stalls: a load needs 1 nop before its use.\n"
-              "Other dependent pairs need no nops.");
+              "No stalls: a load needs 1 nop before use.\n"
+              "All else is forwarded; no nops.");
     EXPECT_EQ(std::string(processorNote(true, false, false)),
-              "No stalls, no forwarding: a value is ready at write-back, so its reader needs 2 nops.\n"
-              "li of a large value and la give wrong results here.");
+              "Ready at write-back: a reader needs 2 nops.\n"
+              "Large li and la give wrong results.");
 }
 
 TEST(ProcessorChoice, TheSingleCycleNoteDoesNotDependOnTheBoxes)
