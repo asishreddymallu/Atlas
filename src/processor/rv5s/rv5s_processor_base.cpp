@@ -695,11 +695,12 @@ void RV5StageVM_Base::pipeline_writeback()
     // An F/D op's exception flags are written when it retires, not in EX:
     // a younger op flushed behind a CSR instruction or an ecall must leave
     // no flags, and the write goes into the step delta for Undo (104, 115).
-    // Replace semantics and the flag encoding are unchanged (72).
+    // The flags accrue: OR-ed into fflags, never replacing it, so a load,
+    // store or exact op (status 0) leaves them as they are (72, 116).
     if (mem_wb_reg_.writes_fp_status)
     {
         const uint64_t old_fcsr = registers_.ReadCsr(0x003);
-        registers_.WriteCsr(0x001, mem_wb_reg_.fp_status);
+        registers_.WriteCsr(0x001, registers_.ReadCsr(0x001) | mem_wb_reg_.fp_status);
         const uint64_t new_fcsr = registers_.ReadCsr(0x003);
         if (old_fcsr != new_fcsr)
             current_delta_.register_changes.push_back({0x003, 1, old_fcsr, new_fcsr});
