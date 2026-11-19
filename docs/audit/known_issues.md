@@ -1593,7 +1593,7 @@ by `instructions.json`.
 
 ---
 
-## 52. `fence`, `fence_i`, `fclass.s` and `fclass.d` have no code-generator path
+## 52. FIXED (fclass): `fence`, `fence_i`, `fclass.s` and `fclass.d` have no code-generator path
 
 All four lex and parse cleanly and then throw out of the code generator
 with `Invalid instruction type: <name>`. `fence` and `fence_i` are
@@ -1629,6 +1629,29 @@ this half is a typo.
 Not fixed here: every stage that has met it so far had the assembler out
 of scope. It is a one-character change plus a test that assembles
 `fclass.s` and `fclass.d`.
+
+
+### Fixed in E4 (fclass only; `f945be2`; test `d25592f`)
+
+- The comma (`instructions.cpp:490`).
+- The docs drop the unsupported marker on both, and the editor's
+  instruction list offers both.
+- `fence`/`fence_i` are untouched and still unsupported.
+
+`test/fclass_test.cpp` comes from `~/atlas-verify/e4/gen_fclass.py`,
+which classifies each bit pattern from its sign, exponent and fraction
+fields. It has:
+- 18 patterns per format covering all ten classes, stored and compared
+  as the spec's mask;
+- f31/x31 and rd = x0;
+- 6 encodings against a spec-layout encoder.
+
+**Red:** all 21 tests (20 on the five models, plus the encoding test).
+
+**Controls:**
+- the commit reverted: the same 21 fail;
+- only the two JSON files reverted:
+  `InstructionDocs.TheSupportFlagMatchesWhatTheAssemblerDoes` fails.
 
 ---
 
@@ -3264,9 +3287,35 @@ computes have never been checked against the spec either, only their
 plumbing. That is why the canonical-NaN tests assert no flags at all —
 asserting today's behaviour would pin an encoding that has to change.
 
+
+**E4 (72 kept open by decision).** Two of its pieces moved:
+- **Point 1, the aliasing, is fixed.** `fflags` and `frm` are now views of
+  `fcsr` (`registers.cpp:77`, `:94`), for 104.
+- **The FP status is written to `fflags`.** It used to replace all of
+  `fcsr`, which since aliasing would also clear `frm`. On the pipelines
+  it is written when the op retires (104), on rvss through
+  `WriteFpStatus` (`rvss_processor.cpp:422`), with an Undo record (115).
+
+Unchanged and still open:
+- the reversed bit order;
+- the bool D status;
+- replace instead of accrue.
+
+Measured after E4, identical on rvss, nh-nf and h-f:
+
+| op | `fflags` | RISC-V's would be |
+|---|---|---|
+| `fdiv.s 1, 0` | `0x02` | DZ `0x08` |
+| `fdiv.s 0, 0` | `0x01` | NV `0x10` |
+| `fdiv.s 1, 3` | `0x10` | NX `0x01` |
+| `fdiv.d 1, 0` and `0, 0` | `0x01` (the bool) | `0x08`, `0x10` |
+
+A further consequence of "replace" is 116: FP loads and stores clear
+the flags.
+
 ---
 
-## 73. `fcvt.w.s` saturates the wrong way for NaN, and has a boundary UB
+## 73. FIXED: `fcvt.w.s` saturates the wrong way for NaN, and has a boundary UB
 
 The float-to-int conversions guard before converting —
 `!isfinite(a) || a > max || a < min` — and saturate explicitly, so no
@@ -3301,6 +3350,45 @@ against `INT64_MAX`; only the `.s`/`w` pair was measured.
 Recorded, not fixed: this stage was canonical NaN, and these are
 integer-result paths that leave through early returns and were never in
 its allow-list.
+
+
+### Fixed in E4 (`1b1bba5`; test `6776682`)
+
+One helper, `convertToInteger` (`alu.cpp:373`), now serves all eight
+`fcvt.{w,wu,l,lu}.{s,d}`:
+1. round in the requested mode (`nearbyint`);
+2. NaN gives the maximum;
+3. range-check the **rounded** value against exact double bounds (-2^31,
+   2^31, 2^32, ±2^63, 2^64) and saturate;
+4. sign-extend 32-bit results.
+
+NV keeps its pre-RISC-V bit (72).
+
+**The boundary UB was worse than recorded.** The guard's
+`static_cast<float>(INT32_MAX)` is evaluated at run time, in the
+instruction's own rounding mode:
+- under RNE/RUP/RMM it is 2^31, so the input 2^31 slipped past the guard
+  into an out-of-range cast;
+- under RTZ/RDN it is 2147483520, so the guard fired.
+
+The result therefore depended on the mode. The same held for 2^32
+(`wu.s`), 2^63 (`l.s`, `l.d`) and 2^64 (`lu.s`, `lu.d`).
+
+`test/fp_to_int_test.cpp` comes from `~/atlas-verify/e4/gen_fcvt_int.py`:
+- one program per (mnemonic, mode), 40 programs and 1500 conversions;
+- inputs: NaNs, ±inf, ±2^31, 2^32, ±2^63 and 2^64 with their neighbours
+  in each format, -0.0, negatives to unsigned types, and in-range ties;
+- modes: rne/rtz/rdn/rup, and rmm off ties (113).
+
+**Red:** 100 tests (20 programs × 5 models), with 33 wrong conversions
+per model, identical on all five:
+
+| | wrong | count |
+|---|---|---|
+| `fcvt.w.s` of 3 NaNs, 5 modes | gives INT32_MIN | 15 |
+| 2^31 → `w.s`; 2^32 → `wu.s`; 2^63 → `l.s`, `l.d`; 2^64 → `lu.s`, `lu.d`; each under rne/rup/rmm | the UB cast (`0x80000000…` / `0`) | 18 |
+
+**After:** 0. **Control** (reverted): the same 100 tests.
 
 ---
 
@@ -3353,7 +3441,7 @@ fails the same one test.
 
 ---
 
-## 75. `fdiv` by zero returns a NaN, not an infinity
+## 75. FIXED: `fdiv` by zero returns a NaN, not an infinity
 
 `AluOp::FDIV_S` and `FDIV_D` in `src/processor/alu.cpp` test the divisor
 and return `quiet_NaN()` for **any** zero divisor:
@@ -3383,6 +3471,29 @@ this behaviour.
 
 Not fixed: it is a value defect in an op the canonical-NaN stage only
 passed through, and it deserves its own red test and control.
+
+
+### Fixed in E4 (`d8d9e41`; test `9bb4442`)
+
+The special case is gone and the host division decides
+(`alu.cpp:533`, `:866`): ±inf with FE_DIVBYZERO for x/±0, NaN with
+FE_INVALID for 0/0 and inf/inf. NaN results are canonicalized as before.
+
+`test/fdiv_zero_test.cpp` comes from `~/atlas-verify/e4/gen_fdiv.py`,
+an IEEE oracle on bit patterns. It has 23 pairs per format:
+- ±1, ±inf, max, ±subnormal by ±0;
+- 0/0, ±inf/±inf;
+- NaN operands (quiet, signalling, negative);
+- 0/x, subnormal/inf, and plain quotients.
+
+**Red:** 90 tests, the 18 x/±0 cases × 5 models. 0/0 and NaN operands
+were already right.
+
+**After:** 0. **Control** (reverted): the same 90.
+
+**Flags (recorded, not asserted; 72):** x/0 gives `fflags` `0x02` (the
+old DZ bit 1), 0/0 gives `0x01` (the old NV bit 0); `fdiv.d` gives the
+bool 1 for both. See the table under 72.
 
 ---
 
@@ -4972,7 +5083,7 @@ jalr at every distance already passed.
 
 ---
 
-## 104. rv5-nh-nf drops a CSR instruction without latching EX/MEM
+## 104. FIXED: rv5-nh-nf drops a CSR instruction without latching EX/MEM (and the pipelines ignore CSR instructions)
 
 `RV5StageProcessorNHNF::pipeline_execute` returns early for any SYSTEM
 instruction other than ecall/ebreak (`rv5s_processor_nh_nf.cpp:216-220`)
@@ -5029,6 +5140,77 @@ duplicate (an idempotent re-write one cycle later). The stage view and
 the per-instruction retire attribution are wrong.
 
 Fix nothing here (E2's instruction). Still open.
+
+
+### Fixed in E4 (`2de270b`, pseudos `c6934ac`; tests `e2b2214`, `abfd621`, `ec0d1ad`, `728f68b`)
+
+**Aliasing.** `fflags` = `fcsr[4:0]` and `frm` = `fcsr[7:5]`; `fcsr`
+reads 8 bits (`registers.cpp:77`, `:94`). This holds on all five models.
+
+**Served at writeback, serializing, like an ecall.**
+`serve_csr_at_writeback` (`rv5s_processor_base.cpp:811`, called at
+`:688`):
+- everything older has retired, so rs1 comes from the register file;
+- the CSR is read and written there, and rd gets the old value;
+- the spec's rules apply: `csrrw(i)` with rd = x0 does not read, and
+  `csrrs`/`csrrc(i)` with rs1 = x0 (uimm 0) do not write;
+- the younger stages are flushed and refetched from pc + 4.
+
+nh-nf's early return and the empty `execute_csr()` are gone
+(`rv5s_processor_nh_nf.cpp:210`).
+
+**FP flags are written at retirement.** An F/D op's status now travels in
+EX/MEM and MEM/WB (`pipeline_registers.h:122`, `:192`;
+`latch_fp_status`, `rv5s_processor_base.h:138`). It is written to
+`fflags` at writeback with an Undo record (`rv5s_processor_base.cpp:699`).
+Before, it was written in EX, so an op flushed behind a CSR read had
+already raised its flags; the E1 ecall comment recorded the same leak.
+
+**Pseudos.** `csrr`, `csrw`, `csrs`, `csrc`, `csrwi`, `csrsi` and `csrci`
+are one arm (`pseudo_formats.cpp:973`). Each expands to a single CSR
+instruction with rd or rs1 = x0. They are in the docs, and the docs
+harness now reports a CSR unit's csr field (`instruction_docs_test.cpp:198`).
+
+**Tests:**
+- **`test/csr_test.cpp`** (`~/atlas-verify/e4/gen_csr.py`, a Python fcsr
+  model). 8 programs with 313 stored results each, padded on all five
+  models and unpadded on rvss/nh-f/h-nf/h-f:
+  - all six forms on all three CSRs from 0x00 and 0xFF;
+  - the x0 rules;
+  - aliasing;
+  - an FP op before and after a `frm` write (`.s` and `.d`);
+  - an `fflags` read with an `fdiv` directly behind it.
+- **`test/csr_pseudo_test.cpp`:** 21 encodings plus one execution program.
+- **`test/csr_undo_test.cpp`:** two programs × 5 models. Step to the end
+  then Undo to the start, and step k / undo j / step j against an
+  uninterrupted run; the snapshot includes `fflags`/`frm`/`fcsr`.
+
+**Red:**
+- at `e2b2214`, 60 tests: every CSR program on every model, and rvss
+  too, which had no aliasing; the pipelines' frm ordering; and the 5
+  Undo cases, which are 115;
+- the pseudos: all 6.
+
+**Controls:**
+- the commit reverted (rvss's lines excluded, since 115/108 rewrote
+  them): 69 fail. That is the same 59 CSR-program failures as at the
+  test commit, rvss's included (aliasing is reverted), plus
+  `CsrUndo …FpFlagsAndFrm` on all five (the retirement record is
+  reverted too), plus the pseudo program on 5;
+- flags written in EX again, everything else kept: 7 fail.
+  `YoungerFpOpDoesNotLeak_Unpadded` fails on nh-f/h-nf/h-f, and
+  `CsrUndo …FpFlagsAndFrm` on the 4 pipelines;
+- the pseudos reverted: 6 fail.
+
+The leak case first had a store between the read and the `fdiv`, so the
+`fdiv` was not yet in EX. That control passed it, which led to the
+correction in `728f68b`.
+
+**Gate rows.** modelsweep changed exactly 120 rows: the six CSR forms × 5
+cases on each of the four pipelines. Every new value equals rvss's.
+
+`cycle`/`instret` and numeric CSR addresses are recorded under 117, not
+implemented.
 
 ---
 
@@ -5175,7 +5357,7 @@ Every new value equals Python's RNE result (2.5 → 2, 7.25 → 7,
 
 ---
 
-## 108. rvss does not write `fcsr` after a double-precision op; the pipelines do
+## 108. FIXED: rvss does not write `fcsr` after a double-precision op; the pipelines do
 
 `RVSSProcessor::ExecuteDouble` computes `fcsr_status` but never stores
 it. Only `ExecuteFloat` calls `WriteCsr(0x003, …)`
@@ -5192,6 +5374,22 @@ fix for 72 has to cover rvss's double path too. Not fixed in E2.
 programs per pipeline differ from rvss, and every differing field is
 fcsr. This is now the only kind of rvss-vs-pipeline divergence in the
 sweep. Still open, tied to 72.
+
+
+### Fixed in E4 (`3fe85ea`; test `d54808e`)
+
+`ExecuteDouble` writes its status through `WriteFpStatus`, as
+`ExecuteFloat` does (`rvss_processor.cpp:419`). That is still 72's bool,
+replacing.
+
+`test/double_flags_test.cpp` (`~/atlas-verify/e4/gen_dflags.py`) runs 11
+D ops, with `fflags` set to 31 before each. The expected 1/0 comes from
+exact Fraction arithmetic and the IEEE special cases.
+- **Red:** the rvss case only (it read 31 after every op).
+- **Control** (reverted): the same 1.
+
+**Sweep:** rvss vs pipelines differed in `fcsr` on 487 programs per
+pipeline after E3, and on 0 now, in any field, over 12448 programs.
 
 ---
 
@@ -5420,4 +5618,60 @@ to ask fcvt.l.d for rtz.
   spec-layout encoder) and 140 explicit-mode fcvt.l.d cases (rtz/rdn/rup
   on 8 values × 5 models, plus 20 non-tie rmm).
 - **Control** (reverted alone): the same 141.
+
+---
+
+## 115. FIXED: Undo did not restore the flags an FP op wrote
+
+On every model an F/D op wrote `fcsr` outside the step delta: rvss in
+`ExecuteFloat`, the pipelines in EX. Undoing the op left its flags
+behind.
+
+**Measured** with `CsrUndo.StepToTheEndThenUndoToTheStart/FpFlagsAndFrm`
+(red at `e2b2214`). After undoing every step, `fcsr` was `0x10`, not 0,
+on all five models.
+
+**Fixed:**
+- the pipelines, by 104's retirement write (`rv5s_processor_base.cpp:699`);
+- rvss in `773ffcc` (`WriteFpStatus`, `rvss_processor.cpp:422`).
+
+Each records the `fcsr` change.
+
+**Control:** rvss's record removed. That case fails on rvss only.
+
+---
+
+## 116. FP loads and stores clear `fflags`
+
+`flw`, `fsw`, `fld` and `fsd` go through the FP execute path for their
+address add, and that path writes its status (0) to `fflags`. RISC-V
+loads and stores never touch the flags.
+
+**Measured** after E4, the same on rvss, nh-nf and h-f: `fdiv.s 1, 0`
+then `fsw` takes `fflags` from `0x02` to 0, and an `fld` after it leaves 0.
+
+| | pipelines | rvss |
+|---|---|---|
+| before E4 (from the code, not measured) | all four: each variant's execute path wrote its status after the address add | only `flw`/`fsw` (`ExecuteFloat`); `ExecuteDouble` wrote nothing (108) |
+| since E4 (measured: `fsw`, `fld`) | the same, now at writeback | all four |
+
+Note: the isasweep programs that end in `fsd` therefore show
+`fcsr = 0`.
+
+It is 72's "replace", reaching instructions that should raise nothing.
+A fix belongs with 72 (accrue): OR-ing a 0 status changes nothing.
+Recorded, not fixed.
+
+---
+
+## 117. `cycle`, `instret` and numeric CSR addresses do not assemble
+
+Only `fflags`, `frm` and `fcsr` are CSR names (`csr_to_address`,
+`registers.cpp:170`).
+- `csrr x5, cycle` and `csrrs x5, 0xC00, x0` fail to parse.
+- The register file has slots for every address, but nothing counts
+  into `cycle`/`instret`.
+
+Recorded in E4 as decided, not implemented. `rdcycle`/`rdinstret`
+would need both the names and live counters.
 
