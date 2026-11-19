@@ -23,7 +23,7 @@ const IsaCase kCases[] = {
 R"ASM(.data
 vals: .dword 0xc3, 0x14, 0x7
 .text
-    lui x10, 16000
+    lui x10, 0x10000
     nop
     nop
     nop
