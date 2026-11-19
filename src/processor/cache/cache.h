@@ -56,6 +56,8 @@ struct CacheChange
     size_t newMissCount{0};
     size_t oldWriteBackCount{0};
     size_t newWriteBackCount{0};
+    size_t oldEvictionCount{0};
+    size_t newEvictionCount{0};
     uint64_t oldTimestamp{0};
     uint64_t newTimestamp{0};
 };
@@ -127,6 +129,8 @@ public:
     [[nodiscard]]size_t getHitCount()  const;
     [[nodiscard]]size_t getMissCount() const;
     [[nodiscard]]size_t getWriteBackCount() const;
+    // Fills that replaced a valid line (filling an invalid way is not an eviction).
+    [[nodiscard]]size_t getEvictionCount() const;
     [[nodiscard]]double getHitRate()   const;
     [[nodiscard]]double getMissRate()  const;
     [[nodiscard]]size_t getSetCount()  const;
@@ -191,6 +195,7 @@ private:
     size_t m_hitCount  {0};
     size_t m_missCount {0};
     size_t m_writeBackCount {0};
+    size_t m_evictionCount {0};
     // common setup function
     void setupCache(size_t cache_size, size_t lineSizeInBytes,size_t wayCount);
     //TODO get this buffer size from config

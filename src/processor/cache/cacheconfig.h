@@ -38,6 +38,7 @@ struct CacheStats
     size_t hitCount         = 0;
     size_t missCount        = 0;
     size_t writeBackCount   = 0;
+    size_t evictionCount    = 0; // fills that replaced a valid line
     double hitRate          = 0.0;
     size_t cacheSizeInBytes = 0;
 };

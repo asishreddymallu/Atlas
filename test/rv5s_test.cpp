@@ -8,19 +8,20 @@
 
 using namespace Kites;
 
-// Disabled: Fails assertion (x1 is 40 due to unhandled pipeline stall cycles, expected 15)
-// TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_1)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorNHNF vm;
-//     std::cout << "Program Information " << std::endl;
-//     std::cout << "Program size : " <<vm.program_size_ << std::endl;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code_1.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();
-//     
-//     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 15);
-// }
+// pipeline_test_code.s (restored from 58f9c8d) is addi x1,x1,1 ... addi x1,x1,8.
+// nh-nf has no hazard unit and no forwarding: each addi reads x1 in ID while the two
+// before it are still in EX and MEM, and sees the value written by the one three ahead
+// (WB writes before ID reads). So x1 = 1, 2, 3, 5, 7, 9, 12, 15 - not the sum, 36.
+TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_1)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHNF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 15);
+}
 
 TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_2)
 {
@@ -33,47 +34,53 @@ TEST(FIVE_STAGE_VM_TEST,no_hazard_no_forwarding_test_2)
     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(4), 20);
 }
 
-// Disabled: Fails assertion (x1 is 120 after 12 addi instructions, expected 36)
-// TEST(FIVE_STAGE_VM_TEST,hazard_no_forwarding_test_1)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorHNF vm;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code_1.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();    
-    
-//     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
-// }
+// h-nf stalls each dependent addi until x1 is written back, so the sum is exact.
+TEST(FIVE_STAGE_VM_TEST,hazard_no_forwarding_test_1)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHNF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
 
-// Disabled: Missing test asset ../examples/pipeline_test_code.s
-// TEST(FIVE_STAGE_VM_TEST,no_hazard_forwarding_test)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorNHF vm;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();    
-    
-// }
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
+}
 
-// Disabled: Missing test asset ../examples/pipeline_test_code.s
-// TEST(FIVE_STAGE_VM_TEST,harzard_no_forwarding_test)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorHF vm;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();    
-    
-// }
+// The three tests below asserted nothing; each now checks the sum. Their names are kept
+// as they were (including the spelling); the model each one builds is named in a comment.
 
-// Disabled: Missing test asset ../examples/pipeline_test_code.s
-// TEST(FIVE_STAGE_VM_TEST,harzard_forwarding_test)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorHNF vm;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();    
-    
-// }
+// nh-f forwards EX->EX, which is all a chain of addi needs.
+TEST(FIVE_STAGE_VM_TEST,no_hazard_forwarding_test)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorNHF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
+}
+
+// Builds h-f (hazard unit and forwarding), whatever the name says.
+TEST(FIVE_STAGE_VM_TEST,harzard_no_forwarding_test)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
+}
+
+// Builds h-nf (hazard unit, no forwarding), whatever the name says.
+TEST(FIVE_STAGE_VM_TEST,harzard_forwarding_test)
+{
+    setupVmStateDirectory();
+    RV5StageProcessorHNF vm;
+    AssembledProgram program = assemble("../examples/pipeline_test_code.s");
+    vm.LoadProgram(program);
+    vm.DebugRun();
+
+    GTEST_ASSERT_EQ(vm.registers_.ReadGpr(1), 36);
+}

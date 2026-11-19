@@ -145,8 +145,9 @@ protected:
     Kites::MainMemory ram;
 };
 
-// Disabled: Fails assertion on 3-way LRU hit count after eviction
-#if 0
+// Was disabled: it re-read the evicted line first, and that miss itself evicts the next
+// victim, so the "still in" lines missed (a textbook cache does the same; see E8).
+// The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(LRUTest, BasicEvictionOrder)
 {
     Cache cache(ram, 1, 4, 3,
@@ -160,19 +161,19 @@ TEST_F(LRUTest, BasicEvictionOrder)
 
     cache.readWord(0x0C);   // evicts A (LRU)
 
-    size_t misses_before = cache.getMissCount();
-    cache.readWord(0x00);   // A evicted — miss
-    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
-
     size_t hits_before = cache.getHitCount();
     cache.readWord(0x04);   // B still in — hit
     cache.readWord(0x08);   // C still in — hit
     EXPECT_EQ(cache.getHitCount(), hits_before + 2);
-}
-#endif
 
-// Disabled: Fails assertion on LRU re-access hit count after eviction
-#if 0
+    size_t misses_before = cache.getMissCount();
+    cache.readWord(0x00);   // A evicted — miss
+    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
+}
+
+// Was disabled: it re-read the evicted line first, and that miss itself evicts the next
+// victim, so the "still in" lines missed (a textbook cache does the same; see E8).
+// The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(LRUTest, AccessPromotesToMostRecent)
 {
     Cache cache(ram, 1, 4, 3,
@@ -190,16 +191,15 @@ TEST_F(LRUTest, AccessPromotesToMostRecent)
     // C is now LRU — should be evicted
     cache.readWord(0x0C);
 
-    size_t misses_before = cache.getMissCount();
-    cache.readWord(0x08);   // C evicted — miss
-    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
-
     size_t hits_before = cache.getHitCount();
     cache.readWord(0x00);   // A still in — hit
     cache.readWord(0x04);   // B still in — hit
     EXPECT_EQ(cache.getHitCount(), hits_before + 2);
+
+    size_t misses_before = cache.getMissCount();
+    cache.readWord(0x08);   // C evicted — miss
+    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
 }
-#endif
 
 TEST_F(LRUTest, WritePromotesToMostRecent)
 {
@@ -281,8 +281,9 @@ TEST_F(LRUTest, LRUWithMultipleSets)
     EXPECT_EQ(cache.getHitCount(), hits_before + 2);
 }
 
-// Disabled: Fails assertion on LRU multi-cycle aging hit count
-#if 0
+// Was disabled: it re-read the evicted line first, and that miss itself evicts the next
+// victim, so the "still in" lines missed (a textbook cache does the same; see E8).
+// The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(LRUTest, LRUAgeingAcrossManyCycles)
 {
     Kites::Cache cache(ram, 1, 4, 3,
@@ -304,17 +305,16 @@ TEST_F(LRUTest, LRUAgeingAcrossManyCycles)
     // A should still be LRU — evicted first
     cache.readWord(0x0C);
 
-    // check the number of misses
-    size_t misses_before = cache.getMissCount();
-    cache.readWord(0x00);   // A evicted — miss
-    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
-
     size_t hits_before = cache.getHitCount();
     cache.readWord(0x04);   // B still in — hit
     cache.readWord(0x08);   // C still in — hit
     EXPECT_EQ(cache.getHitCount(), hits_before + 2);
+
+    // check the number of misses
+    size_t misses_before = cache.getMissCount();
+    cache.readWord(0x00);   // A evicted — miss
+    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
 }
-#endif
 
 // ── Policy comparison ─────────────────────────────────────────────────────────
 class PolicyComparisonTest : public ::testing::Test

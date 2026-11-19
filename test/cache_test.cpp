@@ -369,8 +369,9 @@ TEST_F(ReplacementPolicyTest, LRUEvictsLeastRecentlyUsed)
     EXPECT_EQ(cache.getMissCount(), misses_before + 1);
 }
 
-// Disabled: Fails assertion on 2-way FIFO hit count after eviction
-#if 0
+// Was disabled: it re-read the evicted line first, and that miss itself evicts the next
+// victim, so the "still in" lines missed (a textbook cache does the same; see E8).
+// The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(ReplacementPolicyTest, FIFOEvictsFirstInserted)
 {
     Kites::Cache cache(ram, 1, 4, 2,
@@ -383,17 +384,16 @@ TEST_F(ReplacementPolicyTest, FIFOEvictsFirstInserted)
     cache.readWord(0x00);   // touch A — FIFO ignores hits
     cache.readWord(0x08);   // evicts A (first inserted)
 
-    // A evicted — miss
-    size_t misses_before = cache.getMissCount();
-    cache.readWord(0x00);
-    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
-
     // B still in cache — hit
     size_t hits_before = cache.getHitCount();
     cache.readWord(0x04);
     EXPECT_EQ(cache.getHitCount(), hits_before + 1);
+
+    // A evicted — miss
+    size_t misses_before = cache.getMissCount();
+    cache.readWord(0x00);
+    EXPECT_EQ(cache.getMissCount(), misses_before + 1);
 }
-#endif
 
 // ── L1/L2 hierarchy ───────────────────────────────────────────────────────────
 class HierarchyTest : public ::testing::Test

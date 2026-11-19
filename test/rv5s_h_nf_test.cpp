@@ -1,23 +1,3 @@
-// #include <gtest/gtest.h>
-// #include "processor/rv5s/rv5s_processor_h_nf.h"
-// #include "assembler/assembler.h"
-// #include "utils/utils.h"
-
-// Disabled: Does not compile (placed before namespace/includes, superseded by active test1 below)
-// TEST(RV5StageVM_H_NF_TEST,hazard_forwarding_test_1)
-// {
-//     setupVmStateDirectory();
-//     RV5StageProcessorHNF vm;
-//     std::cout << "Program Information " << std::endl;
-//     std::cout << "Program size : " <<vm.program_size_ << std::endl;
-//     AssembledProgram program = assemble("../examples/pipeline_test_code_1.s");
-//     vm.LoadProgram(program);
-//     vm.DebugRun();
-    
-//     GTEST_ASSERT_EQ(vm.registers_.ReadGpr(6), 15);
-// }
-
-
 #include <gtest/gtest.h>
 #include "processor/rv5s/rv5s_processor_h_nf.h"
 #include "assembler/assembler.h"
@@ -104,4 +84,15 @@ TEST(RV5StageVM_H_NF_TEST, r_m_forwarding)
 {
     auto vm = runHazardProgram("../examples/R_M_hazard.s");
     EXPECT_EQ(vm->registers_.ReadGpr(9), 55);
+}
+
+// Was a commented-out draft above the #includes (it could not compile there). The draft
+// asserted x6 == 15 on pipeline_test_code_1.s, which only writes x1
+// (twelve addi x1,x1,10); the meaningful check is x1 == 120. h-nf stalls each dependent addi until x1 is written back, so the sum is exact.
+TEST(RV5StageVM_H_NF_TEST,hazard_forwarding_test_1)
+{
+    auto vm = runHazardProgram("../examples/pipeline_test_code_1.s");
+
+    EXPECT_EQ(vm->registers_.ReadGpr(1), 120);
+    EXPECT_EQ(vm->registers_.ReadGpr(6), 0);
 }

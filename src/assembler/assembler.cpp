@@ -132,24 +132,4 @@ AssembledProgram assemble(std::istream& source)
     return program;
 }
 
-std::vector<ParseError> getDiagnostics(std::istream &source, const std::string &virtualFilename)
-{
-    // std::vector<ParseError> parseErrors{};
-
-    // Lexer lexer(source, virtualFilena);
-    // std::vector<Token> tokens = lexer.getTokenList();
-
-    // Parser parser(lexer.getFilename(), tokens);
-    // parser.parse();
-
-    // AssembledProgram program;
-    // program.filename = virtualFilename;
-
-    // if (parser.getErrorCount() != 0)
-    // {
-    //     parseErrors = parser.getErrors();
-    // }
-    
-    // return parseErrors;
-}
 }//namespace Kites
