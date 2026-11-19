@@ -2985,6 +2985,25 @@ resets, exactly as it did at `995d7ea`. Nothing in `src/ui/` or `cli/`
 depended on the `ecall` path resetting; anything that comes to depend
 on it must call `reset()` explicitly.
 
+### U6: every end keeps its state, not only the run-thread exit
+
+This entry's intent was that a finished program leaves its results on
+screen. It now holds for every way a program ends:
+- a Run that runs off its end (it always did);
+- an exit on the run thread (this entry);
+- **stepping to the end in a Debug Run, including a stepped exit.**
+
+The paragraph above saying that `ProcessorManager::step()` "still resets,
+exactly as it did at `995d7ea`" is no longer true.
+`ProcessorManager::step()` now calls `StopKeepingState()`
+(`processor_base.cpp`, the `StopWorker(.., false)` path). It publishes
+the stop, wakes the worker and waits for it to leave `Run()`, as
+`StopAndReset` does, without the `Reset()`. A `step()` once
+`ProgramEnded()` is a no-op.
+
+Only Stop, a reload (`ProcessorManager::reset()`) and a processor switch
+reset now. See 142 for the measurement and the tests.
+
 ---
 
 ## 68. FIXED: a glob scanned the whole filesystem on every build (and not from the file this entry first blamed)
@@ -5884,7 +5903,7 @@ Not fixed: assembler work, outside a UI stage.
 
 ---
 
-## 142. Stepping the last instruction resets the processor in the same step
+## 142. FIXED: Stepping the last instruction resets the processor in the same step
 
 `ProcessorManager::step()` calls `RequestStop()` whenever
 `StepAndNotify()` returns false (`processor_manager.cpp:338-349`).
@@ -5915,6 +5934,30 @@ found by a probe in `gui_run_smoke_test.cpp`, removed before commit.
 Not fixed: the end-of-program policy belongs with 67, and the change
 needs a stop that does not reset. The tests that step stop one retire
 short of the end, and say why.
+
+### Fixed in U6 (`ff33d8c` red, fix in the commit after it)
+
+When a program ends, the processor stops and keeps its state, whichever
+way the program ended. 67's U6 section has the stop path.
+
+**`ProcessorBase::ProgramEnded()`** is true when either holds:
+- the PC is past the end (and, on a pipeline, the pipeline has drained:
+  the `RanOffTheEnd` override);
+- or an exit was served in a cycle that has not been undone. That is
+  `exit_cycle_`, the cycle count once the exit's step completed, so Undo
+  un-ends the program and Redo re-ends it.
+
+**In the window:**
+- the status label (`runStatusLabel`) says "Program finished", or
+  "Stopped" after the user pressed Stop;
+- Step stays disabled;
+- Undo and Redo are enabled after any finished run.
+Run or Debug Run again reloads and resets, as before.
+
+**Measured:** before the fix, `ProgramEnd` (15 cases) and three new
+`GuiRunSmoke` cases (15) were red, 30 of 30. Every stepped end read
+retired 0, cycles 0 and zero registers. Steps after it executed the wiped
+memory (retired 1, cycles 5 on h_f).
 
 ---
 
