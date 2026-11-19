@@ -5858,7 +5858,7 @@ Recorded (E5); the harness is out of tree.
 
 ---
 
-## 140. The window has no way to give an ecall read its input
+## 140. FIXED: The window has no way to give an ecall read its input
 
 `ProcessorBase::ServeSyscall`'s read service (`SYSCALL_READ` = 63)
 waits on `input_queue_` (`processor_base.cpp:648-652`).
@@ -5876,6 +5876,32 @@ covered without the window by `test/ecall_syscall_test.cpp`.
 
 Not fixed: it needs an input widget (the log panel, or a prompt on
 `VM_STDIN_START`). That is a UI feature, not this stage's crash.
+
+### Fixed in U6 (`1e0eea3` red, fix in the commit after it)
+
+**What the window showed before:** none of a program's output.
+`ServeSyscall` printed only to `std::cout`, for print int, float, double
+and string (`processor_base.cpp:535-613`) and for write to fd 1
+(`:700-724`). `LogPanel` (`src/ui/log_panel/log_panel.h:12`) is never
+constructed in `src/`. So in the window, output went to the terminal
+that launched the app, or nowhere.
+
+**Now:**
+- An **Output** dock (`src/ui/output_panel/output_dock.*`) sits in the
+  bottom area, tabbed with Problems, with a toggle in the View menu.
+- `programOutput` is read-only and receives `programOutputSignal`, which
+  carries exactly the text the program printed. `std::cout` is unchanged,
+  so kites-cli and the tests still read it.
+- When a read is about to wait, `inputRequestedSignal` enables the
+  `programInput` line. Enter calls `ProcessorManager::pushInput` and
+  echoes the line.
+- Both signals reach the window through `Qt::QueuedConnection`.
+- The panel is cleared on every Run, Debug Run and reload
+  (`tryParseAndLoadProgram`). Stop still ends a wait, and the input line
+  closes.
+
+**Measured** by `GuiRunSmoke` on all five models: Prints, ARunRead,
+StopWhile and SteppingOntoARead, 20 cases, all red before.
 
 ---
 
@@ -5984,3 +6010,36 @@ bubbles" for ecall and CSR came from the same comment.
 
 Not changed: the behaviour is consistent, and only the comments are wrong.
 Fixing them is engine-side.
+
+---
+
+## 144. FIXED: Stepping onto an ecall read froze the window
+
+A manual Step runs on the UI thread: the Step action calls
+`ProcessorManager::step` (`main_window.cpp`, `setUpExecutionActions`),
+which calls `StepAndNotify`. A step that serves a read (a7 = 63, fd 0)
+with no input queued then waits in `input_cv_.wait`
+(`processor_base.cpp`, `SYSCALL_READ`) on that thread. Nothing can type
+the input, and Stop cannot be pressed: the window is frozen.
+
+**Measured** in U6 at `1e0eea3`. `SteppingOntoAReadAsksForInputInsteadOfFreezing`
+hit ctest's 60 s timeout on all five models. gdb on h_f showed thread 1
+in `std::condition_variable::wait`, reached through `ServeSyscall`,
+`serve_syscall_at_writeback`, `pipeline_writeback`,
+`RV5StageProcessorHF::Step`, `StepAndNotify`, `ProcessorManager::step`
+and the Step action's lambda.
+
+**Fixed:**
+- `ProcessorBase::NextStepWaitsForInput()` asks first. It is true when
+  the next step serves an ecall with a7 = 63 and a0 = 0 and the input
+  queue is empty. Every older instruction has retired by then, so a7/a0
+  are final.
+  - rvss: the instruction at the PC (`NextStepServesEcall`, read with
+    `peekByte`).
+  - rv5s: the ecall in MEM/WB, which writeback serves next (override in
+    `rv5s_processor_base.h`).
+- When it is true, the Step action opens the Output panel's input line
+  instead of stepping. The held step runs as soon as the line is entered.
+
+A Run, or a resumed Debug Run, waits on the worker thread as before, and
+the input line serves it the same way.
