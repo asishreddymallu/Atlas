@@ -1,6 +1,7 @@
 #include "ui/timing_grid/timing_grid.h"
 
 #include "processor/processor_manager.h"
+#include "processor/trace_explain.h"
 #include "processor/trace_json.h"
 #include "ui/theme/theme_manager.h"
 
@@ -460,17 +461,15 @@ void TimingGridPanel::jumpChunk()
 void TimingGridPanel::explainSelection(int row, int column)
 {
     const TimingGridData &g = m_view->grid();
-    if (row < 0 || column < 0 || row >= g.rows.size() || column >= g.columns())
+    if (!m_manager || row < 0 || column < 0 || row >= g.rows.size() || column >= g.columns())
         return;
-    const TimingRow  &r    = g.rows[row];
-    const TimingCell &cell = r.cells[column];
-    const uint32_t    cyc  = g.firstCycle + static_cast<uint32_t>(column);
-    if (cell.kind == TimingCell::Empty)
-        m_explain->setPlainText(QStringLiteral("Cycle %1: %2 is not in the pipeline.").arg(cyc).arg(r.label));
-    else
-        m_explain->setPlainText(QStringLiteral("Cycle %1: %2 is in %3.")
-                                    .arg(cyc)
-                                    .arg(r.label)
-                                    .arg(QString::fromLatin1(kLong[static_cast<int>(cell.stage)])));
+    // The sentence comes from the trace's record for that cycle and nothing
+    // else (trace_explain.h): no stall is mentioned that it did not record.
+    const TraceMeta         meta    = m_manager->traceMeta();
+    const AssembledProgram &program = m_manager->currentProgram();
+    const std::string       text    = explainTraceCell(
+        g.records, static_cast<size_t>(column), g.rows[row].id, ExplainModel{meta.hazardDetection, meta.forwarding},
+        [&program](uint64_t pc) { return traceDisassembly(program, pc).toStdString(); });
+    m_explain->setPlainText(QString::fromStdString(text));
 }
 } // namespace Kites

@@ -184,6 +184,23 @@ TEST_P(TimingGridGui, TheGridIsTheHandDrawnDiagram)
     EXPECT_TRUE(w.modals.isEmpty()) << w.modals.join(" | ").toStdString();
 }
 
+// Part C: selecting a cell shows the trace's sentence for it.
+TEST_P(TimingGridGui, SelectingACellExplainsIt)
+{
+    const Pipe &p = kPipes[GetParam()];
+    GridWindow  w;
+    ASSERT_TRUE(w.ready());
+    w.use(p.type);
+    ASSERT_TRUE(w.runToEnd(kLoadUse));
+    w.panel->view()->select(1, 2); // add x6, x5, x5 in cycle 3
+    const QString text = w.panel->explanation();
+    EXPECT_TRUE(text.startsWith("Cycle 3: add x6, x5, x5 ")) << text.toStdString();
+    const bool stalled = p.type == ProcessorType::RV5Stage_H_NF || p.type == ProcessorType::RV5Stage_H_F;
+    EXPECT_EQ(text.contains("stall cycle"), stalled) << text.toStdString();
+    if (!stalled)
+        EXPECT_TRUE(text.contains("nop") || text.contains("forwarding unit")) << text.toStdString();
+}
+
 TEST_P(TimingGridGui, UndoRemovesTheLastColumn)
 {
     GridWindow w;
