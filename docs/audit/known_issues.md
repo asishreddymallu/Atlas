@@ -5858,6 +5858,86 @@ Recorded (E5); the harness is out of tree.
 
 ---
 
+## 119. A CSR instruction is not a producer to the hazard unit
+
+**Asked, not decided (E6).** The control unit sets no `reg_write` for SYSTEM (`rv5s_control_unit.cpp`, no `0b1110011` case). So `producerWritesGpr` returns false for `csrrw`/`csrrs`/`csrrc` and their `i` forms, although each writes rd in the integer file.
+
+Today that is harmless. `serve_csr_at_writeback` (`rv5s_processor_base.cpp:814`) writes rd itself and flushes IF/ID, ID/EX and EX/MEM. So no reader of rd can be in flight when it is written, and the E6 sweep shows 0 differences for `csrrs` as a producer at every distance.
+
+`test/hazard_tables_test.cpp` pins today's view with this reason. The question for you: keep it that way, which is cheapest and relies on the flush, or give SYSTEM a `reg_write` that writeback ignores, so the table matches the spec on its own?
+
+---
+
+## 120. `ebreak` assembles to `0x00001073`, a CSR instruction
+
+**Asked, not decided (E6).** The encoder's row has funct3 `001` (`instructions.cpp:579`, and `:55`). The spec's `ebreak` is `0x00100073`: funct3 0, imm 1. The disassembler already expects the spec form (`instructions.cpp:1716`).
+
+As assembled, `ebreak` executes as `csrrw x0, 0x000, x0`, a write of 0 to CSR 0 (ustatus), and nothing else happens.
+
+Fixing the encoding changes what an `ebreak` does on every model. The models test SYSTEM with funct3 0 for the syscall path, so it would then be served like an `ecall` unless that path checks imm. What should `ebreak` do (halt, breakpoint, or nothing)? That is a design decision.
+
+`test/hazard_tables_test.cpp` checks the table on the spec word and prints the assembled word.
+
+---
+
+## 121. FIXED: an FP store claimed to write the f register named by its imm[4:0]
+
+Decode sets `freg_write = isF || isD` for every F/D instruction (`rv5s_processor_base.cpp:326`). `producerWritesFpr` returned true for every non-OP-FP opcode (`rv5s_forwarding.h`). So `fsw`/`fsd` looked like a producer of f[bits 11:7], which for a store is imm[4:0].
+
+Measured before the fix (`fsw f1, 8(x11)` then `fadd.s f3, f8, f8`, against the same program reading f9):
+
+| | rvss | h_nf | h_f | nh_f | nh_nf |
+|---|---|---|---|---|---|
+| f3 | 5.0 | 5.0 | **`0x10800408`** | **`0x10800408`** | 5.0 |
+| cycles (f9 control) | 25 steps | **31** (29) | 29 (29) | 29 (29) | 29 (29) |
+
+On the forwarding models this was a **wrong value**: the store's address was forwarded into f8. On h_nf it was a 2-cycle false stall.
+
+**Fixed in E6 (`a439f33`; red `5e93ccf`):** `producerWritesFpr` returns false for opcode `0100111`.
+
+**Tests:**
+- `Spec/HazardTables…/fsw` and `…/fsd`;
+- `Distance0/HazardSweepSubset…/fsw-then-*` and `…/fsd-then-*`;
+- the E6 sweep, with `sw`/`sd`/`fsw`/`fsd` producers (imm[4:0] = 5).
+
+Neither E5's 9 cases nor any padded sweep could see it.
+
+---
+
+## 122. nh-f: `jalr x5, 279(x5)` three instructions after `feq.s x5` runs away
+
+**Open (E6).** Found by the hazard sweep (`~/atlas-verify/e6/hazsweep`, program `p32939`). The sequence is `feq.s x5, f9, f13` (x5 = 1), three `addi` fillers, then `jalr x5, 279(x5)`, whose target is the label right after it.
+
+| | result |
+|---|---|
+| rvss, h_nf, h_f, nh_nf | x5 = the link, 280 |
+| nh_f | never ends (20000 steps); x5 stays 1 |
+
+Only this combination fails. Each of these is right:
+- the same with `jalr x20` (rd ≠ rs1);
+- k = 0, 1, 2;
+- `fcvt.w.s`, `fmv.x.w` or `fclass.s` as the producer.
+
+At k = 3 the producer has retired, so this is inside nh_f's contract. Not investigated further in E6.
+
+---
+
+## 123. A writeback-served instruction costs 4 bubbles, not 3
+
+**Recorded, and asked (E6).** A redirect's target is fetched the cycle **after** the resolving stage (`rv5s_processor_base.cpp:493-495`):
+
+| redirect resolved in | bubbles |
+|---|---|
+| EX (jumps) | 2 |
+| MEM (taken branches) | 3 |
+| WB (CSR instructions, and `ecall`, served at writeback since E1/E4) | 4 |
+
+The E6 prompt's rule said 3 for CSR and ecall. The sweep measured 4 for every CSR instruction (the first run's uniform +1 per CSR). The analytic model uses 4, consistently with the code's own convention. `ecall` goes through the same redirect, but it was **not measured**: the sweep has no ecall.
+
+Whether a WB-resolved redirect should fetch in the same cycle, which would make it 3, is a design question.
+
+---
+
 ## 140. FIXED: The window has no way to give an ecall read its input
 
 `ProcessorBase::ServeSyscall`'s read service (`SYSCALL_READ` = 63)
