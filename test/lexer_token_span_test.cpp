@@ -166,6 +166,7 @@ TEST(LexerTokenSpan, EveryTokenInEveryExampleHasAPositiveSpan)
                 << "\" has end_column " << t.end_column << " <= column " << t.column_number;
         }
     }
-    EXPECT_EQ(files, 44u) << "the examples corpus changed size";
+    // 44 until E8, which added examples/pipeline_test_code.s and the nine examples/cache_lab/*.s.
+    EXPECT_EQ(files, 54u) << "the examples corpus changed size";
     EXPECT_GT(tokens, 5000u);
 }
