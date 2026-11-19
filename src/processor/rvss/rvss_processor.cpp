@@ -412,6 +412,11 @@ void RVSSProcessor::ExecuteDouble()
         control_unit_.GetAluSignal(current_instruction_, control_unit_.GetAluOp());
     std::tie(execution_result_, fcsr_status) =
         alu::Alu::dfpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
+
+    // The status was computed and dropped, while the pipelines wrote it
+    // (known_issues 108). Same write as ExecuteFloat: fflags, recorded for
+    // Undo. It is still 72's bool, replacing rather than accruing.
+    WriteFpStatus(fcsr_status);
 }
 
 void RVSSProcessor::WriteFpStatus(uint8_t status)
