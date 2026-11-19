@@ -3346,6 +3346,13 @@ Measured after E5, identical on all five models (from `Fflags`):
 
 **Test changed:** `DoubleFlags.FflagsAfterEachDoubleOp/DoubleOpsWriteFflags/*` (5). It set `fflags` to 31 and expected the replacing bool, which under accrual would read 31 every time. It now clears `fflags` and expects each op's full flags (`~/atlas-verify/e5/gen_dflags.py`).
 
+**Controls** (each reverted alone in a throwaway worktree with `git apply -R`; full suite):
+- the whole fix: 100 failures, the 95 red `Fflags` plus `DoubleFlags` × 5;
+- accrual only (OR back to replace): `Fflags/Accrual/*` × 5;
+- the `isless` guard only: `Fflags/ArithS3/*` and `ArithD3/*`, 10.
+
+`CsrUndo …/FpFlagAccrual` does not fail under replace: Undo is consistent either way. It guards the Undo record, not accrual.
+
 **Readers of the old layout:** none outside the ALU. No UI view decodes the bits; the register views show `fcsr` as a number. The docs JSON names `fflags` only in CSR examples. `FCSR_*` is used only in `alu.cpp`.
 
 ---
@@ -3793,6 +3800,12 @@ Cycles, measured at the red commit and after. The expected counts come from `~/a
 | `flw f5` → `fadd.s f6, f5, f1` (real) | 28 → **26** | 23 → 23 |
 | `addi x5` → `lui x6, 0x28` | 25 → **23** | 21 → 21 |
 | `fadd.d f5` → `addi x6, x5, 1` | 25 → **23** | 21 → 21 |
+
+**Red** at `3568935`: **13** tests, every changed cell in the table above. The commit message says 14; that is a miscount, and 13 was re-counted by the control.
+
+**Control** (the fix reverted alone, full suite): the same 13 —
+- `HduFalseStall/{FldThenIntegerIndex, LdThenFpIndex, LdThenLui, LdThenAuipc, LdThenJal}/{rv5-h-nf, rv5-h-f}`;
+- `HduFalseStall/{FlwThenFpUse, AluThenLui, FpAluThenIntegerIndex}/rv5-h-nf`.
 
 The real dependencies still stall exactly as the rules say. The `flw` case's h_nf drop is a further false stall the test caught: the following `addi x6, x0, 6` has 6 in bits 24:20, which matched the fadd's f6.
 
@@ -5327,6 +5340,12 @@ Cycles, measured at the red commit and after. The expected counts come from `~/a
 | `flw f5` → `fadd.s f6, f5, f1` (real) | 28 → **26** | 23 → 23 |
 | `addi x5` → `lui x6, 0x28` | 25 → **23** | 21 → 21 |
 | `fadd.d f5` → `addi x6, x5, 1` | 25 → **23** | 21 → 21 |
+
+**Red** at `3568935`: **13** tests, every changed cell in the table above. The commit message says 14; that is a miscount, and 13 was re-counted by the control.
+
+**Control** (the fix reverted alone, full suite): the same 13 —
+- `HduFalseStall/{FldThenIntegerIndex, LdThenFpIndex, LdThenLui, LdThenAuipc, LdThenJal}/{rv5-h-nf, rv5-h-f}`;
+- `HduFalseStall/{FlwThenFpUse, AluThenLui, FpAluThenIntegerIndex}/rv5-h-nf`.
 
 The real dependencies still stall exactly as the rules say. The `flw` case's h_nf drop is a further false stall the test caught: the following `addi x6, x0, 6` has 6 in bits 24:20, which matched the fadd's f6.
 
