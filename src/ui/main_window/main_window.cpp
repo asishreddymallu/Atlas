@@ -358,6 +358,11 @@ void MainWindow::setUpExecutionActions()
                     setThemedIcon(m_runAction, Icon::Stop, largeIconSize);
                     setActionHint(m_runAction, "Stop execution");
                     m_userStopped = false;
+                    // A finished program offers Undo/Redo (runFinishedSlot);
+                    // a running one must not: Undo on this thread under the
+                    // running worker is known_issues 62's collision.
+                    m_undoAction->setDisabled(true);
+                    m_redoAction->setDisabled(true);
                     setRunStatus("Running");
                     this->run();
                 }
