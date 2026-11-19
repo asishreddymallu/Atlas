@@ -371,7 +371,7 @@ void RVSSProcessor::ExecuteFloat()
 
     // The flags go to fflags = fcsr[4:0]; writing all of fcsr cleared frm
     // (known_issues 104). Replace semantics and encoding unchanged (72).
-    registers_.WriteCsr(0x001, fcsr_status);
+    WriteFpStatus(fcsr_status);
 }
 
 void RVSSProcessor::ExecuteDouble()
@@ -412,6 +412,17 @@ void RVSSProcessor::ExecuteDouble()
         control_unit_.GetAluSignal(current_instruction_, control_unit_.GetAluOp());
     std::tie(execution_result_, fcsr_status) =
         alu::Alu::dfpexecute(aluOperation, reg1_value, reg2_value, reg3_value, rm);
+}
+
+void RVSSProcessor::WriteFpStatus(uint8_t status)
+{
+    // Recorded in the step delta, so Undo restores the flags; it was not,
+    // and Undo left the last FP op's flags behind (known_issues 115).
+    const uint64_t old_fcsr = registers_.ReadCsr(0x003);
+    registers_.WriteCsr(0x001, status);
+    const uint64_t new_fcsr = registers_.ReadCsr(0x003);
+    if (old_fcsr != new_fcsr)
+        current_delta_.register_changes.push_back({0x003, 1, old_fcsr, new_fcsr});
 }
 
 void RVSSProcessor::ExecuteCsr()

@@ -60,6 +60,8 @@ class RVSSProcessor : public ProcessorBase
     void ExecuteFloat();
     void ExecuteDouble();
     void ExecuteCsr();
+    /// Writes an F/D op's flags to fflags and records the change for Undo.
+    void WriteFpStatus(uint8_t status);
     void HandleSyscall();
 
     void WriteMemory();
