@@ -29,7 +29,10 @@ public:
     void clearExecutionCount();
     
 public slots:
-        void incrementLineExecutionCountSlot(int lineNumber);
+        /// The Profiler's count for one line (0 clears it). The Profiler
+        /// owns the counts; this only draws them (known_issues 85).
+        void setLineExecutionCountSlot(int lineNumber, int count);
+        void clearInstructionTypes();
         void updateLineInstructionTypeSlot(const std::map<int, 
             instruction_set::InstructionType> &instructionTypes);
     // int countAreaWidth() const;

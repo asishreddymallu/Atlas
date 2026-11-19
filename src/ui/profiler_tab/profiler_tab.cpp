@@ -30,8 +30,8 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
         //         &ProfilerTab::updateLineExecutionCounts);
         connect(m_profiler, &Profiler::profilerReset, this,
                 &ProfilerTab::resetProfilerView);
-        connect(m_profiler, &Profiler::incrementLineExecutionCountSignal, ui->plainTextEdit,
-                &ProfilerEditor::incrementLineExecutionCountSlot);
+        connect(m_profiler, &Profiler::lineExecutionCountChangedSignal, ui->plainTextEdit,
+                &ProfilerEditor::setLineExecutionCountSlot);
         connect(m_profiler, &Profiler::updateLineInstructionTypeSignal, ui->plainTextEdit,
                 &ProfilerEditor::updateLineInstructionTypeSlot);
         connect(m_profiler, &Profiler::updateInstructionTypeCountsSignal, model,
@@ -67,6 +67,10 @@ void ProfilerTab::updateStatistics([[maybe_unused]] const std::map<std::string, 
 
 void ProfilerTab::resetProfilerView()
 {
-
+    // Was empty (known_issues 85). The source text stays: on a reload it
+    // is replaced anyway, and after a switch it is still the program in
+    // the editor.
+    ui->plainTextEdit->clearExecutionCount();
+    ui->plainTextEdit->clearInstructionTypes();
 }
 } // namespace Kites

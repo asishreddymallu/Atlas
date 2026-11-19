@@ -107,40 +107,21 @@ QColor ProfilerEditor::heatBackgroundColor(int hitCount) const
     return heat;
 }
 
-void ProfilerEditor::incrementLineExecutionCountSlot(int lineNumber)
+void ProfilerEditor::setLineExecutionCountSlot(int lineNumber, int count)
 {
-    qDebug() << "Incrementing execution count for line: " << lineNumber;
-    m_lineNumberToExecutionCounts[lineNumber]++;
+    auto counts = m_lineNumberToExecutionCounts;
+    if (count > 0)
+        counts[lineNumber] = count;
+    else
+        counts.erase(lineNumber);
+    // setExecutionCount recomputes the maximum, so the heat scale also
+    // comes down after an Undo; incrementing could only ever raise it.
+    setExecutionCount(counts);
+}
 
-    for (const auto &pair : m_lineNumberToExecutionCounts)
-    {
-        m_maxExecutionCount = std::max(m_maxExecutionCount, pair.second);
-    }
-
-    QList<QTextEdit::ExtraSelection> selections;
-    for (const auto &pair : m_lineNumberToExecutionCounts)
-    {
-        const int lineNumber = pair.first;
-        const int hits = pair.second;
-        if (hits <= 0 || lineNumber <= 0)
-        {
-            continue;
-        }
-
-        QTextBlock block = document()->findBlockByNumber(lineNumber - 1);
-        if (!block.isValid())
-        {
-            continue;
-        }
-
-        QTextEdit::ExtraSelection selection;
-        selection.cursor = QTextCursor(block);
-        selection.cursor.clearSelection();
-        selection.format.setBackground(heatBackgroundColor(hits));
-        selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-        selections.append(selection);
-    }
-    setExtraSelections(selections);
+void ProfilerEditor::clearInstructionTypes()
+{
+    m_lineNumberToInstructionType.clear();
     viewport()->update();
 }
 

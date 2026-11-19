@@ -125,6 +125,7 @@ void RVSSProcessor::setProcessorState()
     processor_state_.programCounters = 
     {program_counter_,INVALID_PC,INVALID_PC,INVALID_PC,INVALID_PC};
     processor_state_.lastExecutedPC = last_executed_pc_;
+    processor_state_.instructionsRetired = instructions_retired_;
 }
 
 void RVSSProcessor::Run()
@@ -1030,6 +1031,8 @@ bool RVSSProcessor::StepAndNotify()
     Step();
     SetActiveWireNames();
     setProcessorState();
+    // Single cycle: what executed is what retired.
+    processor_state_.retiredPC = last_executed_pc_;
     emit processorClockedSignal(processor_state_);
     emitCircuitState();
     active_wires_.erase(active_wires_.begin() + always_active_wires_count_,

@@ -66,6 +66,9 @@ bool RV5StageVM_Base::StepAndNotify()
     }
     last_executed_pc_ = id_ex_reg_.pc; // this pc will be executed in this step,
     //so we set it as the last executed pc before we step
+    // The instruction in MEM/WB is the one pipeline_writeback() retires in
+    // this Step() (it counts every non-bubble there, :670-676).
+    const uint64_t retiring = mem_wb_reg_.pc;
     Step();
     SetActiveWireNames();
     cpi_ = instructions_retired_
@@ -75,6 +78,7 @@ bool RV5StageVM_Base::StepAndNotify()
                     : 0.0f;
 
     setProcessorState();
+    processor_state_.retiredPC = retiring;
     emitCircuitState();
     emit processorClockedSignal(processor_state_);
     // An exit service reached by this manual step ends the program here,
@@ -167,6 +171,7 @@ void RV5StageVM_Base::setProcessorState()
     // processor_state_.programCounters[toIndex(PipelineStage::WB)]  = mem_wb_reg_.pc;
     processor_state_.programCounters =
     {program_counter_, if_id_reg_.pc, id_ex_reg_.pc, ex_mem_reg_.pc, mem_wb_reg_.pc};
+    processor_state_.instructionsRetired = instructions_retired_;
 }
 
 bool RV5StageVM_Base::isBranchInstruction(uint32_t instruction)

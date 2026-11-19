@@ -68,7 +68,16 @@ namespace Kites
 struct ProcessorState
 {
     std::vector<uint64_t> programCounters;
-    uint64_t lastExecutedPC;
+    uint64_t lastExecutedPC{UINT64_MAX};
+    /// The instruction that retired on the clock this state was emitted
+    /// for (UINT64_MAX, i.e. INVALID_PC, for none). Only meaningful on a
+    /// clock that increased instructionsRetired; Undo and Redo leave it
+    /// alone, and the Profiler replays its own history for those.
+    uint64_t retiredPC{UINT64_MAX};
+    /// The processor's instructions_retired_ when this state was emitted.
+    /// The Profiler counts by its changes: +1 is a retire, a drop is an
+    /// Undo, no change is a refresh or a bubble.
+    uint64_t instructionsRetired{0};
     void reset()
     {
         programCounters.assign(programCounters.size(), 0);

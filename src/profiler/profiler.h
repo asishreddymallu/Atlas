@@ -5,6 +5,7 @@
 #include <QVariant>
 #include <map>
 #include <string>
+#include <vector>
 #include "common/assembled_program.h"
 #include "common/instruction_types.h"
 #include "utils/to_index.h"
@@ -33,6 +34,15 @@ public:
 
     int getLineExecutionCount(int lineNumber)const;
 
+    /// Every line that has retired at least once -> times retired.
+    const std::map<int, int> &getLineExecutionCounts() const { return m_lineNumberToExecutionCounts; }
+
+    /// Set by ProcessorManager::redo around the processor's Redo(): the
+    /// state Redo emits restores a saved cycle and carries no fresh
+    /// retiredPC, so a retire seen while this is set is replayed from
+    /// what Undo took back.
+    void setReplayingRedo(bool replaying) { m_replayingRedo = replaying; }
+
 public slots:
     void processorClockedSlot(const ProcessorState& processorState);
 
@@ -53,9 +63,20 @@ private:
     std::map<int, instruction_set::InstructionType>       m_lineNumberToinstructionType{};
 
     InstructionTypeCounts m_instructionTypeCounts{};
+
+    // The line of every instruction retired so far, oldest first. Its
+    // size is always the processor's instructions_retired_ as last seen.
+    std::vector<int> m_retiredLines{};
+    // What Undo took off m_retiredLines, for Redo to put back.
+    std::vector<int> m_undoneLines{};
+    bool             m_replayingRedo{false};
+
+    int  lineOfPc(uint64_t pc) const;
+    void addToLine(int lineNumber, int delta);
 signals:
     void profilerReset();
-    void incrementLineExecutionCountSignal(int lineNumber);
+    /// A line's count changed (up on a retire, down on an Undo).
+    void lineExecutionCountChangedSignal(int lineNumber, int count);
     void updateLineInstructionTypeSignal(std::map<int, instruction_set::InstructionType> lineInstructionTypes = {});
     void updateInstructionTypeCountsSignal();
 };

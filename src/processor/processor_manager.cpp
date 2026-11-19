@@ -68,6 +68,8 @@ void ProcessorManager::changeProcessor(ProcessorType vmType)
     }
     m_currentProcessorType = vmType;
     m_currentProcessor = ProcessorFactory::createVM(vmType);
+    // The new processor has no program, so there is nothing to profile.
+    m_profiler.Reset();
     m_currentProcessor->step_delay_ = m_stepDelayMs;
     connect(m_currentProcessor.get(), &ProcessorBase::processorClockedSignal, this,
             &ProcessorManager::processorStateChangedSignal, Qt::DirectConnection);
@@ -135,6 +137,9 @@ void ProcessorManager::loadProgram(const AssembledProgram &program)
 {
     m_currentProgram = program;
     m_currentProcessor->LoadProgram(program);
+    // A new program starts a new profile (known_issues 85: Reset had no
+    // callers, so counts carried over from the last program).
+    m_profiler.Reset();
     m_profiler.setInstructionToLineMapping(program);
     m_profiler.setLineNumberToInstructionTypeMapping(program);
     updateEditorHighlight({0});
@@ -376,7 +381,11 @@ void ProcessorManager::undo()
 }
 void ProcessorManager::redo()
 {
+    // Redo restores a saved cycle rather than running it, so the state it
+    // emits has no fresh retiredPC; the profiler replays what it undid.
+    m_profiler.setReplayingRedo(true);
     m_currentProcessor->Redo();
+    m_profiler.setReplayingRedo(false);
 }
 
 void ProcessorManager::pushInput(const std::string &input)

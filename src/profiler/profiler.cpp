@@ -13,8 +13,13 @@ Profiler::Profiler(QObject *parent) : QObject(parent)
 void Profiler::Reset()
 {
     m_lineNumberToExecutionCounts.clear();
+    m_lineNumberToinstructionType.clear();
+    m_instructionNumberToLineNumber.clear();
     m_instructionTypeCounts.fill(0);
+    m_retiredLines.clear();
+    m_undoneLines.clear();
     emit profilerReset();
+    emit updateInstructionTypeCountsSignal();
 }
 
 void Profiler::setInstructionToLineMapping(const AssembledProgram &program)
@@ -79,14 +84,63 @@ void Profiler::setLineNumberToInstructionTypeMapping(const AssembledProgram &pro
     emit updateInstructionTypeCountsSignal();
 }
 
+int Profiler::lineOfPc(uint64_t pc) const
+{
+    // find, not operator[]: a bubble's INVALID_PC used to be inserted and
+    // counted as line 0 (known_issues 85).
+    const auto it = m_instructionNumberToLineNumber.find(static_cast<unsigned int>(pc / 4));
+    return it == m_instructionNumberToLineNumber.end() ? -1 : static_cast<int>(it->second);
+}
+
+void Profiler::addToLine(int lineNumber, int delta)
+{
+    if (lineNumber < 0)
+        return;
+    int &count = m_lineNumberToExecutionCounts[lineNumber];
+    count += delta;
+    const int now = count;
+    if (now <= 0)
+        m_lineNumberToExecutionCounts.erase(lineNumber);
+    emit lineExecutionCountChangedSignal(lineNumber, now > 0 ? now : 0);
+}
+
 void Profiler::processorClockedSlot(const ProcessorState &processorState)
 {
-    int executedLine = m_instructionNumberToLineNumber
-    [static_cast<unsigned int>(processorState.lastExecutedPC / 4)];
-    qDebug() << "Processor clocked. Last executed PC: " << processorState.lastExecutedPC
-             << ", Instruction number: " << (processorState.lastExecutedPC / 4)
-             << ", Mapped line number: " << executedLine;
-    emit incrementLineExecutionCountSignal(executedLine);
+    // Counted by retirement, from the change in the processor's retired
+    // count, not by signal: Undo, Redo and the extra clock a Run emits on
+    // Stop all emit this signal too, and used to add a count each.
+    const size_t retired = static_cast<size_t>(processorState.instructionsRetired);
+    const size_t seen    = m_retiredLines.size();
+
+    if (retired < seen)
+    {
+        // Undo: take back what the undone cycles retired.
+        while (m_retiredLines.size() > retired)
+        {
+            const int line = m_retiredLines.back();
+            m_retiredLines.pop_back();
+            m_undoneLines.push_back(line);
+            addToLine(line, -1);
+        }
+        return;
+    }
+    if (retired != seen + 1)
+        return; // nothing retired (a bubble, a stall, a refresh), or out of step
+
+    int line = -1;
+    if (m_replayingRedo && !m_undoneLines.empty())
+    {
+        line = m_undoneLines.back();
+        m_undoneLines.pop_back();
+    }
+    else
+    {
+        // A fresh cycle: what was undone is gone, as in the processor.
+        m_undoneLines.clear();
+        line = lineOfPc(processorState.retiredPC);
+    }
+    m_retiredLines.push_back(line);
+    addToLine(line, +1);
 }
 
 // uint64_t Profiler::resolveExecutedLineFromState(const ProcessorState& processorState) const

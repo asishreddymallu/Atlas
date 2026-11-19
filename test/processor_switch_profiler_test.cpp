@@ -102,8 +102,11 @@ int countsAfter(const QTemporaryDir &dir, const ProcessorType *switchTo)
     ProcessorManager manager;
     int              fired = 0;
 
-    QObject::connect(manager.getProfiler(), &Profiler::incrementLineExecutionCountSignal, &manager,
-                     [&fired](int) { ++fired; });
+    // Was incrementLineExecutionCountSignal, one per clock. The profiler
+    // now owns the counts and reports a line's new count when it changes
+    // (U5, known_issues 85), so this counts those.
+    QObject::connect(manager.getProfiler(), &Profiler::lineExecutionCountChangedSignal, &manager,
+                     [&fired](int, int) { ++fired; });
 
     if (switchTo)
         manager.changeProcessor(*switchTo);
