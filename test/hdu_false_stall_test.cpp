@@ -238,6 +238,11 @@ struct Param
     Model       model;
 };
 
+void PrintTo(const Param &param, std::ostream *os)
+{
+    *os << kHduCases[param.index].name << "/" << name(param.model);
+}
+
 std::vector<Param> params()
 {
     std::vector<Param> out;
