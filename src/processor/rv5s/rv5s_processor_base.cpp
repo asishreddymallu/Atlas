@@ -110,6 +110,12 @@ void RV5StageVM_Base::Reset()
     instructions_retired_ = 0;
     cycle_s_              = 0;
     stall_cycles_         = 0;
+    // Both used to survive a Reset, so a reload kept the last program's
+    // totals.
+    branch_mispredictions_ = 0;
+    total_stall_cycles_    = 0;
+    cpi_                   = 0;
+    ipc_                   = 0;
     pc_redirected_        = false;
     last_breakpoint_pc_.reset(); // Clear breakpoint tracking on reset
 
@@ -135,6 +141,7 @@ void RV5StageVM_Base::begin_step_delta()
     current_delta_.old_stall_cycles          = stall_cycles_;
     current_delta_.old_instructions_retired  = instructions_retired_;
     current_delta_.old_branch_mispredictions = branch_mispredictions_;
+    current_delta_.old_total_stall_cycles    = total_stall_cycles_;
 
     current_delta_.pipeline_register_change.old_if_id_reg  = if_id_reg_;
     current_delta_.pipeline_register_change.old_id_ex_reg  = id_ex_reg_;
@@ -149,6 +156,7 @@ void RV5StageVM_Base::finalize_step_delta()
     current_delta_.new_stall_cycles          = stall_cycles_;
     current_delta_.new_instructions_retired  = instructions_retired_;
     current_delta_.new_branch_mispredictions = branch_mispredictions_;
+    current_delta_.new_total_stall_cycles    = total_stall_cycles_;
 
     current_delta_.pipeline_register_change.new_if_id_reg  = if_id_reg_;
     current_delta_.pipeline_register_change.new_id_ex_reg  = id_ex_reg_;
@@ -1110,6 +1118,7 @@ void RV5StageVM_Base::Undo()
     instructions_retired_ = last.old_instructions_retired;
     stall_cycles_ = last.old_stall_cycles;
     branch_mispredictions_ = last.old_branch_mispredictions;
+    total_stall_cycles_ = last.old_total_stall_cycles;
 
     if_id_reg_ = last.pipeline_register_change.old_if_id_reg;
     id_ex_reg_ = last.pipeline_register_change.old_id_ex_reg;
@@ -1171,6 +1180,7 @@ void RV5StageVM_Base::Redo()
     instructions_retired_ = next.new_instructions_retired;
     stall_cycles_ = next.new_stall_cycles;
     branch_mispredictions_ = next.new_branch_mispredictions;
+    total_stall_cycles_ = next.new_total_stall_cycles;
 
     if_id_reg_ = next.pipeline_register_change.new_if_id_reg;
     id_ex_reg_ = next.pipeline_register_change.new_id_ex_reg;

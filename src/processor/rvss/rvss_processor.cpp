@@ -126,6 +126,10 @@ void RVSSProcessor::setProcessorState()
     {program_counter_,INVALID_PC,INVALID_PC,INVALID_PC,INVALID_PC};
     processor_state_.lastExecutedPC = last_executed_pc_;
     processor_state_.instructionsRetired = instructions_retired_;
+    // Never set on rvss before, so CPI and IPC read 0. One instruction a
+    // cycle: both are 1 once anything has run.
+    cpi_ = instructions_retired_ ? static_cast<double>(cycle_s_) / instructions_retired_ : 0.0;
+    ipc_ = cycle_s_ ? static_cast<double>(instructions_retired_) / cycle_s_ : 0.0;
 }
 
 void RVSSProcessor::Run()
@@ -1185,6 +1189,8 @@ void RVSSProcessor::Reset()
     program_counter_ = 0;
     instructions_retired_ = 0;
     cycle_s_ = 0;
+    cpi_ = 0;
+    ipc_ = 0;
     last_breakpoint_pc_ = UINT64_MAX; // Clear breakpoint tracking on reset
     registers_.Reset();
     memory_controller_.reset();

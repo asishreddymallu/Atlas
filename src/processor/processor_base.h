@@ -73,6 +73,8 @@ struct StepDelta
     unsigned int new_stall_cycles{};
     unsigned int old_branch_mispredictions{};
     unsigned int new_branch_mispredictions{};
+    unsigned int old_total_stall_cycles{};
+    unsigned int new_total_stall_cycles{};
     std::vector<RegisterChange> register_changes{};
     std::vector<MemoryChange> memory_changes{};
 };
