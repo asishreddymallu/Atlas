@@ -52,7 +52,10 @@ void ProfilerTab::setProcessorManager(ProcessorManager *manager)
     auto *view     = new QTableView(this);
     view->setObjectName("profilerMetricsTableView");
     view->setModel(m_metricsModel);
-    view->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    // The names are the long column ("Branch mispredictions"); with both
+    // columns stretched they were cut to "Branch misp...".
+    view->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    view->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     applyDataTableStyle(view);
     ui->verticalLayout_3->insertWidget(0, view);
     connect(manager, &ProcessorManager::processorStateChangedSignal, m_metricsModel,
