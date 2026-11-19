@@ -7,6 +7,7 @@
 #include "ui/theme/theme_manager.h"
 #include "utils/to_index.h"
 #include <QAction>
+#include <QDockWidget>
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QThread>
@@ -18,6 +19,7 @@ class QSpinBox;
 namespace Kites
 {
 class OutputDock;
+class TimingGridPanel;
 QT_BEGIN_NAMESPACE
 namespace Ui
 {
@@ -137,6 +139,9 @@ private:
     // The Output panel, and a manual Step held until a read's input is
     // entered there.
     OutputDock        *m_outputDock {nullptr};
+    QDockWidget       *m_timingDock {nullptr};
+    TimingGridPanel   *m_timingPanel {nullptr};
+    QAction           *m_timingToggleAction {nullptr};
     bool               m_stepAwaitingInput {false};
     bool               m_outputDockSized {false};
     void showOutputDock();

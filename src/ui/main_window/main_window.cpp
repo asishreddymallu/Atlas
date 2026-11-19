@@ -1,3 +1,4 @@
+#include "ui/timing_grid/timing_grid.h"
 #include "main_window.h"
 #include "assembler/assembler.h"
 #include "common/assembled_program.h"
@@ -20,6 +21,7 @@
 #include "ui_main_window.h"
 #include "utils/utils.h"
 #include <QActionGroup>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -238,6 +240,21 @@ void MainWindow::setUpProblemsDock()
     outputToggle->setText("Output");
     setActionHint(outputToggle, "Show or hide the program's output");
     viewMenu->addAction(outputToggle);
+
+    // WP-03: the pipeline timing grid, a bottom dock like Output so it can sit
+    // under the Processor tab's circuit. Hidden until asked for.
+    m_timingDock = new QDockWidget("Pipeline timing", this);
+    m_timingDock->setObjectName("timingDock");
+    m_timingPanel = new TimingGridPanel(m_timingDock);
+    m_timingPanel->setUp(m_processorManager, m_stepAction, m_undoAction);
+    m_timingDock->setWidget(m_timingPanel);
+    addDockWidget(Qt::BottomDockWidgetArea, m_timingDock);
+    tabifyDockWidget(m_outputDock, m_timingDock);
+    m_timingDock->hide();
+    m_timingToggleAction = m_timingDock->toggleViewAction();
+    m_timingToggleAction->setText("Pipeline timing");
+    setActionHint(m_timingToggleAction, "Show or hide the pipeline timing grid");
+    viewMenu->addAction(m_timingToggleAction);
     // Queued: the processor emits these on the worker thread during a Run.
     connect(m_processorManager, &ProcessorManager::programOutputSignal, m_outputDock,
             [this](const QString &text)
