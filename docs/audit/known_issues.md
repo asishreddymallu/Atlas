@@ -5678,3 +5678,48 @@ Only `fflags`, `frm` and `fcsr` are CSR names (`csr_to_address`,
 Recorded in E4 as decided, not implemented. `rdcycle`/`rdinstret`
 would need both the names and live counters.
 
+
+---
+
+## 140. The window has no way to give an ecall read its input
+
+`ProcessorBase::ServeSyscall`'s read service (`SYSCALL_READ` = 63)
+waits on `input_queue_` (`processor_base.cpp:648-652`).
+`ProcessorBase::PushInput` (`processor_base.h:364`) fills that queue,
+and its only callers are `ProcessorManager::pushInput`
+(`processor_manager.cpp:382`) and `kites-cli`'s `input` command
+(`command_handler.cpp:265`). Nothing in `src/ui/` calls either. So a
+program that reads from stdin in the window waits until Stop. Stop does
+end it, because the wait also wakes on `stop_requested_` (`:651`).
+
+**Measured** in U5 by `GuiRunSmoke.AnEcallReadWaitsAndStopEndsIt`, on all
+five models. 500 ms after Run, the run action still reads "Stop", and
+Stop returns the window to idle. The read itself, with pushed input, is
+covered without the window by `test/ecall_syscall_test.cpp`.
+
+Not fixed: it needs an input widget (the log panel, or a prompt on
+`VM_STDIN_START`). That is a UI feature, not this stage's crash.
+
+---
+
+## 141. `fence`, `fence_i`, `fmv.s.x` and `fmv.x.s` are listed as instructions but do not assemble
+
+All four are in the assembler's tables:
+- `fence` and `fence_i` are in `valid_instructions`
+  (`src/common/instructions.cpp:363`), `PseudoInstructions` (`:445`)
+  and `instruction_syntax_map` (both `O` and `PSEUDO`, `:838-839`,
+  `:870-871`), and `getExpectedSyntaxes` documents `fence`.
+- `fmv.s.x` and `fmv.x.s` are in `instruction_string_map`
+  (`:330`, `:332`), as old names of `fmv.w.x` and `fmv.x.w`.
+
+None of them assembles. `fence` gives "Invalid instruction type: fence",
+and nothing in `src/assembler/` handles it. The two `fmv` aliases give
+"Failed to parse file". So completion and the docs offer four
+mnemonics the assembler rejects.
+
+**Measured** in U5 by `test/profiler_instruction_type_test.cpp`, which
+enumerates every mnemonic in those maps. All four are pinned there as
+"listed but rejected" (`kListedButRejected`). If one starts to assemble,
+its case fails until it is given a profiler type.
+
+Not fixed: assembler work, outside a UI stage.
