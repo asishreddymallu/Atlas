@@ -38,23 +38,6 @@ AssembledProgram assemble(const std::string &filename);
  */
 AssembledProgram assemble(std::istream &source);
 
-/**
- * @brief Assembles source read from an in-memory stream, without touching disk.
- *
- * Used for live diagnostics on editor content that hasn't been saved. Unlike the
- * file-based overload, this never writes the disassembly/error dump files (those
- * paths are shared globals and not safe to write from a background/live-typing
- * call), and never throws on parse errors — callers should inspect the returned
- * program together with a diagnostics query on their own Parser if they need
- * errors (see LanguageService, which drives this directly).
- *
- * @param source The stream to assemble.
- * @param virtualFilename A name to report in diagnostics (not a real file).
- * @param diagnosticsOut Populated with every parse error/diagnostic found.
- * @return The assembled program (only meaningful when diagnosticsOut is empty).
- */
-std::vector<ParseError> getDiagnostics(std::istream &source, const std::string &virtualFilename);
-
 }  // namespace Kites
 
 #endif // ASSEMBLER_H
