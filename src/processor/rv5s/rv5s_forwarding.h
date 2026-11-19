@@ -92,9 +92,16 @@ inline bool producerWritesFpr(uint32_t instruction, bool freg_write)
         return false;
     }
     const uint8_t opcode = instruction & 0b1111111;
+    if (opcode == 0b0100111)
+    {
+        // fsw/fsd write no register. Decode sets freg_write for every F/D
+        // instruction, so without this an fsw claimed to write the f register
+        // named by imm[4:0] (bits 11:7) and stalled a reader of it (E6).
+        return false;
+    }
     if (opcode != 0b1010011)
     {
-        return true; // an FP load, store or FMA writes an f register
+        return true; // an FP load or FMA writes an f register
     }
     const uint8_t funct7 = (instruction >> 25) & 0b1111111;
     // everything but the compare, float-to-integer, classify and move-out rows
