@@ -22,7 +22,7 @@
  *     younger instruction is discarded, and the target is fetched in the
  *     next cycle. A taken branch is decided in MEM: 3. jal in EX: 2. An
  *     ecall and a Zicsr instruction are served at WB and refetch from
- *     pc+4: 4. (The E1 comment at rv5s_processor_base.cpp:801 and the U5
+ *     pc+4: 4. (The E1 comment at rv5s_processor_base.cpp:814 and the U5
  *     brief say three for ecall; the rule gives four, and four is what
  *     runs: known_issues 143.)
  *   - fetch assumes not taken: each taken conditional branch is one
