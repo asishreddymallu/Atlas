@@ -182,14 +182,14 @@ TEST_P(ProcessorNoteMeasured, TheNoteStatesTheMeasuredTable)
     const std::string note = processorNote(true, m.hazard, m.forwarding);
 
     // The note's claims are fixed phrases, so each can be matched exactly:
-    //   nothing needs padding     -> "No nops needed"
+    //   nothing needs padding     -> "Nothing to pad"
     //   only a load needs padding -> "a load needs N nop"
     //   every dependent pair      -> "needs N nops" (the worst case)
     //   li/la come out wrong      -> "give wrong results"
     const int worst = std::max({r.pad[Alu], r.pad[Load], r.pad[Fp]});
     std::string claim;
     if (worst == 0)
-        claim = "No nops needed";
+        claim = "Nothing to pad";
     else if (r.pad[Alu] == 0 && r.pad[Fp] == 0)
         claim = "a load needs " + std::to_string(r.pad[Load]) + " nop";
     else

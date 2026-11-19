@@ -71,35 +71,31 @@ const char *processorDescription(ProcessorType type)
 
 const char *processorNote(bool pipeline, bool hazard, bool forwarding)
 {
+    // Every number below is measured, on every test run, by
+    // test/processor_note_measure_test.cpp: a dependent pair with 0..4 nops
+    // between producer and consumer (ALU, load and FP producers), and li/la
+    // run unpadded. That test fails if a number here stops matching.
     if (!pipeline)
     {
         return "Every instruction finishes in one cycle; there are no pipeline hazards.";
     }
     if (hazard && forwarding)
     {
-        // rv5s_hdu.cpp:82-104 - with forwarding on, the only stall is
-        // the load-use one; everything else is handled by the four
-        // forwarding paths.
-        return "The pipeline stalls one cycle on a load-use hazard and forwards everything else.";
+        return "Forwards results, and stalls one cycle when a load is used right away.\n"
+               "Nothing to pad.";
     }
     if (hazard)
     {
-        // rv5s_hdu.cpp:106-117 - two stalls then one, i.e. the dependent
-        // instruction waits until the producer has reached write-back.
-        return "Without forwarding, a result is only available after write-back; the pipeline "
-               "stalls until then.";
+        return "No forwarding: stalls until the producer reaches write-back.\n"
+               "Nothing to pad.";
     }
     if (forwarding)
     {
-        // rv5s_processor_nh_f.cpp never calls check_data_hazard, so the
-        // load-use case the forwarding unit cannot cover is not caught
-        // either. Measured in known_issues 77: a dependent chain comes
-        // out as 0 on rv5-nh-f as well as rv5-nh-nf.
-        return "Without hazard detection the pipeline never stalls, so dependent instructions "
-               "need nops between them.";
+        return "Forwards results but never stalls: a load needs 1 nop before its use.\n"
+               "Other dependent pairs need no nops.";
     }
-    return "Without hazard detection the pipeline never stalls, and without forwarding a result "
-           "is only available after write-back: dependent instructions need nops between them.";
+    return "No stalls, no forwarding: a value is ready at write-back, so its reader needs 2 nops.\n"
+           "li of a large value and la give wrong results here.";
 }
 
 } // namespace Kites

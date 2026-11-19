@@ -60,14 +60,14 @@ ProcessorChoice processorChoiceFor(ProcessorType type);
 const char *processorDescription(ProcessorType type);
 
 /**
- * @brief One line on what this combination costs the programmer.
+ * @brief At most two short lines on what this combination costs the
+ *        programmer: whether it stalls or forwards, and how many nops a
+ *        dependent instruction needs.
  *
- * Each clause is the code's behaviour, not a general statement about
- * pipelines: with forwarding the hazard unit stalls only on a load-use
- * (`rv5s_hdu.cpp:82-104`); without it, it stalls until the producer has
- * written back (`:106-117`); and the two no-hazard variants never
- * consult it at all, which is why a dependent chain silently evaluates
- * to zero on both of them (known_issues 77).
+ * The nop counts are measured, not reasoned: test/
+ * processor_note_measure_test.cpp runs dependent pairs at every distance
+ * on each pipeline and fails if the note stops matching. The chooser shows
+ * it, and the status bar's processor label carries it as its tooltip.
  */
 const char *processorNote(bool pipeline, bool hazard, bool forwarding);
 

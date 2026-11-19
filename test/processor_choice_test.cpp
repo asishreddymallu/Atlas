@@ -182,22 +182,25 @@ TEST(ProcessorChoice, TheNoteSaysWhatEachCombinationCosts)
     //   forwarding on  -> rv5s_hdu.cpp:82-104 stalls only on load-use
     //   forwarding off -> rv5s_hdu.cpp:106-117 stalls to write-back
     //   no hazard unit -> rv5s_processor_nh_nf.cpp / nh_f.cpp never call
-    //                     check_data_hazard, and known_issues 77 measured
-    //                     a dependent chain coming out as 0 on BOTH.
+    //                     check_data_hazard; known_issues 77's "0 on both"
+    //                     was corrected there (nh-f forwards; only a load
+    //                     needs a nop).
+    // U5: the pipeline notes now state measured nop counts; the numbers
+    // are pinned against the machine by processor_note_measure_test.cpp.
     EXPECT_EQ(std::string(processorNote(false, true, true)),
               "Every instruction finishes in one cycle; there are no pipeline hazards.");
     EXPECT_EQ(std::string(processorNote(true, true, true)),
-              "The pipeline stalls one cycle on a load-use hazard and forwards everything else.");
+              "Forwards results, and stalls one cycle when a load is used right away.\n"
+              "Nothing to pad.");
     EXPECT_EQ(std::string(processorNote(true, true, false)),
-              "Without forwarding, a result is only available after write-back; the pipeline "
-              "stalls until then.");
+              "No forwarding: stalls until the producer reaches write-back.\n"
+              "Nothing to pad.");
     EXPECT_EQ(std::string(processorNote(true, false, true)),
-              "Without hazard detection the pipeline never stalls, so dependent instructions "
-              "need nops between them.");
+              "Forwards results but never stalls: a load needs 1 nop before its use.\n"
+              "Other dependent pairs need no nops.");
     EXPECT_EQ(std::string(processorNote(true, false, false)),
-              "Without hazard detection the pipeline never stalls, and without forwarding a "
-              "result is only available after write-back: dependent instructions need nops "
-              "between them.");
+              "No stalls, no forwarding: a value is ready at write-back, so its reader needs 2 nops.\n"
+              "li of a large value and la give wrong results here.");
 }
 
 TEST(ProcessorChoice, TheSingleCycleNoteDoesNotDependOnTheBoxes)

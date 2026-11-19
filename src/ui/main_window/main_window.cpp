@@ -253,7 +253,6 @@ void MainWindow::setUpStatusBar()
     // where it has always been, hard against the right edge.
     m_processorStatusLabel = new QLabel(this);
     m_processorStatusLabel->setObjectName("processorStatusLabel");
-    m_processorStatusLabel->setToolTip("The processor model this window is running");
     statusBar->addPermanentWidget(m_processorStatusLabel);
     updateProcessorStatusLabel();
 
@@ -267,9 +266,13 @@ void MainWindow::updateProcessorStatusLabel()
     {
         return;
     }
-    m_processorStatusLabel->setText(
-        QStringLiteral("Processor: ") +
-        QString::fromUtf8(processorDescription(m_processorManager->getProcessorType())));
+    const ProcessorType type = m_processorManager->getProcessorType();
+    m_processorStatusLabel->setText(QStringLiteral("Processor: ") +
+                                    QString::fromUtf8(processorDescription(type)));
+    // The chooser's note for the same model, so the two always agree.
+    const ProcessorChoice choice = processorChoiceFor(type);
+    m_processorStatusLabel->setToolTip(
+        QString::fromUtf8(processorNote(choice.pipeline, choice.hazard, choice.forwarding)));
 }
 
 void MainWindow::setUpExecutionActions()
