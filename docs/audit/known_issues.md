@@ -5186,15 +5186,18 @@ harness now reports a CSR unit's csr field (`instruction_docs_test.cpp:198`).
   uninterrupted run; the snapshot includes `fflags`/`frm`/`fcsr`.
 
 **Red:**
-- at `e2b2214`, 60 tests: every CSR program on every model, and rvss
-  too, which had no aliasing; the pipelines' frm ordering; and the 5
-  Undo cases, which are 115;
+- at `e2b2214`, 64 tests (re-counted at that commit):
+  - 59 CSR-program failures: SixForms ×3, ZeroRegisterRules and Aliasing
+    on every model, padded and unpadded (rvss included, since it had no
+    aliasing); FrmOrdering s/d on the pipelines;
+  - the 5 `CsrUndo …FpFlagsAndFrm` cases (115);
+  - the leak case passed there, trivially;
 - the pseudos: all 6.
 
 **Controls:**
 - the commit reverted (rvss's lines excluded, since 115/108 rewrote
-  them): 69 fail. That is the same 59 CSR-program failures as at the
-  test commit, rvss's included (aliasing is reverted), plus
+  them): 69 fail. That is the same 59 CSR-program failures as at
+  `e2b2214`, rvss's included (aliasing is reverted), plus
   `CsrUndo …FpFlagsAndFrm` on all five (the retirement record is
   reverted too), plus the pseudo program on 5;
 - flags written in EX again, everything else kept: 7 fail.
