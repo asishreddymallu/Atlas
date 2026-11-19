@@ -40,6 +40,8 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QLabel>
+#include <QKeyEvent>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QTimer>
 #include <QPlainTextEdit>
@@ -601,6 +603,136 @@ TEST_P(GuiRunSmoke, ASteppedExitKeepsItsStateToo)
     QLabel *status = runStatus(w.window);
     ASSERT_NE(status, nullptr);
     EXPECT_EQ(status->text(), "Program finished");
+}
+
+// ---------------------------------------------------------------------------
+// U6 Part C: the Output panel (known_issues 140). Found by object name:
+// "programOutput" (read-only text), "programInput" (the line a read asks
+// for). The programs are padded per model with padFor(); values by hand:
+//   print_int 42, then print_string "hi" at 0x10000000 (the data section's
+//   first byte, config.h:37): the panel reads exactly "42hi".
+//   read fd 0 into 0x10000000, length 8, the user types "7": a0 = 1 (bytes
+//   read), and the doubleword there is '7' = 0x37 followed by zeros.
+namespace
+{
+const char *kPrintProgram = ".data\n"
+                            "msg: .string \"hi\"\n"
+                            ".text\n"
+                            "    addi a0, x0, 42\n"
+                            "    addi a7, x0, 1\n"
+                            "    ecall\n"
+                            "    lui a0, 0x10000\n"
+                            "    addi a7, x0, 4\n"
+                            "    ecall\n";
+const char *kReadProgram = ".data\n"
+                           "buf: .dword 0\n"
+                           ".text\n"
+                           "    lui a1, 0x10000\n"
+                           "    addi a0, x0, 0\n"
+                           "    addi a2, x0, 8\n"
+                           "    addi a7, x0, 63\n"
+                           "    ecall\n"
+                           "    ld t0, 0(a1)\n";
+
+QPlainTextEdit *outputText(MainWindow &w) { return w.findChild<QPlainTextEdit *>("programOutput"); }
+QLineEdit      *inputLine(MainWindow &w) { return w.findChild<QLineEdit *>("programInput"); }
+
+bool inputOffered(MainWindow &w)
+{
+    QLineEdit *line = inputLine(w);
+    return line && line->isEnabled();
+}
+
+void typeAndEnter(QLineEdit *line, const QString &text)
+{
+    line->setText(text);
+    // Return as a key event, the way a user presses it (no QtTest link).
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(line, &press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(line, &release);
+    QApplication::processEvents();
+}
+} // namespace
+
+TEST_P(GuiRunSmoke, PrintsShowInTheOutputPanel)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    const ProcessorType type = typeNamed(GetParam());
+    w.use(type);
+    ASSERT_TRUE(w.runToEnd(padFor(type, kPrintProgram)));
+    QPlainTextEdit *out = outputText(w.window);
+    ASSERT_NE(out, nullptr) << "no Output panel (programOutput)";
+    waitUntil([&] { return out->toPlainText() == "42hi"; }, 2000);
+    EXPECT_EQ(out->toPlainText().toStdString(), "42hi");
+    EXPECT_TRUE(out->isReadOnly());
+
+    // A second Run clears the panel first: still exactly one "42hi".
+    ASSERT_TRUE(w.runToEnd(padFor(type, kPrintProgram)));
+    waitUntil([&] { return out->toPlainText() == "42hi"; }, 2000);
+    EXPECT_EQ(out->toPlainText().toStdString(), "42hi") << "the panel was not cleared on re-Run";
+}
+
+TEST_P(GuiRunSmoke, ARunReadTakesTheLineTypedIntoThePanel)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    const ProcessorType type = typeNamed(GetParam());
+    w.use(type);
+    w.editor->setPlainText(QString::fromStdString(padFor(type, kReadProgram)));
+    QApplication::processEvents();
+    w.run->trigger();
+    ASSERT_TRUE(waitUntil([&] { return inputOffered(w.window); }, 5000))
+        << "the panel never offered an input line";
+    typeAndEnter(inputLine(w.window), "7");
+    ASSERT_TRUE(waitUntil([&] { return w.debug->isEnabled() && w.run->text() == "Run"; }));
+    EXPECT_EQ(w.gpr(10), 1u) << "a0 is the number of bytes read";
+    EXPECT_EQ(w.gpr(5), 0x37u) << "t0 is the doubleword the read wrote";
+    EXPECT_FALSE(inputOffered(w.window)) << "the input line stayed open after the read";
+}
+
+TEST_P(GuiRunSmoke, StopWhileARunWaitsForInputReturnsToIdle)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    const ProcessorType type = typeNamed(GetParam());
+    w.use(type);
+    w.editor->setPlainText(QString::fromStdString(padFor(type, kReadProgram)));
+    QApplication::processEvents();
+    w.run->trigger();
+    ASSERT_TRUE(waitUntil([&] { return inputOffered(w.window); }, 5000));
+    EXPECT_TRUE(w.stop());
+    EXPECT_FALSE(inputOffered(w.window)) << "the input line stayed open after Stop";
+}
+
+TEST_P(GuiRunSmoke, SteppingOntoAReadAsksForInputInsteadOfFreezing)
+{
+    Window w;
+    ASSERT_TRUE(w.ready());
+    const ProcessorType type = typeNamed(GetParam());
+    w.use(type);
+    w.editor->setPlainText(QString::fromStdString(padFor(type, kReadProgram)));
+    QApplication::processEvents();
+    w.debug->trigger();
+    ASSERT_TRUE(waitUntil([&] { return w.step->isEnabled(); }));
+    // Before the fix this loop never comes back: the step that serves the
+    // read blocks the UI thread waiting for input nobody can type.
+    for (int i = 0; i < 200 && !inputOffered(w.window) && w.run->text() == "Stop"; ++i)
+    {
+        w.step->trigger();
+        spin(10);
+    }
+    ASSERT_TRUE(inputOffered(w.window)) << "stepping onto the read did not ask for input";
+    typeAndEnter(inputLine(w.window), "7");
+    for (int i = 0; i < 200 && w.run->text() == "Stop"; ++i)
+    {
+        w.step->trigger();
+        spin(10);
+    }
+    waitUntil([&] { return w.debug->isEnabled() && w.run->text() == "Run"; });
+    EXPECT_EQ(w.gpr(10), 1u);
+    EXPECT_EQ(w.gpr(5), 0x37u);
 }
 
 INSTANTIATE_TEST_SUITE_P(AllModels, GuiRunSmoke, ::testing::ValuesIn(allModelNames()), paramName);
