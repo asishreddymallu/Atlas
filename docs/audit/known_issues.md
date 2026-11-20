@@ -6408,3 +6408,74 @@ ALU result, which is the address 0x10000. So x13 = 0x10001 on nh_f, and
 forwarding the `sw` reads the old x11 and stores 0.) Without a hazard
 unit the program must place one independent instruction (or a nop)
 between a load and its consumer; the timing grid's explanation says so.
+
+## 157. FIXED: The Cache tab showed the hit rate as a fraction with a percent sign
+
+Seen in the T5 hand-test: `examples/cache_lab/stride_1.s` on L1 (2^n
+Lines 4, 2^n Ways 0, 2^n words/line 2, Write Through, Write No Allocate,
+LRU) gave Hits 768, Misses 256 and Hit rate "0.75 %".
+`CacheStats::hitRate` is a fraction, 0 to 1 (`Cache::updateStats`; the
+engine value is pinned at 0.75 by `cache_test.cpp`), and
+`CacheConfigWidget::cacheStatsUpdatedSlot` printed it with " %".
+
+**Fixed in T5** (`src/ui/cache_tab/cache_config_widget.cpp`, the one
+widget behind all three sub-tabs): the field shows `hitRate * 100` with
+two decimals, "75.00 %". The engine value is unchanged. Pinned by
+`CacheTabHitRate.{Stride1ReadsSeventyFivePercent,
+Stride16ReadsZeroPercent, OneHitInThreeReadsAPercentageWithTwoDecimals}`.
+
+## 158. DONE: The Cache tab's Statistics box shows Evictions
+
+The engine counts evictions (a valid line replaced to make room for a new
+one) and `CacheStats::evictionCount` carries it; the box had no field.
+**Added in T5**: a read-only "Evictions:" field under "Write backs:" on
+all three sub-tabs, tooltip "Valid lines replaced to make room for a new
+line.", reset with the other fields on every Run. UI only. Pinned by
+`CacheTabEvictions.*` (5 tests, E8 oracle numbers: stride_1 240,
+stride_16 60, matmul_ijk 2w256 LRU 827/389/181, FIFO 788/428/220).
+Known issue 83 still applies: Undo does not restore the cache counters,
+this field included.
+
+## 159. FIXED: The Cache tab showed one write policy and sent another
+
+The E8 survey read the engine's defaults as write-through +
+no-write-allocate, 1 set x 2 ways x 16 B, LRU; a fresh window showed
+Write hit = "Write Back". **The survey was right and the UI wrong**, in
+four ways, all in `src/ui/cache_tab/`:
+
+1. `setConfig` selected combo items by enum value as an index. The Write
+   hit list is "Write Back", "Write Through", while
+   `WritePolicy::WriteThrough` is 0: write-through was shown as Write
+   Back. (Write miss and Replacement Policy happened to be in enum order.)
+2. No combo item carried data, so `getConfig` read an invalid QVariant
+   and sent 0 for all three policies: write-through, write-allocate,
+   LRU, whatever was shown. Choosing Write Back, or FIFO, never reached
+   the engine; FIFO ran as LRU.
+3. Hence any edit of any field (2^n Lines, say) also switched the
+   engine's no-write-allocate to write-allocate.
+4. A processor switch builds new caches with the engine defaults, and
+   `CacheTab::changeMemoryController` only rebound signals: the screen
+   kept the old settings while the engine ran its defaults.
+
+**Fixed in T5**: every combo item carries its enum value (tagged by
+label); `setConfig` and `getConfig` use it. On a processor switch the
+tab applies what the sub-tabs show to the new caches (a custom
+policy's script is reloaded). The engine's defaults are unchanged.
+Pinned by `Levels/CacheTabConfig.*` (12 tests, three levels).
+
+Consequence for earlier hand-tests in the window: until T5, a cache
+configured in the Cache tab ran write-allocate and LRU whatever the
+combos said. Loads-only programs (the stride benchmarks) were not
+affected; programs with stores, or FIFO, were. The engine-level E8 tests
+and the oracle comparison configure the engine directly and are not
+affected.
+
+## 160. The hit rate's unit elsewhere
+
+**Open, nothing to fix today.** `Cache::getHitRate()` and
+`CacheStats::hitRate` are fractions (0 to 1); `cache_test.cpp` pins
+`getHitRate() == 0.75`. The Cache tab was their only display (157). The
+Profiler tab has no cache rows, the CLI (`cli/`) prints no cache
+statistics, and no dump or export (`vm_state/*.json`, the trace JSON)
+carries the hit rate. Any future display, CLI line or export of it must
+multiply by 100 if it adds a "%".

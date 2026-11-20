@@ -33,7 +33,7 @@ This builds and runs `kites_test` only — the fast path for everyday local test
 
 ## Run ctest serially
 
-Run the suite one test at a time (plain `ctest`, no `-j`). The suite has 4,114 tests and
+Run the suite one test at a time (plain `ctest`, no `-j`). The suite has 4,134 tests and
 takes about 7 minutes serially; all of them pass.
 
 Under `ctest -j` the GUI tests flake (`Pipelines/TimingGridGui.*`, `Models/TimingGridJump.*` and the other GUI suites).
