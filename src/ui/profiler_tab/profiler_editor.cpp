@@ -1,4 +1,5 @@
 #include "profiler_editor.h"
+#include "utils/to_index.h"
 #include "ui/theme/theme_manager.h"
 #include <QFontDatabase>
 #include <QPainter>
@@ -60,6 +61,19 @@ void ProfilerEditor::setExecutionCount(const std::map<int, int> &hitCounts)
     }
     setExtraSelections(selections);
     viewport()->update();
+    emit marginChangedSignal();
+}
+
+std::array<size_t, instruction_set::kInstructionTypeCount> ProfilerEditor::executedTypeCounts() const
+{
+    std::array<size_t, instruction_set::kInstructionTypeCount> counts{};
+    for (const auto &[line, hits] : m_lineNumberToExecutionCounts)
+    {
+        const auto it = m_lineTypes.find(line);
+        if (hits > 0 && it != m_lineTypes.end() && toIndex(it->second) < counts.size())
+            counts[toIndex(it->second)] += static_cast<size_t>(hits);
+    }
+    return counts;
 }
 
 void ProfilerEditor::setInstructionTypes(const std::map<int, std::string> &instructionTypes)
@@ -73,6 +87,7 @@ void ProfilerEditor::clearExecutionCount()
     m_maxExecutionCount = 0;
     setExtraSelections({});
     viewport()->update();
+    emit marginChangedSignal();
 }
 
 QColor ProfilerEditor::heatColor(int hitCount) const
@@ -122,13 +137,16 @@ void ProfilerEditor::setLineExecutionCountSlot(int lineNumber, int count)
 void ProfilerEditor::clearInstructionTypes()
 {
     m_lineNumberToInstructionType.clear();
+    m_lineTypes.clear();
     viewport()->update();
+    emit marginChangedSignal();
 }
 
 void ProfilerEditor::updateLineInstructionTypeSlot
 (const std::map<int, instruction_set::InstructionType> &instructionTypes)
 {
     m_lineNumberToInstructionType.clear();
+    m_lineTypes = instructionTypes;
     for (const auto &pair : instructionTypes)
     {
         int lineNumber = pair.first;
@@ -137,5 +155,6 @@ void ProfilerEditor::updateLineInstructionTypeSlot
             instruction_set::instructionTypeName(instrType);
     }
     viewport()->update();
+    emit marginChangedSignal();
 }
 } // namespace Kites

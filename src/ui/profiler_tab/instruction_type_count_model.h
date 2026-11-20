@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <functional>
 #include <QAbstractTableModel>
 #include "common/instruction_types.h"
 #include "utils/to_index.h"
@@ -12,8 +13,8 @@ class InstructionTypeCountModel : public QAbstractTableModel
     using InstructionTypeCounts = std::array<size_t, 
     toIndex(instruction_set::InstructionType::INSTRUCTION_TYPE_COUNT)>;
     public:
-    InstructionTypeCountModel(QObject *parent = nullptr,
-        const InstructionTypeCounts &instruction_type_counts = {});
+    /// The counts are read through `source` each time they are shown.
+    InstructionTypeCountModel(QObject *parent, std::function<InstructionTypeCounts()> source);
     QVariant data(const QModelIndex &index, int role = Qt::DisplayRole) const override;
     QVariant headerData(int section, Qt::Orientation orientation,
                         int role = Qt::DisplayRole) const override;
@@ -22,6 +23,7 @@ class InstructionTypeCountModel : public QAbstractTableModel
 
     public slots:
     void updateInstructionTypeCountsSlot();
+    void countsChangedSlot();
     
     private:
 
@@ -30,9 +32,8 @@ class InstructionTypeCountModel : public QAbstractTableModel
         InstructionType = 0,
         InstructionCount = 1
     };
-    // using const here because the model should not modify the counts, 
-    // it should only display them
-    const InstructionTypeCounts &m_instructionTypeCounts;
+    // The model only displays the counts; it never keeps its own.
+    std::function<InstructionTypeCounts()> m_source;
 };  
 } // namespace kites
 

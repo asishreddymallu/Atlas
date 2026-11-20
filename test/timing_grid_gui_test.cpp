@@ -12,6 +12,8 @@
 #include "processor/processor_manager.h"
 #include "processor/processor_types.h"
 #include "processor/registers.h"
+#include "profiler/profiler.h"
+#include "common/instruction_types.h"
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/editor_tab/main_editor.h"
 #include "ui/main_window/main_window.h"
@@ -31,6 +33,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QSpinBox>
+#include <QTableView>
 #include <QTemporaryDir>
 #include <QTimer>
 
@@ -673,3 +676,135 @@ TEST(TimingGridExplainReset, HnfStallNamesTheModelAndItsLength)
     EXPECT_TRUE(text.contains("2 stall cycles")) << text.toStdString();
     EXPECT_FALSE(text.contains("hazard detection + forwarding")) << text.toStdString();
 }
+
+// ---- T4: the Profiler's Instruction Type table counts the run -------------
+// Seen in the hand-test: on a loop the table counted each source line once
+// (the program), while Instructions retired and the editor's per-line
+// margin counted every retire (the run). The margin's per-line counts are
+// the Profiler's (it owns them, known_issues 85); the table must be their
+// sum by type.
+namespace
+{
+const char *kTypeLoop = ".text\n"
+                        "    lui x10, 0x10\n"
+                        "    addi x11, x0, 8\n"
+                        "    addi x0, x0, 0\n"
+                        "    addi x0, x0, 0\n"
+                        "L:  sw x11, 0(x10)\n"
+                        "    addi x11, x11, -1\n"
+                        "    addi x0, x0, 0\n"
+                        "    addi x0, x0, 0\n"
+                        "    bne x11, x0, L\n"
+                        "    addi x12, x0, 9\n";
+
+using TypeCounts = std::vector<size_t>;
+
+/// The Instruction Type table as shown: one count per type row.
+TypeCounts tableCounts(GridWindow &w)
+{
+    TypeCounts out;
+    auto *view = w.window.findChild<QTableView *>("instructionTypeCountTableView");
+    if (!view || !view->model())
+        return out;
+    QAbstractItemModel *m = view->model();
+    for (int r = 0; r < m->rowCount(); ++r)
+        out.push_back(m->data(m->index(r, 1)).toString().toULongLong());
+    return out;
+}
+
+/// The margin's numbers summed by type: the Profiler's per-line counts.
+TypeCounts marginCounts(ProcessorManager *m)
+{
+    TypeCounts out(instruction_set::kInstructionTypeCount, 0);
+    const Profiler *p     = m->getProfiler();
+    const auto      types = p->getLineInstructionTypes();
+    for (const auto &[line, count] : p->getLineExecutionCounts())
+    {
+        const auto it = types.find(line);
+        if (it != types.end() && toIndex(it->second) < out.size())
+            out[toIndex(it->second)] += static_cast<size_t>(count);
+    }
+    return out;
+}
+
+size_t sum(const TypeCounts &c)
+{
+    size_t s = 0;
+    for (size_t v : c)
+        s += v;
+    return s;
+}
+
+std::string show(const TypeCounts &c)
+{
+    std::string s;
+    for (size_t i = 0; i < c.size(); ++i)
+        if (c[i])
+            s += instruction_set::instructionTypeNames[i] + "=" + std::to_string(c[i]) + " ";
+    return s;
+}
+
+class ProfilerTypeTable : public ::testing::TestWithParam<size_t>
+{
+};
+} // namespace
+
+TEST_P(ProfilerTypeTable, AfterARunTheTableIsTheMarginSummedByType)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(kJumpModels[GetParam()].type);
+    ASSERT_TRUE(w.runToEnd(kTypeLoop));
+    ProcessorManager *m = w.panel->manager();
+    const TypeCounts table  = tableCounts(w);
+    const TypeCounts margin = marginCounts(m);
+    ASSERT_EQ(table.size(), margin.size());
+    EXPECT_EQ(sum(table), m->getInstructionsRetired()) << "table " << show(table);
+    EXPECT_EQ(table, margin) << "table " << show(table) << " | margin " << show(margin);
+}
+
+TEST_P(ProfilerTypeTable, UndoAndRedoMatchAStraightRun)
+{
+    constexpr int kSteps = 40, kBack = 15;
+    TypeCounts    afterUndo, afterRedo, straightShort, straightLong;
+    {
+        GridWindow w;
+        ASSERT_TRUE(w.ready());
+        w.use(kJumpModels[GetParam()].type);
+        ASSERT_TRUE(w.debugStart(kTypeLoop));
+        for (int i = 0; i < kSteps; ++i)
+            w.step->trigger();
+        spin(30);
+        for (int i = 0; i < kBack; ++i)
+            w.undo->trigger();
+        spin(30);
+        afterUndo = tableCounts(w);
+        EXPECT_EQ(sum(afterUndo), w.panel->manager()->getInstructionsRetired()) << show(afterUndo);
+        EXPECT_EQ(afterUndo, marginCounts(w.panel->manager())) << show(afterUndo);
+        for (QAction *a : w.window.findChildren<QAction *>(Qt::FindDirectChildrenOnly))
+            if (a->text() == "Redo")
+                for (int i = 0; i < kBack; ++i)
+                    a->trigger();
+        spin(30);
+        ASSERT_EQ(w.panel->currentCycle(), static_cast<uint32_t>(kSteps));
+        afterRedo = tableCounts(w);
+    }
+    for (int target : {kSteps - kBack, kSteps})
+    {
+        GridWindow w;
+        ASSERT_TRUE(w.ready());
+        w.use(kJumpModels[GetParam()].type);
+        ASSERT_TRUE(w.debugStart(kTypeLoop));
+        for (int i = 0; i < target; ++i)
+            w.step->trigger();
+        spin(30);
+        (target == kSteps ? straightLong : straightShort) = tableCounts(w);
+    }
+    EXPECT_EQ(afterUndo, straightShort) << show(afterUndo) << " vs " << show(straightShort);
+    EXPECT_EQ(afterRedo, straightLong) << show(afterRedo) << " vs " << show(straightLong);
+}
+
+INSTANTIATE_TEST_SUITE_P(Models, ProfilerTypeTable, ::testing::Values(0, 1, 2, 3, 4),
+                         [](const ::testing::TestParamInfo<size_t> &info) {
+                             return std::string(kJumpModels[info.param].name);
+                         });

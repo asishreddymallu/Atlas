@@ -28,8 +28,13 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
         "instruction types and an execution heat map.");
     if (m_profiler)
     {   
-        InstructionTypeCountModel *model = new InstructionTypeCountModel(this, 
-        m_profiler->getInstructionTypeCounts());
+        // The table sums the margin's per-line counts by type: the run, as
+        // Instructions retired counts it, not each source line once (T4).
+        ProfilerEditor            *margin = ui->plainTextEdit;
+        InstructionTypeCountModel *model  = new InstructionTypeCountModel(
+            this, [margin]() { return margin->executedTypeCounts(); });
+        connect(margin, &ProfilerEditor::marginChangedSignal, model,
+                &InstructionTypeCountModel::countsChangedSlot);
         ui->instructionTypeCountTableView->setModel(model);
         // connect(m_profiler, &Profiler::lineExecutionCountsUpdated, this,
         //         &ProfilerTab::updateLineExecutionCounts);

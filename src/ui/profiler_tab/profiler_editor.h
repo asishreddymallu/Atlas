@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QPlainTextEdit>
 #include <QWidget>
+#include <array>
 #include <map>
 #include <string>
 
@@ -27,6 +28,15 @@ public:
     void setInstructionTypes(const std::map<int, std::string>
                                  &instructionTypes); // line number to instruction type mapping
     void clearExecutionCount();
+
+    /// The margin's per-line counts summed by each line's type: the
+    /// Instruction Type table (T4). The run, not the program: a loop's
+    /// lines count once per retire, as the margin shows them.
+    std::array<size_t, instruction_set::kInstructionTypeCount> executedTypeCounts() const;
+
+signals:
+    /// The counts or the types in the margin changed.
+    void marginChangedSignal();
     
 public slots:
         /// The Profiler's count for one line (0 clears it). The Profiler
@@ -46,6 +56,7 @@ private:
     SyntaxHighlighter *m_syntaxHighlighter = nullptr;
     std::map<int, int> m_lineNumberToExecutionCounts;
     std::map<int, std::string> m_lineNumberToInstructionType;
+    std::map<int, instruction_set::InstructionType> m_lineTypes; ///< the same, as types
     int m_maxExecutionCount = 0; // to determine the color intensity for heatmap
     //LineStatsModel *m_lineStatsModel = nullptr; // model to hold line stats data
     QColor heatColor(int hitCount) const; // Helper function to determine color based on hit count
