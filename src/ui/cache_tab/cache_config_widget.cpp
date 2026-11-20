@@ -16,6 +16,8 @@ CacheConfigWidget::CacheConfigWidget(QWidget *parent)
     ui->missesLineEdit->setReadOnly(true);
     ui->writeBackLineEdit->setReadOnly(true);
     ui->hitrateLineEdit->setReadOnly(true);
+    ui->evictionsLineEdit->setReadOnly(true);
+    ui->evictionsLabel->setToolTip(ui->evictionsLineEdit->toolTip());
 
     ui->customPolicyScriptlineEdit->setReadOnly(true);
 
@@ -156,6 +158,7 @@ void CacheConfigWidget::cacheStatsUpdatedSlot(CacheStats newStats)
     ui->hitsLineEdit->setText(QString::number(newStats.hitCount));
     ui->missesLineEdit->setText(QString::number(newStats.missCount));
     ui->writeBackLineEdit->setText(QString::number(newStats.writeBackCount));
+    ui->evictionsLineEdit->setText(QString::number(newStats.evictionCount));
     // CacheStats::hitRate is a fraction (0..1, Cache::updateStats); shown as
     // a percentage.
     ui->hitrateLineEdit->setText(QString::number(newStats.hitRate * 100.0, 'f', 2) + " %");

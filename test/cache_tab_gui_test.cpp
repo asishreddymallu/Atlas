@@ -346,3 +346,77 @@ INSTANTIATE_TEST_SUITE_P(Levels, CacheTabConfig, ::testing::Values(0, 1, 2),
                          [](const ::testing::TestParamInfo<size_t> &info) {
                              return std::string(kLevels[info.param].name);
                          });
+
+// ---- Item 2: Evictions in the Statistics box --------------------------------
+// The engine counts evictions (a valid line replaced to make room) and
+// CacheStats carries the count (CacheEvictions.StatsSignalCarriesTheCount).
+// Expected numbers: the E8 oracle (cache_lab_cases.inc). Known issue 83:
+// Undo does not restore cache counters, so no check after an Undo.
+namespace
+{
+void twoWay256(CacheWindow &w, const char *replacement)
+{
+    w.use(ProcessorType::RVSS);
+    w.configure("L1Config", 3, 1, 2, "Write Through", "Write No Allocate", replacement);
+}
+} // namespace
+
+TEST(CacheTabEvictions, EveryLevelHasAReadOnlyEvictionsField)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    for (const char *level : {"InstructionConfig", "L1Config", "L2Config"})
+    {
+        CacheConfigWidget *cfg = w.level(level);
+        ASSERT_NE(cfg, nullptr) << level;
+        auto *field = cfg->findChild<QLineEdit *>("evictionsLineEdit");
+        ASSERT_NE(field, nullptr) << level << " has no Evictions field";
+        EXPECT_TRUE(field->isReadOnly()) << level;
+        EXPECT_EQ(field->toolTip().toStdString(), "Valid lines replaced to make room for a new line.") << level;
+    }
+}
+
+TEST(CacheTabEvictions, Stride1Evicts240Lines)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    dm256(w);
+    ASSERT_TRUE(w.runSource(readExample("stride_1")));
+    EXPECT_EQ_Q(w.field("L1Config", "evictionsLineEdit"), "240");
+}
+
+TEST(CacheTabEvictions, Stride16Evicts60LinesAndANewRunStartsAtZero)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    dm256(w);
+    ASSERT_TRUE(w.runSource(readExample("stride_16")));
+    EXPECT_EQ_Q(w.field("L1Config", "evictionsLineEdit"), "60");
+    // A new Run starts every field at 0, Evictions too.
+    ASSERT_TRUE(w.runSource(kNoMemory));
+    EXPECT_EQ_Q(w.field("L1Config", "hitsLineEdit"), "0");
+    EXPECT_EQ_Q(w.field("L1Config", "missesLineEdit"), "0");
+    EXPECT_EQ_Q(w.field("L1Config", "evictionsLineEdit"), "0");
+}
+
+TEST(CacheTabEvictions, MatmulIjkLru)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    twoWay256(w, "LRU");
+    ASSERT_TRUE(w.runSource(readExample("matmul_ijk")));
+    EXPECT_EQ_Q(w.field("L1Config", "hitsLineEdit"), "827");
+    EXPECT_EQ_Q(w.field("L1Config", "missesLineEdit"), "389");
+    EXPECT_EQ_Q(w.field("L1Config", "evictionsLineEdit"), "181");
+}
+
+TEST(CacheTabEvictions, MatmulIjkFifo)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    twoWay256(w, "FIFO");
+    ASSERT_TRUE(w.runSource(readExample("matmul_ijk")));
+    EXPECT_EQ_Q(w.field("L1Config", "hitsLineEdit"), "788");
+    EXPECT_EQ_Q(w.field("L1Config", "missesLineEdit"), "428");
+    EXPECT_EQ_Q(w.field("L1Config", "evictionsLineEdit"), "220");
+}

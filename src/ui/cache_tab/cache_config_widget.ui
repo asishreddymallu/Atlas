@@ -237,6 +237,20 @@
       <item row="2" column="3">
        <widget class="QLineEdit" name="writeBackLineEdit"/>
       </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="evictionsLabel">
+        <property name="text">
+         <string>Evictions:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="3">
+       <widget class="QLineEdit" name="evictionsLineEdit">
+        <property name="toolTip">
+         <string>Valid lines replaced to make room for a new line.</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
