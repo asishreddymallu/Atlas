@@ -37,6 +37,8 @@ class WireItem : public QGraphicsPathItem
     void setActive(bool isActive); ///< Active or Off; kept for existing callers
     void setState(State state);
     State state() const { return m_state; }
+    /// Pens from the current theme's diagram colours (T8), keeping the state.
+    void applyThemeColors();
     QJsonObject toJson();
 
   private:

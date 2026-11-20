@@ -1,6 +1,8 @@
 /* ── Kites theme template ──────────────────────────────────────────
  * Rendered by ThemeManager with a theme's JSON color tokens substituted
- * for the {{token}} placeholders below. Kept intentionally flat/minimal
+ * for the double-brace placeholders below. The controlBorder token outlines
+ * controls (buttons, fields, combo and spin boxes); a theme without it uses
+ * its border colour there. Kept intentionally flat/minimal
  * (thin low-contrast borders, no gradients) to match a Zed-like aesthetic.
  * ───────────────────────────────────────────────────────────────── */
 
@@ -98,7 +100,7 @@ QTabBar::tab:hover:!selected {
 QPushButton, QToolButton {
     background-color: {{surface}};
     color: {{foreground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 4px;
     padding: 5px 14px;
     min-height: 22px;
@@ -127,7 +129,7 @@ QPushButton:focus, QToolButton:focus {
 QPushButton[segmented="true"] {
     background-color: transparent;
     color: {{mutedForeground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 0;
     padding: 3px 14px;
     min-height: 18px;
@@ -158,7 +160,7 @@ QPushButton[segmentPos="last"] {
 QLineEdit {
     background-color: {{surface}};
     color: {{foreground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 4px;
     padding: 3px 6px;
     selection-background-color: {{selection}};
@@ -169,7 +171,7 @@ QLineEdit:focus {
 QComboBox {
     background-color: {{surface}};
     color: {{foreground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 4px;
     padding: 4px 8px;
     min-height: 20px;
@@ -318,7 +320,7 @@ QToolTip {
 #findBar QLineEdit, #gotoLineBar QLineEdit {
     background-color: {{background}};
     color: {{foreground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     /* 140px was wider than the Input pane can give when the editor is
        split with the Expanded pane, and the layout honoured it by pushing
        the toggles over the input. 60px still fits a short pattern and lets
@@ -495,7 +497,7 @@ QToolButton[ribbonStacked="true"] {
 #ribbonPanel QToolButton[ribbonSegment] {
     background-color: transparent;
     color: {{mutedForeground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 0;
 }
 #ribbonPanel QToolButton[ribbonSegment="first"] {
@@ -540,7 +542,7 @@ QToolButton[ribbonStacked="true"] {
 QSpinBox {
     background-color: {{surface}};
     color: {{foreground}};
-    border: 1px solid {{border}};
+    border: 1px solid {{controlBorder}};
     border-radius: 4px;
     padding: 4px 8px;
     min-height: 20px;

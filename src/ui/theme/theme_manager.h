@@ -39,6 +39,18 @@ enum class SyntaxStyle
 };
 
 
+/// The processor diagram's colours. The defaults are the original black
+/// diagram's; an invalid label colour leaves the labels' own colour.
+struct DiagramColors
+{
+    QColor background      = Qt::black;
+    QColor component       = Qt::gray;
+    QColor componentBorder = Qt::white;
+    QColor label;
+    QColor wire            = Qt::gray;
+    QColor wireActive      = Qt::yellow;
+};
+
 struct ThemeData
 {
     QString id;
@@ -62,6 +74,7 @@ struct ThemeData
     QColor errorColor;
     QColor infoColor;
 
+    DiagramColors diagram;
     QString stylesheet; // fully rendered QSS (template + this theme's colors)
 
     std::array<QTextCharFormat, toIndex(SyntaxStyle::SyntaxStyleCount)> syntaxFormats;
@@ -78,6 +91,11 @@ public:
     ~ThemeManager() = default;
 
     static ThemeManager &getInstance();
+    /// The template with a theme's colour tokens (and the type scale) filled in.
+    static QString renderStylesheet(const QString &qssTemplate, const QJsonObject &colors);
+    /// The theme to start with: the saved one if it still exists, else the default.
+    static QString startupThemeId(const QString &saved, const QStringList &available);
+    static constexpr const char *kDefaultThemeId = "tokyo-night";
 
     QString currentThemeId() const;
     void setTheme(const QString &id);
@@ -107,6 +125,8 @@ public:
     bool installTheme(const QString &sourceFilePath, QString &errorOut);
 
     QColor getIconColor()const;
+    /// The current (global) theme's processor-diagram colours.
+    DiagramColors diagramColors() const;
     QColor getTextColor()const;
     QColor getCurrentLineColor()const;
     QTextCharFormat getSyntaxFormat(SyntaxStyle style)const;

@@ -1,0 +1,43 @@
+{
+    "id": "cobalt2-theme-official",
+    "name": "Cobalt2 Theme Official",
+    "appearance": "dark",
+    "colors": {
+        "background": "#15232d",
+        "surface": "#193549",
+        "border": "#122738",
+        "controlBorder": "#1d83c7",
+        "foreground": "#ffffff",
+        "mutedForeground": "#aaaaaa",
+        "accent": "#0088ff",
+        "selection": "#0050a4",
+        "currentLine": "#1f4662",
+        "iconColor": "#afafaf",
+        "cacheHit": "#80fcff",
+        "cacheMiss": "#ff90ae",
+        "success": "#3ad900",
+        "warning": "#ffc600",
+        "error": "#ff90ae",
+        "info": "#0088ff",
+        "syntax": {
+            "r32Instruction": "#ff9d00",
+            "r64Instruction": "#ff9d00",
+            "mInstruction": "#ff9d00",
+            "fInstruction": "#ff9d00",
+            "dInstruction": "#ffc600",
+            "pseudoInstruction": "#ffc600",
+            "register": "#e1efff",
+            "comment": "#0f8fff",
+            "label": "#9effff",
+            "numberLiteral": "#ff628c"
+        },
+        "diagram": {
+            "background": "#193549",
+            "component": "#3f4b53",
+            "componentBorder": "#aaaaaa",
+            "label": "#ffffff",
+            "wire": "#707b83",
+            "wireActive": "#ffc600"
+        }
+    }
+}

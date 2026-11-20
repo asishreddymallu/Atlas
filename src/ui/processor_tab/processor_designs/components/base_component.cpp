@@ -1,4 +1,6 @@
 #include "base_component.h"
+#include "ui/theme/theme_manager.h"
+#include <QPen>
 #include <QJsonObject>
 #include <QPainter>
 #include <QTextDocument>
@@ -10,8 +12,6 @@ namespace Kites
 BaseComponent::BaseComponent(const QPainterPath &path, const QString &name, QGraphicsItem *parent)
     : QGraphicsPathItem(path, parent)
 {
-    setBrush(Qt::gray);
-    setPen(QPen(Qt::white, 2));
 
     // setFlag(QGraphicsItem::ItemIsSelectable, false);
     // setFlag(QGraphicsItem::ItemIsMovable, true);
@@ -31,7 +31,19 @@ BaseComponent::BaseComponent(const QPainterPath &path, const QString &name, QGra
         m_label->document()->setDefaultTextOption(option);
         m_label->setPos(box.center().x() - labelWidth / 2,
                         box.center().y() - m_label->boundingRect().height() / 2);
+        m_defaultLabelColor = m_label->defaultTextColor();
     }
+    applyThemeColors();
+}
+
+void BaseComponent::applyThemeColors()
+{
+    // The original diagram: gray, white outline (DiagramColors' defaults).
+    const DiagramColors d = ThemeManager::getInstance().diagramColors();
+    setBrush(d.component);
+    setPen(QPen(d.componentBorder, 2));
+    if (m_label)
+        m_label->setDefaultTextColor(d.label.isValid() ? d.label : m_defaultLabelColor);
 }
 
 void BaseComponent::setName(const QString &name)
@@ -51,6 +63,8 @@ void BaseComponent::setName(const QString &name)
         m_label->document()->setDefaultTextOption(option);
         m_label->setPos(box.center().x() - labelWidth / 2,
                         box.center().y() - m_label->boundingRect().height() / 2);
+        m_defaultLabelColor = m_label->defaultTextColor();
+        applyThemeColors();
     }
 }
 

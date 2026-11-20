@@ -9,6 +9,7 @@
 #include "processor_designs/components/short_alu.h"
 #include "processor_designs/components/short_rect.h"
 #include "processor_designs/components/wire_item.h"
+#include "ui/theme/theme_manager.h"
 #include <QFile>
 #include <QGraphicsProxyWidget>
 #include <QHeaderView>
@@ -28,7 +29,20 @@ CircuitScene::CircuitScene(QObject *parent) : QGraphicsScene(parent)
 {
     setSceneRect(-100, -400, 300, 500);
     // setSceneRect(-1000, -1000, 2000, 2000);
-    setBackgroundBrush(Qt::black);
+    setBackgroundBrush(ThemeManager::getInstance().diagramColors().background);
+    // T8: the diagram follows the theme (the house themes keep it black).
+    connect(&ThemeManager::getInstance(), &ThemeManager::themeChangedSignal, this, [this]() {
+        setBackgroundBrush(ThemeManager::getInstance().diagramColors().background);
+        for (QGraphicsItem *item : items())
+        {
+            if (auto *wire = dynamic_cast<WireItem *>(item))
+                wire->applyThemeColors();
+            else if (auto *component = dynamic_cast<BaseComponent *>(item))
+                component->applyThemeColors();
+        }
+        fillInstructionTable();
+        update();
+    });
     m_timer = new QTimer(this);
     m_timer->setSingleShot(true);
     m_timer->setInterval(100); // flash for 100ms
@@ -192,9 +206,11 @@ void CircuitScene::setSelectedStages(quint8 stages)
 
 QColor CircuitScene::selectedColumnColor()
 {
-    // The lit-wire yellow, translucent, so the column reads as the same
-    // thing the emphasised wires are.
-    return QColor(255, 255, 0, 70);
+    // The lit-wire colour (yellow by default), translucent, so the column
+    // reads as the same thing the emphasised wires are.
+    QColor c = ThemeManager::getInstance().diagramColors().wireActive;
+    c.setAlpha(70);
+    return c;
 }
 
 void CircuitScene::applyWireStates()

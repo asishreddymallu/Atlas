@@ -1,4 +1,5 @@
 #include "wire_item.h"
+#include "ui/theme/theme_manager.h"
 #include <QJsonArray>
 
 namespace Kites
@@ -7,13 +8,21 @@ WireItem::WireItem(const QPainterPath &path, QGraphicsItem *parent)
     : QGraphicsPathItem(path, parent)
 {
     // setFlag(QGraphicsItem::ItemIsMovable, true);
-    m_activePen = QPen(Qt::yellow, 2, Qt::SolidLine);
-    m_inactivePen = QPen(Qt::gray, 1, Qt::SolidLine);
+    applyThemeColors();
+}
+
+void WireItem::applyThemeColors()
+{
+    // Defaults (DiagramColors): yellow lit, gray idle, as the original diagram.
+    const DiagramColors d = ThemeManager::getInstance().diagramColors();
+    m_activePen   = QPen(d.wireActive, 2, Qt::SolidLine);
+    m_inactivePen = QPen(d.wire, 1, Qt::SolidLine);
     // The lit colour at about a third of its opacity: still clearly a lit
-    // wire against the scene's black background, clearly not the selected
-    // stage's.
-    m_dimmedPen = QPen(QColor(255, 255, 0, 90), 2, Qt::SolidLine);
-    setPen(m_inactivePen);
+    // wire against the scene's background, clearly not the selected stage's.
+    QColor dimmed = d.wireActive;
+    dimmed.setAlpha(90);
+    m_dimmedPen = QPen(dimmed, 2, Qt::SolidLine);
+    setState(m_state);
 }
 
 QString WireItem::getName()

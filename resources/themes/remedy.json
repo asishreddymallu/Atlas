@@ -1,0 +1,43 @@
+{
+    "id": "remedy",
+    "name": "Remedy",
+    "appearance": "light",
+    "colors": {
+        "background": "#fceed1",
+        "surface": "#fef8eb",
+        "border": "#e4c88d",
+        "controlBorder": "#ab8128",
+        "foreground": "#563d0e",
+        "mutedForeground": "#563d0e",
+        "accent": "#e95c3d",
+        "selection": "#e8dfce",
+        "currentLine": "#f5ebd7",
+        "iconColor": "#563d0e",
+        "cacheHit": "#5e8d87",
+        "cacheMiss": "#a54242",
+        "success": "#858d3d",
+        "warning": "#a85a21",
+        "error": "#a54242",
+        "info": "#5f819d",
+        "syntax": {
+            "r32Instruction": "#85678f",
+            "r64Instruction": "#cc6666",
+            "mInstruction": "#5f819d",
+            "fInstruction": "#5f819d",
+            "dInstruction": "#cc6666",
+            "pseudoInstruction": "#cc6666",
+            "register": "#563d0e",
+            "comment": "#9f824a",
+            "label": "#5e8d87",
+            "numberLiteral": "#cc6c2a"
+        },
+        "diagram": {
+            "background": "#fef8eb",
+            "component": "#deceae",
+            "componentBorder": "#563d0e",
+            "label": "#563d0e",
+            "wire": "#998866",
+            "wireActive": "#85678f"
+        }
+    }
+}

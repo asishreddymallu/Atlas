@@ -1,0 +1,43 @@
+{
+    "id": "monokai-dark-soda",
+    "name": "Monokai Dark Soda",
+    "appearance": "dark",
+    "colors": {
+        "background": "#1f1f1f",
+        "surface": "#242424",
+        "border": "#40403f",
+        "controlBorder": "#8e8e8b",
+        "foreground": "#f8f8f2",
+        "mutedForeground": "#a3a3a0",
+        "accent": "#f92672",
+        "selection": "#403d3d",
+        "currentLine": "#3d3d3d",
+        "iconColor": "#f8f8f2",
+        "cacheHit": "#90e7f7",
+        "cacheMiss": "#f78181",
+        "success": "#60cf30",
+        "warning": "#fab85a",
+        "error": "#f78181",
+        "info": "#6796e6",
+        "syntax": {
+            "r32Instruction": "#f9357c",
+            "r64Instruction": "#66d9ef",
+            "mInstruction": "#66d9ef",
+            "fInstruction": "#66d9ef",
+            "dInstruction": "#66d9ef",
+            "pseudoInstruction": "#66d9ef",
+            "register": "#fd971f",
+            "comment": "#8c8c8c",
+            "label": "#f9357c",
+            "numberLiteral": "#ff80f4"
+        },
+        "diagram": {
+            "background": "#242424",
+            "component": "#464645",
+            "componentBorder": "#a3a3a0",
+            "label": "#f8f8f2",
+            "wire": "#70706e",
+            "wireActive": "#fab85a"
+        }
+    }
+}

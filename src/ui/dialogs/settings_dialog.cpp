@@ -192,8 +192,18 @@ QWidget *SettingsDialog::createAppearancePage()
         editorThemeCombo->clear();
 
         editorThemeCombo->addItem("Same as global theme", QString());
+        bool            first = true;
+        ThemeAppearance last  = ThemeAppearance::Dark;
         for (const ThemeData &theme : ThemeManager::getInstance().availableThemes())
         {
+            // Dark themes first, then light ones, split by a separator.
+            if (!first && theme.appearance != last)
+            {
+                globalThemeCombo->insertSeparator(globalThemeCombo->count());
+                editorThemeCombo->insertSeparator(editorThemeCombo->count());
+            }
+            first = false;
+            last  = theme.appearance;
             globalThemeCombo->addItem(themeLabel(theme), theme.id);
             editorThemeCombo->addItem(themeLabel(theme), theme.id);
         }

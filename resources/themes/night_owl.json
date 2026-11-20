@@ -1,0 +1,43 @@
+{
+    "id": "night-owl",
+    "name": "Night Owl",
+    "appearance": "dark",
+    "colors": {
+        "background": "#011627",
+        "surface": "#011627",
+        "border": "#213444",
+        "controlBorder": "#5f7e97",
+        "foreground": "#d6deeb",
+        "mutedForeground": "#536e86",
+        "accent": "#6e51b0",
+        "selection": "#1d3b53",
+        "currentLine": "#072435",
+        "iconColor": "#d6deeb",
+        "cacheHit": "#21c7a8",
+        "cacheMiss": "#ef5855",
+        "success": "#22da6e",
+        "warning": "#c5e478",
+        "error": "#ef5855",
+        "info": "#82aaff",
+        "syntax": {
+            "r32Instruction": "#c792ea",
+            "r64Instruction": "#7fdbca",
+            "mInstruction": "#82aaff",
+            "fInstruction": "#82aaff",
+            "dInstruction": "#c5e478",
+            "pseudoInstruction": "#c5e478",
+            "register": "#ffcb8b",
+            "comment": "#637777",
+            "label": "#caece6",
+            "numberLiteral": "#f78c6c"
+        },
+        "diagram": {
+            "background": "#011627",
+            "component": "#273a4a",
+            "componentBorder": "#536e86",
+            "label": "#d6deeb",
+            "wire": "#324b60",
+            "wireActive": "#c5e478"
+        }
+    }
+}

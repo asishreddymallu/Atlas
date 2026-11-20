@@ -10,6 +10,8 @@
 #include <QStandardPaths>
 #include <QTextStream>
 
+#include <algorithm>
+
 namespace Kites
 {
 namespace
@@ -37,10 +39,10 @@ ThemeManager::ThemeManager()
     if (!savedEditorId.isEmpty() && indexOfTheme(savedEditorId) >= 0)
         m_editorThemeId = savedEditorId;
 
-    QString savedId = AppSettings::getInstance().themeId();
-    if (savedId.isEmpty() || indexOfTheme(savedId) < 0)
-        savedId = "tokyo-night";
-    setTheme(savedId);
+    QStringList ids;
+    for (const ThemeData &theme : m_themes)
+        ids << theme.id;
+    setTheme(startupThemeId(AppSettings::getInstance().themeId(), ids));
 }
 
 ThemeManager &ThemeManager::getInstance()
@@ -56,7 +58,14 @@ QString ThemeManager::currentThemeId() const
 
 QVector<ThemeData> ThemeManager::availableThemes() const
 {
-    return m_themes;
+    // Dark themes first, then light ones, each by name (T8).
+    QVector<ThemeData> sorted = m_themes;
+    std::stable_sort(sorted.begin(), sorted.end(), [](const ThemeData &a, const ThemeData &b) {
+        if (a.appearance != b.appearance)
+            return a.appearance == ThemeAppearance::Dark;
+        return QString::compare(a.name, b.name, Qt::CaseInsensitive) < 0;
+    });
+    return sorted;
 }
 
 int ThemeManager::indexOfTheme(const QString &id) const
@@ -186,6 +195,12 @@ void ThemeManager::applyTheme(const ThemeData &theme)
 {
     QApplication::setPalette(theme.palette);
     qApp->setStyleSheet(theme.stylesheet);
+}
+
+DiagramColors ThemeManager::diagramColors() const
+{
+    const int index = indexOfTheme(m_currentThemeId);
+    return index >= 0 ? m_themes[index].diagram : DiagramColors{};
 }
 
 QColor ThemeManager::getIconColor() const
@@ -362,16 +377,37 @@ bool ThemeManager::parseThemeFile(const QString &path, ThemeData &themeOut, QStr
     setSyntax(SyntaxStyle::Label, "label", QColor("#d7ba7d"));
     setSyntax(SyntaxStyle::NumberLiteral, "numberLiteral", QColor("#b5cea8"));
 
+    // The processor diagram (T8). A theme without a "diagram" object keeps
+    // the original black diagram: these fallbacks are its literal colours.
+    const QJsonObject diagram = colors.value("diagram").toObject();
+    DiagramColors &d = themeOut.diagram;
+    d.background      = colorOr(diagram, "background", QColor(Qt::black));
+    d.component       = colorOr(diagram, "component", QColor(Qt::gray));
+    d.componentBorder = colorOr(diagram, "componentBorder", QColor(Qt::white));
+    d.label           = diagram.contains("label") ? QColor(diagram.value("label").toString()) : QColor();
+    d.wire            = colorOr(diagram, "wire", QColor(Qt::gray));
+    d.wireActive      = colorOr(diagram, "wireActive", QColor(Qt::yellow));
+
     themeOut.stylesheet = renderStylesheet(colors);
     return true;
 }
 
+QString ThemeManager::startupThemeId(const QString &saved, const QStringList &available)
+{
+    return !saved.isEmpty() && available.contains(saved) ? saved : QString::fromLatin1(kDefaultThemeId);
+}
+
 QString ThemeManager::renderStylesheet(const QJsonObject &colors) const
 {
-    QString result = m_qssTemplate;
+    return renderStylesheet(m_qssTemplate, colors);
+}
+
+QString ThemeManager::renderStylesheet(const QString &qssTemplate, const QJsonObject &colors)
+{
+    QString result = qssTemplate;
 
     static const QStringList tokens = {
-        "background", "surface", "border", "foreground",
+        "background", "surface", "border", "controlBorder", "foreground",
         "mutedForeground", "accent", "selection", "currentLine",
         "success", "warning", "error", "info"
     };
@@ -387,6 +423,9 @@ QString ThemeManager::renderStylesheet(const QJsonObject &colors) const
     values["background"]      = background;
     values["surface"]         = surface;
     values["border"]          = border;
+    // Controls' outlines (T8). A theme that does not set it keeps its faint
+    // separator colour there too, i.e. the stylesheet it always had.
+    values["controlBorder"]   = colorOr(colors, "controlBorder", border);
     values["foreground"]      = foreground;
     values["mutedForeground"] = colorOr(colors, "mutedForeground", foreground.darker(150));
     values["accent"]          = accent;

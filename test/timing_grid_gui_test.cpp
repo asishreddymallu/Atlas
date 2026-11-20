@@ -288,14 +288,14 @@ TEST(TimingGridGuiExport, FileExportTraceWritesTheRun)
     EXPECT_EQ(j["cycles"].toArray().size(), 8);
 }
 
-// Every stage colour keeps the theme's text at WCAG AA (4.5:1) in all four
-// built-in themes. The test binary has no Qt resources, so the themes are
+// Every stage colour keeps the theme's text at WCAG AA (4.5:1) in every
+// built-in theme (ten since T8). The test binary has no Qt resources, so the themes are
 // read from the source tree (ctest runs in test/).
 TEST(TimingGridColours, StageCellsAreAaInEveryTheme)
 {
     QDir dir("../resources/themes");
     const QStringList files = dir.entryList({"*.json"}, QDir::Files);
-    ASSERT_EQ(files.size(), 4) << dir.absolutePath().toStdString();
+    ASSERT_EQ(files.size(), 10) << dir.absolutePath().toStdString();
     for (const QString &name : files)
     {
         QFile f(dir.filePath(name));

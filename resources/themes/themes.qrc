@@ -5,5 +5,11 @@
         <file>kites_light.json</file>
         <file>tokyo_night.json</file>
         <file>tokyo_night_storm.json</file>
+        <file>cobalt2_theme_official.json</file>
+        <file>night_owl.json</file>
+        <file>monokai_dark_soda.json</file>
+        <file>remedy.json</file>
+        <file>zed_theme.json</file>
+        <file>cpp_light_theme.json</file>
     </qresource>
 </RCC>

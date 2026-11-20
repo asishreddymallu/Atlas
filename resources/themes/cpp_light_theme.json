@@ -1,0 +1,43 @@
+{
+    "id": "cpp-light-theme",
+    "name": "C++ Light Theme",
+    "appearance": "light",
+    "colors": {
+        "background": "#f5f5f5",
+        "surface": "#ffffff",
+        "border": "#d0d0d0",
+        "controlBorder": "#808080",
+        "foreground": "#000000",
+        "mutedForeground": "#666666",
+        "accent": "#007acc",
+        "selection": "#bfdef2",
+        "currentLine": "#fff5be",
+        "iconColor": "#000000",
+        "cacheHit": "#267f99",
+        "cacheMiss": "#800000",
+        "success": "#008000",
+        "warning": "#70521a",
+        "error": "#800000",
+        "info": "#0451a5",
+        "syntax": {
+            "r32Instruction": "#0000ff",
+            "r64Instruction": "#0000ff",
+            "mInstruction": "#8800d1",
+            "fInstruction": "#8800d1",
+            "dInstruction": "#267f99",
+            "pseudoInstruction": "#267f99",
+            "register": "#001080",
+            "comment": "#008000",
+            "label": "#000000",
+            "numberLiteral": "#098658"
+        },
+        "diagram": {
+            "background": "#ffffff",
+            "component": "#c9c9c9",
+            "componentBorder": "#666666",
+            "label": "#000000",
+            "wire": "#a3a3a3",
+            "wireActive": "#0000ff"
+        }
+    }
+}

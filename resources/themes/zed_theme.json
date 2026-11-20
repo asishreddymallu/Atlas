@@ -1,0 +1,43 @@
+{
+    "id": "zed-theme",
+    "name": "Zed Theme",
+    "appearance": "light",
+    "colors": {
+        "background": "#f6f5f0",
+        "surface": "#f6f5f0",
+        "border": "#e7e7e7",
+        "controlBorder": "#7b7a78",
+        "foreground": "#000000",
+        "mutedForeground": "#5f86d0",
+        "accent": "#1051d0",
+        "selection": "#add6ff",
+        "currentLine": "#eceae1",
+        "iconColor": "#1051d0",
+        "cacheHit": "#0598bc",
+        "cacheMiss": "#c12e2e",
+        "success": "#00a200",
+        "warning": "#535700",
+        "error": "#c12e2e",
+        "info": "#0451a5",
+        "syntax": {
+            "r32Instruction": "#a406d3",
+            "r64Instruction": "#a406d3",
+            "mInstruction": "#007e8e",
+            "fInstruction": "#007e8e",
+            "dInstruction": "#b87700",
+            "pseudoInstruction": "#b87700",
+            "register": "#d90819",
+            "comment": "#7f848e",
+            "label": "#d90819",
+            "numberLiteral": "#cf6806"
+        },
+        "diagram": {
+            "background": "#f6f5f0",
+            "component": "#cac9c5",
+            "componentBorder": "#5f86d0",
+            "label": "#000000",
+            "wire": "#97afdc",
+            "wireActive": "#a406d3"
+        }
+    }
+}

@@ -886,8 +886,15 @@ void MainWindow::setUpMenubar()
     settingsMenu->addMenu(preferencesMenu);
     QActionGroup *themeGroup = new QActionGroup(this);
     themeGroup->setExclusive(true);
+    bool firstTheme = true;
+    ThemeAppearance lastAppearance = ThemeAppearance::Dark;
     for (const ThemeData &theme : ThemeManager::getInstance().availableThemes())
     {
+        // Dark themes, then light ones (availableThemes' order), split by a line.
+        if (!firstTheme && theme.appearance != lastAppearance)
+            preferencesMenu->addSeparator();
+        firstTheme     = false;
+        lastAppearance = theme.appearance;
         QAction *themeAction = new QAction(theme.name, this);
         themeAction->setCheckable(true);
         themeAction->setChecked(theme.id == ThemeManager::getInstance().currentThemeId());
