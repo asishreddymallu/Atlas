@@ -6,5 +6,6 @@
         <file>H_NF_Processor.json</file>
         <file>NH_NF_Processor.json</file>
         <file>single_cycle_draft1.json</file>
+        <file>component_labels.json</file>
     </qresource>
 </RCC>

@@ -379,17 +379,23 @@ bool ThemeManager::parseThemeFile(const QString &path, ThemeData &themeOut, QStr
 
     // The processor diagram (T8). A theme without a "diagram" object keeps
     // the original black diagram: these fallbacks are its literal colours.
+    themeOut.diagram = diagramColorsFrom(colors);
+
+    themeOut.stylesheet = renderStylesheet(colors);
+    return true;
+}
+
+DiagramColors ThemeManager::diagramColorsFrom(const QJsonObject &colors)
+{
     const QJsonObject diagram = colors.value("diagram").toObject();
-    DiagramColors &d = themeOut.diagram;
+    DiagramColors     d;
     d.background      = colorOr(diagram, "background", QColor(Qt::black));
     d.component       = colorOr(diagram, "component", QColor(Qt::gray));
     d.componentBorder = colorOr(diagram, "componentBorder", QColor(Qt::white));
     d.label           = diagram.contains("label") ? QColor(diagram.value("label").toString()) : QColor();
     d.wire            = colorOr(diagram, "wire", QColor(Qt::gray));
     d.wireActive      = colorOr(diagram, "wireActive", QColor(Qt::yellow));
-
-    themeOut.stylesheet = renderStylesheet(colors);
-    return true;
+    return d;
 }
 
 QString ThemeManager::startupThemeId(const QString &saved, const QStringList &available)

@@ -1,4 +1,5 @@
 #pragma once
+#include "ui/theme/theme_manager.h"
 
 #include "processor_designs/components/base_component.h"
 #include "processor_designs/components/wire_item.h"
@@ -55,6 +56,28 @@ class CircuitScene : public QGraphicsScene
     /// The colour a selected column's cell is filled with.
     static QColor selectedColumnColor();
 
+    /// T9: one per component, the name it shows. `caption` names are drawn
+    /// outside the component (it has no name inside); `rect` is the scene
+    /// rectangle the name covers.
+    struct ComponentLabel
+    {
+        QGraphicsItem *component = nullptr;
+        QString        text;
+        QRectF         rect;
+        bool           caption = false;
+        bool           visible = false;
+    };
+    QList<ComponentLabel> componentLabels() const;
+    /// The legend (nullptr before a circuit is loaded) and its entry count.
+    QGraphicsItem *legendItem() const { return m_legend; }
+    /// The pipelines' stage headers (IF..WB, left to right) and their rects.
+    QList<QPair<QString, QRectF>> stageHeaders() const;
+    int            legendEntries() const { return m_legendEntries; }
+    /// The colour of the names outside components and of the legend text:
+    /// the theme's diagram label colour when it reads at 4.5:1 on the
+    /// diagram's background, else white or black, whichever reads better.
+    static QColor captionColorFor(const DiagramColors &colors);
+
   protected:
     // void mouseMoveEvent(QGraphicsSceneMouseEvent *mouseEvent) override;
     void mousePressEvent(QGraphicsSceneMouseEvent *mouseEvent) override;
@@ -75,6 +98,21 @@ class CircuitScene : public QGraphicsScene
 
     void applyWireStates();
     void fillInstructionTable();
+
+    // T9: names, tooltips and the legend.
+    struct Caption
+    {
+        BaseComponent *component = nullptr;
+        QString        shortName, fullName;
+    };
+    QList<Caption>               m_captionSpecs;
+    QList<QGraphicsRectItem *>   m_captions;
+    QGraphicsRectItem           *m_legend        = nullptr;
+    QList<QGraphicsItem *>       m_stageItems; ///< headers (QGraphicsRectItem chips) and divider lines
+    int                          m_legendEntries = 0;
+    bool                         m_pipelined     = false;
+    void readComponentLabels(const QString &designFile, const QList<BaseComponent *> &components);
+    void buildDecorations(); ///< (re)creates captions and legend in the theme's colours
 
     void setUpInstructionTable();
     void fitTableToCircuit(const QString &vmType);

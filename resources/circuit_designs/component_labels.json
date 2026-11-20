@@ -1,0 +1,502 @@
+{
+  "H_F_Processor.json": [
+    {
+      "label": "AND",
+      "title": "Branch AND gate (Branch and Zero)",
+      "type": "AndGateItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Write-back mux (ALU result or memory data)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Data memory input mux",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Data Mem",
+      "title": "Data Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Mux",
+      "title": "PC source mux (next PC)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "PC",
+      "title": "Program counter (PC)",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Add",
+      "title": "PC + 4 adder",
+      "type": "SALUItem"
+    },
+    {
+      "label": "Reg File",
+      "title": "Reg File",
+      "type": "RectItem"
+    },
+    {
+      "label": "Instr Mem",
+      "title": "Instr Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "ID/EX",
+      "title": "ID/EX pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "IF/ID",
+      "title": "IF/ID pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Add",
+      "title": "Branch target adder (PC + imm)",
+      "type": "SALUItem"
+    },
+    {
+      "label": "Imm Gen",
+      "title": "Immediate generator",
+      "type": "ShortRect"
+    },
+    {
+      "label": "EX/MEM",
+      "title": "EX/MEM pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "MEM/WB",
+      "title": "MEM/WB pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Control",
+      "title": "Main control unit",
+      "type": "ShortRect"
+    },
+    {
+      "label": "ALU",
+      "title": "ALU",
+      "type": "ALUItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Forwarding mux (ALU operand A)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Forwarding mux (ALU operand B)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "ALU source mux (register or immediate)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Fwd Unit",
+      "title": "Fwd Unit",
+      "type": "HoriRect"
+    },
+    {
+      "label": "ALU Ctrl",
+      "title": "ALU control",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "Hazard mux (inserts a bubble: zeroes the control signals)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "HDU",
+      "title": "HDU",
+      "type": "HoriRect"
+    }
+  ],
+  "H_NF_Processor.json": [
+    {
+      "label": "AND",
+      "title": "Branch AND gate (Branch and Zero)",
+      "type": "AndGateItem"
+    },
+    {
+      "label": "ALU Ctrl",
+      "title": "ALU control",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Control",
+      "title": "Main control unit",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "PC source mux (next PC)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "PC",
+      "title": "Program counter (PC)",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Add",
+      "title": "PC + 4 adder",
+      "type": "SALUItem"
+    },
+    {
+      "label": "Reg File",
+      "title": "Reg File",
+      "type": "RectItem"
+    },
+    {
+      "label": "Instr Mem",
+      "title": "Instr Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "ID/EX",
+      "title": "ID/EX pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "IF/ID",
+      "title": "IF/ID pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "EX/MEM",
+      "title": "EX/MEM pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Add",
+      "title": "Branch target adder (PC + imm)",
+      "type": "SALUItem"
+    },
+    {
+      "label": "ALU",
+      "title": "ALU",
+      "type": "ALUItem"
+    },
+    {
+      "label": "Mux",
+      "title": "ALU source mux (register or immediate)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Imm Gen",
+      "title": "Immediate generator",
+      "type": "ShortRect"
+    },
+    {
+      "label": "MEM/WB",
+      "title": "MEM/WB pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Data Mem",
+      "title": "Data Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Write-back mux (ALU result or memory data)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "HDU",
+      "title": "HDU",
+      "type": "HoriRect"
+    },
+    {
+      "label": "Mux",
+      "title": "Hazard mux (inserts a bubble: zeroes the control signals)",
+      "type": "MuxItem"
+    }
+  ],
+  "NH_F_Processor.json": [
+    {
+      "label": "ALU Ctrl",
+      "title": "ALU control",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Fwd Unit",
+      "title": "Fwd Unit",
+      "type": "HoriRect"
+    },
+    {
+      "label": "Mux",
+      "title": "ALU source mux (register or immediate)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Forwarding mux (ALU operand B)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Forwarding mux (ALU operand A)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "ALU",
+      "title": "ALU",
+      "type": "ALUItem"
+    },
+    {
+      "label": "Control",
+      "title": "Main control unit",
+      "type": "ShortRect"
+    },
+    {
+      "label": "MEM/WB",
+      "title": "MEM/WB pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "EX/MEM",
+      "title": "EX/MEM pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Imm Gen",
+      "title": "Immediate generator",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Add",
+      "title": "Branch target adder (PC + imm)",
+      "type": "SALUItem"
+    },
+    {
+      "label": "IF/ID",
+      "title": "IF/ID pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "ID/EX",
+      "title": "ID/EX pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Instr Mem",
+      "title": "Instr Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Reg File",
+      "title": "Reg File",
+      "type": "RectItem"
+    },
+    {
+      "label": "Add",
+      "title": "PC + 4 adder",
+      "type": "SALUItem"
+    },
+    {
+      "label": "PC",
+      "title": "Program counter (PC)",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "PC source mux (next PC)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Data Mem",
+      "title": "Data Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Data memory input mux",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Write-back mux (ALU result or memory data)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "AND",
+      "title": "Branch AND gate (Branch and Zero)",
+      "type": "AndGateItem"
+    }
+  ],
+  "NH_NF_Processor.json": [
+    {
+      "label": "Mux",
+      "title": "Write-back mux (ALU result or memory data)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Data Mem",
+      "title": "Data Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "MEM/WB",
+      "title": "MEM/WB pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Imm Gen",
+      "title": "Immediate generator",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "ALU source mux (register or immediate)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "ALU",
+      "title": "ALU",
+      "type": "ALUItem"
+    },
+    {
+      "label": "Add",
+      "title": "Branch target adder (PC + imm)",
+      "type": "SALUItem"
+    },
+    {
+      "label": "EX/MEM",
+      "title": "EX/MEM pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "IF/ID",
+      "title": "IF/ID pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "ID/EX",
+      "title": "ID/EX pipeline register",
+      "type": "PipelineReg"
+    },
+    {
+      "label": "Instr Mem",
+      "title": "Instr Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Reg File",
+      "title": "Reg File",
+      "type": "RectItem"
+    },
+    {
+      "label": "Add",
+      "title": "PC + 4 adder",
+      "type": "SALUItem"
+    },
+    {
+      "label": "PC",
+      "title": "Program counter (PC)",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "PC source mux (next PC)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Control",
+      "title": "Main control unit",
+      "type": "ShortRect"
+    },
+    {
+      "label": "ALU Ctrl",
+      "title": "ALU control",
+      "type": "ShortRect"
+    },
+    {
+      "label": "AND",
+      "title": "Branch AND gate (Branch and Zero)",
+      "type": "AndGateItem"
+    }
+  ],
+  "single_cycle_draft1.json": [
+    {
+      "label": "Control",
+      "title": "Control",
+      "type": "RectItem"
+    },
+    {
+      "label": "Mux",
+      "title": "ALU source mux (register or immediate)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Mux",
+      "title": "Write-back mux (ALU result or memory data)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "Imm Gen",
+      "title": "Immediate generator",
+      "type": "ShortRect"
+    },
+    {
+      "label": "ALU",
+      "title": "ALU",
+      "type": "ALUItem"
+    },
+    {
+      "label": "Add",
+      "title": "Branch target adder (PC + imm)",
+      "type": "SALUItem"
+    },
+    {
+      "label": "Instr Mem",
+      "title": "Instr Mem",
+      "type": "RectItem"
+    },
+    {
+      "label": "Reg File",
+      "title": "Reg File",
+      "type": "RectItem"
+    },
+    {
+      "label": "Add",
+      "title": "PC + 4 adder",
+      "type": "SALUItem"
+    },
+    {
+      "label": "PC",
+      "title": "Program counter (PC)",
+      "type": "ShortRect"
+    },
+    {
+      "label": "Mux",
+      "title": "PC source mux (next PC)",
+      "type": "MuxItem"
+    },
+    {
+      "label": "ALU Ctrl",
+      "title": "ALU control",
+      "type": "ShortRect"
+    },
+    {
+      "label": "AND",
+      "title": "Branch AND gate (Branch and Zero)",
+      "type": "AndGateItem"
+    },
+    {
+      "label": "Data Mem",
+      "title": "Data Mem",
+      "type": "RectItem"
+    }
+  ]
+}

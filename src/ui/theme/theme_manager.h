@@ -127,6 +127,8 @@ public:
     QColor getIconColor()const;
     /// The current (global) theme's processor-diagram colours.
     DiagramColors diagramColors() const;
+    /// A theme's diagram colours from its JSON "colors" (defaults when absent).
+    static DiagramColors diagramColorsFrom(const QJsonObject &colors);
     QColor getTextColor()const;
     QColor getCurrentLineColor()const;
     QTextCharFormat getSyntaxFormat(SyntaxStyle style)const;
