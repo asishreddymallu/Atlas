@@ -1007,6 +1007,8 @@ bool MainWindow::tryParseAndLoadProgram()
     editor->switchToExpandedView(); // switch to the expanded view 
                                     //to show expanded pseudoinstructions
     editor->resetErrorLines();    // we reset previous error lines
+    if (m_timingPanel)
+        m_timingPanel->clearSelection(); // a new trace: the old cell's sentence is void
     if (m_outputDock)
         m_outputDock->clearOutput(); // every Run, Debug Run and reload starts clean
     editor->setCanWrite(false);   // we disable writing in editor while vm is running
@@ -1099,6 +1101,8 @@ void MainWindow::processorChangeDialog()
 void MainWindow::processorChanged(const ProcessorType &vmType)
 {
     m_processorManager->changeProcessor(vmType);
+    if (m_timingPanel)
+        m_timingPanel->clearSelection();
     m_registerContainer->setRegisterFile(m_processorManager->getRegisterFile());
     auto *memtab = dynamic_cast<MemoryTab *>(m_tabs[TabIndex::MemoryTabIndex]);
     if (memtab)

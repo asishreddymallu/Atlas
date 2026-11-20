@@ -513,3 +513,163 @@ INSTANTIATE_TEST_SUITE_P(Models, TimingGridJump, ::testing::Values(0, 1, 2, 3, 4
                          [](const ::testing::TestParamInfo<size_t> &info) {
                              return std::string(kJumpModels[info.param].name);
                          });
+
+// ---- T4: the explanation under the grid never outlives its trace ----------
+// Seen in the hand-test: select the stalled cell after a Run on h_f, switch
+// to another model and Run again, and the h_f sentence stayed under the grid.
+namespace
+{
+// lw needs x10 from lui; the addi needs x12 from the lw (a load-use pair).
+const char *kExplainProgram = ".text\n"
+                              "    lui x10, 0x10\n"
+                              "    lw x12, 0(x10)\n"
+                              "    addi x13, x12, 1\n";
+
+/// The first stalled cell of the row whose instruction starts with `label`.
+bool findStalled(const TimingGridData &g, const QString &label, int &row, int &col)
+{
+    for (int r = 0; r < g.rows.size(); ++r)
+    {
+        if (!g.rows[r].label.startsWith(label))
+            continue;
+        for (int c = 0; c < g.rows[r].cells.size(); ++c)
+            if (g.rows[r].cells[c].kind == TimingCell::Stalled)
+            {
+                row = r;
+                col = c;
+                return true;
+            }
+    }
+    return false;
+}
+
+/// Run on h_f and select the addi's stalled cell; returns the sentence.
+QString selectHfStall(GridWindow &w)
+{
+    w.use(ProcessorType::RV5Stage_H_F);
+    if (!w.runToEnd(kExplainProgram))
+        return {};
+    int row = -1, col = -1;
+    if (!findStalled(w.panel->view()->grid(), "addi x13", row, col))
+        return {};
+    w.panel->view()->select(row, col);
+    return w.panel->explanation();
+}
+
+const JumpModel kOtherModels[] = {{"h_nf", ProcessorType::RV5Stage_H_NF},
+                                  {"nh_f", ProcessorType::RV5Stage_NH_F},
+                                  {"nh_nf", ProcessorType::RV5Stage_NH_NF},
+                                  {"rvss", ProcessorType::RVSS}};
+
+class TimingGridExplain : public ::testing::TestWithParam<size_t>
+{
+};
+} // namespace
+
+TEST_P(TimingGridExplain, ANewRunOnAnotherModelClearsTheExplanation)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    const QString before = selectHfStall(w);
+    ASSERT_TRUE(before.contains("hazard detection + forwarding")) << before.toStdString();
+    ASSERT_TRUE(before.contains("1 stall cycle")) << before.toStdString();
+    w.use(kOtherModels[GetParam()].type);
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << "after the switch: " << w.panel->explanation().toStdString();
+    ASSERT_TRUE(w.runToEnd(kExplainProgram));
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << "after the Run: " << w.panel->explanation().toStdString();
+    EXPECT_EQ(w.panel->view()->selectedRow(), -1);
+    EXPECT_EQ(w.panel->view()->selectedColumn(), -1);
+}
+
+INSTANTIATE_TEST_SUITE_P(Models, TimingGridExplain, ::testing::Values(0, 1, 2, 3),
+                         [](const ::testing::TestParamInfo<size_t> &info) {
+                             return std::string(kOtherModels[info.param].name);
+                         });
+
+TEST(TimingGridExplainReset, ASecondRunOnTheSameModelClearsIt)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    ASSERT_FALSE(selectHfStall(w).isEmpty());
+    ASSERT_TRUE(w.runToEnd(kExplainProgram)); // the same program again: a new trace
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << w.panel->explanation().toStdString();
+    EXPECT_EQ(w.panel->view()->selectedRow(), -1);
+}
+
+TEST(TimingGridExplainReset, ReloadingTheProgramClearsIt)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    ASSERT_FALSE(selectHfStall(w).isEmpty());
+    ASSERT_TRUE(w.debugStart(kExplainProgram)); // reloads: back to cycle 0
+    spin(30);
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << w.panel->explanation().toStdString();
+    EXPECT_EQ(w.panel->view()->selectedRow(), -1);
+}
+
+TEST(TimingGridExplainReset, StoppingADebugRunClearsIt)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(ProcessorType::RV5Stage_H_F);
+    ASSERT_TRUE(w.debugStart(kExplainProgram));
+    for (int i = 0; i < 6; ++i)
+        w.step->trigger();
+    spin(30);
+    int row = -1, col = -1;
+    ASSERT_TRUE(findStalled(w.panel->view()->grid(), "addi x13", row, col));
+    w.panel->view()->select(row, col);
+    ASSERT_FALSE(w.panel->explanation().isEmpty());
+    ASSERT_EQ(w.run->text(), "Stop");
+    w.run->trigger(); // Stop resets the machine
+    spin(30);
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << w.panel->explanation().toStdString();
+    EXPECT_EQ(w.panel->view()->selectedRow(), -1);
+}
+
+TEST(TimingGridExplainReset, UndoPastTheSelectedCycleClearsIt)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(ProcessorType::RV5Stage_H_F);
+    ASSERT_TRUE(w.debugStart(kExplainProgram));
+    for (int i = 0; i < 7; ++i)
+        w.step->trigger();
+    spin(30);
+    int row = -1, col = -1;
+    ASSERT_TRUE(findStalled(w.panel->view()->grid(), "addi x13", row, col));
+    const uint32_t selectedCycle = w.panel->view()->grid().firstCycle + col;
+    w.panel->view()->select(row, col);
+    const QString text = w.panel->explanation();
+    ASSERT_FALSE(text.isEmpty());
+    // One Undo that keeps the selected cycle keeps the sentence.
+    w.undo->trigger();
+    spin(30);
+    ASSERT_GE(w.panel->currentCycle(), selectedCycle);
+    EXPECT_EQ(w.panel->explanation(), text);
+    // Undo until the selected cycle is gone.
+    while (w.panel->currentCycle() >= selectedCycle)
+    {
+        w.undo->trigger();
+        spin(10);
+    }
+    spin(30);
+    EXPECT_TRUE(w.panel->explanation().isEmpty()) << w.panel->explanation().toStdString();
+    EXPECT_EQ(w.panel->view()->selectedRow(), -1);
+}
+
+TEST(TimingGridExplainReset, HnfStallNamesTheModelAndItsLength)
+{
+    GridWindow w;
+    ASSERT_TRUE(w.ready());
+    w.use(ProcessorType::RV5Stage_H_NF);
+    ASSERT_TRUE(w.runToEnd(kExplainProgram));
+    int row = -1, col = -1;
+    ASSERT_TRUE(findStalled(w.panel->view()->grid(), "addi x13", row, col));
+    w.panel->view()->select(row, col);
+    const QString text = w.panel->explanation();
+    EXPECT_TRUE(text.contains("hazard detection, no forwarding")) << text.toStdString();
+    // No forwarding: the addi reads x12 in ID in the lw's WB cycle, 2 bubbles.
+    EXPECT_TRUE(text.contains("2 stall cycles")) << text.toStdString();
+    EXPECT_FALSE(text.contains("hazard detection + forwarding")) << text.toStdString();
+}

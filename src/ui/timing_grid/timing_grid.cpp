@@ -200,10 +200,26 @@ QSize TimingGridView::sizeHint() const
 void TimingGridView::setGrid(const TimingGridData &grid)
 {
     m_grid = grid;
-    if (m_selRow >= m_grid.rows.size() || m_selCol >= m_grid.columns())
-        m_selRow = m_selCol = -1;
+    // A new grid has no selection; the panel puts it back when the same
+    // cell of the same trace is still drawn (TimingGridPanel::refresh).
+    m_selRow = m_selCol = -1;
     resize(sizeHint());
     setMinimumSize(sizeHint());
+    update();
+}
+
+void TimingGridView::clearSelection()
+{
+    m_selRow = m_selCol = -1;
+    update();
+}
+
+void TimingGridView::restoreSelection(int row, int column)
+{
+    if (row < 0 || column < 0 || row >= m_grid.rows.size() || column >= m_grid.columns())
+        return;
+    m_selRow = row;
+    m_selCol = column;
     update();
 }
 
@@ -414,6 +430,7 @@ void TimingGridPanel::refresh()
         m_message->show();
         m_scroll->hide();
         m_view->setGrid({});
+        clearSelection();
         return;
     }
     m_scroll->show();
@@ -421,6 +438,7 @@ void TimingGridPanel::refresh()
     const uint32_t first = last > kVisibleCycles ? last - kVisibleCycles + 1 : 1;
     const auto     recs  = last ? trace.window(first, kVisibleCycles) : std::vector<TraceCycle>{};
     m_view->setGrid(buildTimingGrid(recs, m_manager->currentProgram()));
+    keepOrClearSelection(meta);
     if (recs.empty())
         m_message->setText("Step or run a program to draw its timing.");
     else
@@ -487,6 +505,40 @@ void TimingGridPanel::jumpChunk()
     QTimer::singleShot(0, this, &TimingGridPanel::jumpChunk);
 }
 
+void TimingGridPanel::clearSelection()
+{
+    m_selected.reset();
+    m_view->clearSelection();
+    m_explain->clear(); // back to the placeholder hint
+}
+
+void TimingGridPanel::keepOrClearSelection(const TraceMeta &meta)
+{
+    if (!m_selected)
+        return;
+    // The sentence stays only while the very cell it describes is drawn: the
+    // same model, the same cycle with the same record, the same instance.
+    // A new Run, a reload, a reset, a model switch or an Undo past that cycle
+    // all fail one of these, and the old sentence would then be false.
+    const TimingGridData &g = m_view->grid();
+    if (meta.model == m_selected->model)
+        for (int c = 0; c < g.columns(); ++c)
+        {
+            if (g.records[c].cycle != m_selected->record.cycle)
+                continue;
+            if (!(g.records[c] == m_selected->record))
+                break;
+            for (int r = 0; r < g.rows.size(); ++r)
+                if (g.rows[r].id == m_selected->id)
+                {
+                    m_view->restoreSelection(r, c);
+                    return;
+                }
+            break;
+        }
+    clearSelection();
+}
+
 void TimingGridPanel::explainSelection(int row, int column)
 {
     const TimingGridData &g = m_view->grid();
@@ -495,6 +547,7 @@ void TimingGridPanel::explainSelection(int row, int column)
     // The sentence comes from the trace's record for that cycle and nothing
     // else (trace_explain.h): no stall is mentioned that it did not record.
     const TraceMeta         meta    = m_manager->traceMeta();
+    m_selected = SelectedCell{meta.model, g.rows[row].id, g.records[column]};
     const AssembledProgram &program = m_manager->currentProgram();
     const std::string       text    = explainTraceCell(
         g.records, static_cast<size_t>(column), g.rows[row].id, ExplainModel{meta.hazardDetection, meta.forwarding},

@@ -34,6 +34,7 @@ class QToolButton;
 namespace Kites
 {
 class ProcessorManager;
+struct TraceMeta;
 
 /// One cell: what an instruction did in one cycle.
 struct TimingCell
@@ -101,6 +102,10 @@ class TimingGridView : public QWidget
     void setGrid(const TimingGridData &grid);
     const TimingGridData &grid() const { return m_grid; }
     void select(int row, int column);
+    /// Drops the selection without explaining anything.
+    void clearSelection();
+    /// Puts a selection back after setGrid, without emitting cellSelected.
+    void restoreSelection(int row, int column);
     int  selectedRow() const { return m_selRow; }
     int  selectedColumn() const { return m_selCol; }
     QSize sizeHint() const override;
@@ -142,6 +147,9 @@ class TimingGridPanel : public QWidget
     bool jumping() const { return m_jumpTarget.has_value(); }
     /// The machine's cycle count (0 with no processor).
     uint32_t currentCycle() const;
+    /// Forgets the selected cell and its sentence (a new Run, a reload, a
+    /// model switch). refresh() also drops them once the cell is gone.
+    void clearSelection();
 
     TimingGridView   *view() const { return m_view; }
     ProcessorManager *manager() const { return m_manager; }
@@ -154,6 +162,16 @@ class TimingGridPanel : public QWidget
   private:
     void jumpChunk();
     void explainSelection(int row, int column);
+    void keepOrClearSelection(const TraceMeta &meta);
+
+    /// The explained cell, by what it is rather than where it was drawn.
+    struct SelectedCell
+    {
+        QString    model;
+        uint32_t   id = 0;
+        TraceCycle record;
+    };
+    std::optional<SelectedCell> m_selected;
 
     QPointer<ProcessorManager> m_manager;
     QPointer<QAction>          m_stepAction;
