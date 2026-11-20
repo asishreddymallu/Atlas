@@ -6428,8 +6428,9 @@ Stride16ReadsZeroPercent, OneHitInThreeReadsAPercentageWithTwoDecimals}`.
 
 The engine counts evictions (a valid line replaced to make room for a new
 one) and `CacheStats::evictionCount` carries it; the box had no field.
-**Added in T5**: a read-only "Evictions:" field under "Write backs:" on
-all three sub-tabs, tooltip "Valid lines replaced to make room for a new
+**Added in T5**: a read-only "Evictions:" field beside "Size:" (first
+row; a new row would have raised the whole window's minimum height by
+about 35 px) on all three sub-tabs, tooltip "Valid lines replaced to make room for a new
 line.", reset with the other fields on every Run. UI only. Pinned by
 `CacheTabEvictions.*` (5 tests, E8 oracle numbers: stride_1 240,
 stride_16 60, matmul_ijk 2w256 LRU 827/389/181, FIFO 788/428/220).

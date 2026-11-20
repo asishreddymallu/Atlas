@@ -194,8 +194,22 @@
         </property>
        </widget>
       </item>
-      <item row="0" column="1" colspan="3">
+      <item row="0" column="1">
        <widget class="QLineEdit" name="sizeLineEdit"/>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLabel" name="evictionsLabel">
+        <property name="text">
+         <string>Evictions:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="3">
+       <widget class="QLineEdit" name="evictionsLineEdit">
+        <property name="toolTip">
+         <string>Valid lines replaced to make room for a new line.</string>
+        </property>
+       </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="label_8">
@@ -236,20 +250,6 @@
       </item>
       <item row="2" column="3">
        <widget class="QLineEdit" name="writeBackLineEdit"/>
-      </item>
-      <item row="3" column="2">
-       <widget class="QLabel" name="evictionsLabel">
-        <property name="text">
-         <string>Evictions:</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="3">
-       <widget class="QLineEdit" name="evictionsLineEdit">
-        <property name="toolTip">
-         <string>Valid lines replaced to make room for a new line.</string>
-        </property>
-       </widget>
       </item>
      </layout>
     </widget>
