@@ -90,6 +90,24 @@ QString traceDisassembly(const AssembledProgram &program, uint64_t pc)
     return QString::fromStdString(os.str()).trimmed();
 }
 
+namespace
+{
+// The word of instance `id`: the stage occupant with that id in record
+// `index`, else in the nearest earlier record. TraceForward and
+// TraceRedirect name a producer by id and pc only. 0 when no record holds
+// it (it left the window the trace keeps).
+uint32_t wordOf(const std::vector<TraceCycle> &records, size_t index, uint32_t id)
+{
+    if (id == 0)
+        return 0;
+    for (size_t k = index + 1; k-- > 0;)
+        for (const TraceOccupant &o : records[k].occ)
+            if (o.id == id)
+                return o.instruction;
+    return 0;
+}
+} // namespace
+
 QJsonObject traceToJson(const std::vector<TraceCycle> &records, const TraceMeta &meta,
                         const AssembledProgram &program)
 {
@@ -103,9 +121,10 @@ QJsonObject traceToJson(const std::vector<TraceCycle> &records, const TraceMeta 
     root["dropped"]          = static_cast<qint64>(meta.dropped);
 
     QJsonArray cycles;
-    for (const TraceCycle &r : records)
+    for (size_t index = 0; index < records.size(); ++index)
     {
-        QJsonObject c;
+        const TraceCycle &r = records[index];
+        QJsonObject       c;
         c["cycle"] = static_cast<qint64>(r.cycle);
         QJsonObject stages;
         if (r.singleCycle)
@@ -149,7 +168,7 @@ QJsonObject traceToJson(const std::vector<TraceCycle> &records, const TraceMeta 
             j["operand"]          = QStringLiteral("rs%1").arg(f.operand);
             j["register"]         = regName(f.file, f.reg);
             j["path"]             = f.from == TraceStage::MEM ? "EX/MEM" : "MEM/WB";
-            j["producer"]         = producerJson(f.producerId, f.producerPc, 0);
+            j["producer"]         = producerJson(f.producerId, f.producerPc, wordOf(records, index, f.producerId));
             j["producer_is_load"] = f.producerIsLoad;
             fwd.append(j);
         }
@@ -159,7 +178,7 @@ QJsonObject traceToJson(const std::vector<TraceCycle> &records, const TraceMeta 
         {
             QJsonObject rd;
             rd["kind"] = redirectKindName(r.redirect.kind);
-            rd["by"]   = producerJson(r.redirect.byId, r.redirect.byPc, 0);
+            rd["by"]   = producerJson(r.redirect.byId, r.redirect.byPc, wordOf(records, index, r.redirect.byId));
             QJsonArray sq;
             for (const TraceOccupant &o : r.redirect.squashed)
                 sq.append(occupantJson(o, &program));

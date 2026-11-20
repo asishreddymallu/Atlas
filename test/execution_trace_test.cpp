@@ -553,3 +553,88 @@ TEST(ExecutionTrace, RvssRecordsOneOccupiedStagePerCycle)
     EXPECT_TRUE(j["single_cycle"].toBool());
     EXPECT_TRUE(j["cycles"].toArray()[0].toObject()["stages"].toObject().contains("CI"));
 }
+
+// ---- T4: every producer and "by" reference carries its instruction word -----
+// forwarding[].producer.instruction and redirect.by.instruction were written
+// as 0x00000000 (TraceForward and TraceRedirect carry no word); raw[] and
+// stall producers were right. The word of an id is the word of the stage
+// occupant with that id, anywhere in the trace.
+namespace
+{
+const std::array<Model, 5> kAllModels = {{{"rvss", ProcessorType::RVSS},
+                                          {"nh_nf", ProcessorType::RV5Stage_NH_NF},
+                                          {"nh_f", ProcessorType::RV5Stage_NH_F},
+                                          {"h_nf", ProcessorType::RV5Stage_H_NF},
+                                          {"h_f", ProcessorType::RV5Stage_H_F}}};
+
+class TraceJsonWords : public ::testing::TestWithParam<size_t>
+{
+};
+} // namespace
+
+TEST_P(TraceJsonWords, EveryProducerCarriesItsInstructionWord)
+{
+    const Model &m       = kAllModels[GetParam()];
+    size_t       checked = 0, forwarding = 0, redirects = 0, unknownIds = 0;
+    for (size_t c = 0; c < kCaseCount; ++c)
+    {
+        TraceRun          run(m.type, kCases[c].source);
+        const QJsonObject j = run.manager.traceJson();
+        // id -> word, from every stage occupant of every cycle.
+        std::map<qint64, QString> word;
+        for (const QJsonValue &cv : j["cycles"].toArray())
+        {
+            const QJsonObject stages = cv.toObject()["stages"].toObject();
+            for (const QString &k : stages.keys())
+                if (stages[k].isObject())
+                    word[stages[k].toObject()["id"].toInteger()] = stages[k].toObject()["instruction"].toString();
+        }
+        auto check = [&](const QJsonObject &ref, const char *what, qint64 cycle)
+        {
+            const qint64 id = ref["id"].toInteger();
+            if (id == 0)
+                return;
+            const auto it = word.find(id);
+            if (it == word.end())
+            {
+                ++unknownIds; // no occupant has it: the word must stay 0
+                EXPECT_EQ(ref["instruction"].toString().toStdString(), "0x00000000") << what;
+                return;
+            }
+            ++checked;
+            EXPECT_EQ(ref["instruction"].toString().toStdString(), it->second.toStdString())
+                << kCases[c].name << " " << m.name << " cycle " << cycle << " " << what << " id " << id;
+        };
+        for (const QJsonValue &cv : j["cycles"].toArray())
+        {
+            const QJsonObject cy    = cv.toObject();
+            const qint64      cycle = cy["cycle"].toInteger();
+            for (const QJsonValue &x : cy["raw"].toArray())
+                check(x.toObject()["producer"].toObject(), "raw.producer", cycle);
+            if (cy["stall"].isObject())
+                check(cy["stall"].toObject()["producer"].toObject(), "stall.producer", cycle);
+            for (const QJsonValue &f : cy["forwarding"].toArray())
+            {
+                ++forwarding;
+                check(f.toObject()["producer"].toObject(), "forwarding.producer", cycle);
+            }
+            if (cy["redirect"].isObject())
+            {
+                ++redirects;
+                check(cy["redirect"].toObject()["by"].toObject(), "redirect.by", cycle);
+            }
+        }
+    }
+    RecordProperty("checked", static_cast<int>(checked));
+    std::cout << "[words] " << m.name << " references checked " << checked << " (forwarding " << forwarding
+              << ", redirects " << redirects << "), ids with no occupant " << unknownIds << "\n";
+    if (m.type == ProcessorType::RV5Stage_NH_F || m.type == ProcessorType::RV5Stage_H_F)
+        EXPECT_GT(forwarding, 0u) << "the forwarding models must exercise forwarding[]";
+    if (m.type != ProcessorType::RVSS)
+        EXPECT_GT(redirects, 0u);
+}
+
+INSTANTIATE_TEST_SUITE_P(Models, TraceJsonWords, ::testing::Values(0, 1, 2, 3, 4),
+                         [](const ::testing::TestParamInfo<size_t> &info) {
+                             return std::string(kAllModels[info.param].name);
+                         });
