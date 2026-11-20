@@ -6321,3 +6321,90 @@ highlight mapping, stage selection), the window's highlight receivers
 (about 0.13 s) and about 5 ms of repaint per turn. Reaching 1 s would
 mean deferring that per-cycle work in `ProcessorManager` during a jump,
 which T3 did not change.
+
+## 152. FIXED: The timing grid's explanation outlived its trace
+
+Seen in the T4 hand-test: Run on h_f and click the stalled cell: "Cycle
+6: addi x13, x12, 1 waits in ID because lw x12, x10, 0 ... On this
+processor (hazard detection + forwarding) this costs 1 stall cycle."
+Switch to h_nf or nh_f and Run: the same sentence stayed under the grid.
+The view kept its selection by row and column across grid rebuilds, and
+the panel never cleared the text.
+
+**Fixed in T4** (`src/ui/timing_grid/timing_grid.cpp`, `main_window.cpp`):
+the panel remembers the explained cell by model, cycle record and
+instance id, and clears the selection and sentence when that cell is no
+longer drawn (a model switch, a new trace, a reset, an Undo past the
+cycle). The window clears it on every Run, Debug Run, reload and model
+switch. `trace_explain` was already right on h_nf ("hazard detection, no
+forwarding", 2 stall cycles). Pinned by
+`Models/TimingGridExplain.ANewRunOnAnotherModelClearsTheExplanation/*`
+and `TimingGridExplainReset.*` (9 tests).
+
+## 153. FIXED: The Instruction Type table counted the program, not the run
+
+On the hand-test loop the table read I 6, S 1, B 1, U 1 (each source
+line once, sum 9), while Instructions retired was 13 and the editor's
+per-line margin summed to 13. The table model showed
+`Profiler::m_instructionTypeCounts`, a static count filled at load.
+
+**Not deliberate.** `docs/ARCHITECTURE.md` describes the Profiler as
+accumulating instruction types "as the processor is clocked". The static
+numbers were asserted only incidentally, by the bounds check in
+`profiler_instruction_type_test.cpp` and by known_issues 85's
+no-double-count test; both still hold, because
+`Profiler::getInstructionTypeCounts()` is unchanged.
+
+**Fixed in T4** (`src/ui/profiler_tab/`): the table is the margin's own
+per-line counts summed by each line's type
+(`ProfilerEditor::executedTypeCounts`). No new counter, no change to
+retire semantics. The margin's counts stay right through Undo and Redo,
+so the table does too. Pinned by
+`Models/ProfilerTypeTable.{AfterARunTheTableIsTheMarginSummedByType,
+UndoAndRedoMatchAStraightRun}/*` on all five models.
+
+## 154. FIXED: Forwarding producers and redirect "by" had instruction word 0 in the trace JSON
+
+In the exported trace, `forwarding[].producer.instruction` and
+`redirect.by.instruction` read `"0x00000000"` (their id and pc were
+right; `raw[]` and `stall` producers were right). `TraceForward` and
+`TraceRedirect` carry no word, and `traceToJson` wrote 0.
+
+**Fixed in T4** (`src/processor/trace_json.cpp`): the word is looked up
+by id among that cycle's stage occupants, then the earlier cycles. It
+stays 0 only when no record in the trace holds the id; on the 64
+generated programs that never happens. Pinned by
+`Models/TraceJsonWords.EveryProducerCarriesItsInstructionWord/*` (2,676
+references on the four pipelines).
+
+## 155. The Stall cycles rows read "n/a" under a [Measured] tag on nh_f and nh_nf
+
+**Open, cosmetic.** On the models without a hazard unit there is no stall
+counter, so Stall cycles and its load-use and RAW split rows show "n/a".
+The Source column still says [Measured] on those rows: the provenance
+tag is per row (`processor_metrics_model.cpp`), not per value. A
+"[n/a]" or empty tag for an absent value would read better; the tooltip
+already says why the value is absent.
+
+## 156. Design note: on nh_f a load-use consumer receives the load's address
+
+**Intended hardware behaviour, not a bug; a lab teaching point.** nh_f
+has forwarding but no hazard detection. In the hand-test program P1
+
+```
+    lui  x10, 0x10        # x10 = 0x10000
+    addi x11, x0, 5
+    sw   x11, 0(x10)      # mem[0x10000] = 5
+    lw   x12, 0(x10)      # x12 = 5
+    addi x13, x12, 1      # expected 6
+```
+
+the `addi` is in EX while the `lw` is in MEM, before the load's data
+exists. The EX/MEM forwarding path carries what EX/MEM holds, the `lw`'s
+ALU result, which is the address 0x10000. So x13 = 0x10001 on nh_f, and
+6 on rvss, h_nf and h_f. Checked in T4 with the same sequence on
+`lirepro` (x5/x6/x7 for x10/x12/x13): nh-f x7 = 0x10001, the others 6.
+(nh_nf goes wrong in a different way on this program: without
+forwarding the `sw` reads the old x11 and stores 0.) Without a hazard
+unit the program must place one independent instruction (or a nop)
+between a load and its consumer; the timing grid's explanation says so.
