@@ -19,6 +19,25 @@ CacheConfigWidget::CacheConfigWidget(QWidget *parent)
 
     ui->customPolicyScriptlineEdit->setReadOnly(true);
 
+    // Each choice carries its engine value, so what is shown and what is
+    // sent never depend on the order of the items in the .ui. (Write hit
+    // lists Write Back first, while WritePolicy::WriteThrough is 0, and no
+    // item had data: getConfig() sent 0 - write-through, write-allocate,
+    // LRU - whatever was shown.)
+    auto tag = [](QComboBox *box, const char *text, int value)
+    {
+        const int i = box->findText(QString::fromLatin1(text));
+        if (i >= 0)
+            box->setItemData(i, value);
+    };
+    tag(ui->writeHitComboBox, "Write Through", static_cast<int>(WritePolicy::WriteThrough));
+    tag(ui->writeHitComboBox, "Write Back", static_cast<int>(WritePolicy::WriteBack));
+    tag(ui->writeMissComboBox, "Write Allocate", static_cast<int>(AllocationPolicy::WriteAllocate));
+    tag(ui->writeMissComboBox, "Write No Allocate", static_cast<int>(AllocationPolicy::NoWriteAllocate));
+    tag(ui->repPolComboBox, "LRU", static_cast<int>(ReplacementPolicy::LRU));
+    tag(ui->repPolComboBox, "FIFO", static_cast<int>(ReplacementPolicy::FIFO));
+    tag(ui->repPolComboBox, "Custom", static_cast<int>(ReplacementPolicy::Custom));
+
     connect(ui->linesSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CacheConfigWidget::configChangedSignal);
     connect(ui->waysSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this,
@@ -33,8 +52,8 @@ CacheConfigWidget::CacheConfigWidget(QWidget *parent)
     connect(ui->repPolComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
     [this]
     {
-        if (ui->repPolComboBox->currentData().value<ReplacementPolicy>() == 
-        ReplacementPolicy::Custom)
+        if (static_cast<ReplacementPolicy>(ui->repPolComboBox->currentData().toInt()) ==
+            ReplacementPolicy::Custom)
         {
             onCustomPolicyClicked();
         }
@@ -42,7 +61,7 @@ CacheConfigWidget::CacheConfigWidget(QWidget *parent)
         {
             ui->customPolicyScriptlineEdit->clear();
             m_lastSelectedPolicy =
-                static_cast<ReplacementPolicy>(ui->repPolComboBox->currentIndex());
+                static_cast<ReplacementPolicy>(ui->repPolComboBox->currentData().toInt());
             emit CacheConfigWidget::configChangedSignal();
         }
     });
@@ -61,7 +80,8 @@ void CacheConfigWidget::onCustomPolicyClicked()
     {
         // If no file was selected, reset the combo box to a default value (e.g., LRU)
         QSignalBlocker blocker(ui->repPolComboBox);
-        ui->repPolComboBox->setCurrentIndex(static_cast<int>(ReplacementPolicy::LRU));
+        ui->repPolComboBox->setCurrentIndex(
+            ui->repPolComboBox->findData(static_cast<int>(ReplacementPolicy::LRU)));
         ui->customPolicyScriptlineEdit->clear();
         QMessageBox::warning(this, tr("No Script Selected"),
                              tr("No custom policy script was selected. Reverting to LRU."));
@@ -75,9 +95,9 @@ CacheConfig CacheConfigWidget::getConfig() const
     config.lineCount = 1ULL << ui->linesSpinBox->value();
     config.lineSizeInBytes = (1ULL <<ui->wordsSpinBox->value())* sizeof(uint32_t);
     config.wayCount = 1ULL << ui->waysSpinBox->value();
-    config.writePolicy = ui->writeHitComboBox->currentData().value<WritePolicy>();
-    config.allocationPolicy = ui->writeMissComboBox->currentData().value<AllocationPolicy>();
-    config.replacementPolicy = ui->repPolComboBox->currentData().value<ReplacementPolicy>();
+    config.writePolicy = static_cast<WritePolicy>(ui->writeHitComboBox->currentData().toInt());
+    config.allocationPolicy = static_cast<AllocationPolicy>(ui->writeMissComboBox->currentData().toInt());
+    config.replacementPolicy = static_cast<ReplacementPolicy>(ui->repPolComboBox->currentData().toInt());
     return config;
 }
 
@@ -117,9 +137,17 @@ void CacheConfigWidget::setConfig(CacheConfig config)
     ui->linesSpinBox->setValue(static_cast<int>(std::log2(config.lineCount)));
     ui->waysSpinBox->setValue(static_cast<int>(std::log2(config.wayCount)));
     ui->wordsSpinBox->setValue(static_cast<int>(std::log2(config.lineSizeInBytes/sizeof(uint32_t))));
-    ui->writeHitComboBox->setCurrentIndex(static_cast<int>(config.writePolicy));
-    ui->writeMissComboBox->setCurrentIndex(static_cast<int>(config.allocationPolicy));
-    ui->repPolComboBox->setCurrentIndex(static_cast<int>(config.replacementPolicy));
+    ui->writeHitComboBox->setCurrentIndex(ui->writeHitComboBox->findData(static_cast<int>(config.writePolicy)));
+    ui->writeMissComboBox->setCurrentIndex(
+        ui->writeMissComboBox->findData(static_cast<int>(config.allocationPolicy)));
+    ui->repPolComboBox->setCurrentIndex(ui->repPolComboBox->findData(static_cast<int>(config.replacementPolicy)));
+    if (config.replacementPolicy != ReplacementPolicy::Custom)
+        m_lastSelectedPolicy = config.replacementPolicy;
+}
+
+std::string CacheConfigWidget::customPolicyScriptPath() const
+{
+    return ui->customPolicyScriptlineEdit->text().toStdString();
 }
 
 void CacheConfigWidget::cacheStatsUpdatedSlot(CacheStats newStats)

@@ -4,6 +4,8 @@
 #include "processor/cache/cacheconfig.h"
 #include <QWidget>
 
+#include <string>
+
 namespace Kites
 {
 namespace Ui
@@ -29,11 +31,13 @@ explicit CacheConfigWidget(QWidget *parent = nullptr);
     void setWordsExponent(int value);
 	
 	void setConfig(CacheConfig config);
+    /// The loaded custom replacement script, or empty.
+    std::string customPolicyScriptPath() const;
 
 private:
     Ui::CacheConfigWidget *ui;
     void onCustomPolicyClicked();
-    ReplacementPolicy m_lastSelectedPolicy; // to be used when loading custom script fails
+    ReplacementPolicy m_lastSelectedPolicy = ReplacementPolicy::LRU; // to be used when loading custom script fails
 
 public slots:
     void cacheStatsUpdatedSlot(CacheStats newStats);

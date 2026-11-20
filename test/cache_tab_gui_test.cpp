@@ -214,3 +214,135 @@ TEST(CacheTabHitRate, OneHitInThreeReadsAPercentageWithTwoDecimals)
     EXPECT_EQ_Q(w.field("L1Config", "missesLineEdit"), "2");
     EXPECT_EQ_Q(w.field("L1Config", "hitrateLineEdit"), "33.33 %");
 }
+
+// ---- Item 3: what the Cache tab shows is what the engine has ----------------
+// The E8 survey read the engine's defaults as write-through + no-write-
+// allocate, 1 set x 2 ways x 16 B, LRU (cache_test.cpp pins them); a fresh
+// window showed Write hit = "Write Back".
+namespace
+{
+struct Level
+{
+    const char *widget;
+    const char *name;
+    Cache *(MemoryController::*cache)();
+};
+const Level kLevels[] = {{"InstructionConfig", "instruction", &MemoryController::getInstructionCache},
+                         {"L1Config", "l1", &MemoryController::getL1Cache},
+                         {"L2Config", "l2", &MemoryController::getL2Cache}};
+
+std::string writeHitLabel(WritePolicy p)
+{
+    return p == WritePolicy::WriteThrough ? "Write Through" : "Write Back";
+}
+std::string writeMissLabel(AllocationPolicy p)
+{
+    return p == AllocationPolicy::WriteAllocate ? "Write Allocate" : "Write No Allocate";
+}
+std::string replacementLabel(ReplacementPolicy p)
+{
+    return p == ReplacementPolicy::LRU ? "LRU" : p == ReplacementPolicy::FIFO ? "FIFO" : "Custom";
+}
+
+CacheConfig engineConfig(CacheWindow &w, const Level &l)
+{
+    return (w.manager->getMemoryController()->*l.cache)()->getConfig();
+}
+
+/// The widget's fields against the engine's config, field by field.
+void expectShown(CacheWindow &w, const Level &l, const std::string &when)
+{
+    const CacheConfig  e   = engineConfig(w, l);
+    CacheConfigWidget *cfg = w.level(l.widget);
+    ASSERT_NE(cfg, nullptr);
+    EXPECT_EQ(cfg->findChild<QSpinBox *>("linesSpinBox")->value(), static_cast<int>(std::log2(e.lineCount)))
+        << when << ": 2^n Lines";
+    EXPECT_EQ(cfg->findChild<QSpinBox *>("waysSpinBox")->value(), static_cast<int>(std::log2(e.wayCount)))
+        << when << ": 2^n Ways";
+    EXPECT_EQ(cfg->findChild<QSpinBox *>("wordsSpinBox")->value(),
+              static_cast<int>(std::log2(e.lineSizeInBytes / 4)))
+        << when << ": 2^n words/line";
+    EXPECT_EQ(cfg->findChild<QComboBox *>("writeHitComboBox")->currentText().toStdString(),
+              writeHitLabel(e.writePolicy))
+        << when << ": Write hit";
+    EXPECT_EQ(cfg->findChild<QComboBox *>("writeMissComboBox")->currentText().toStdString(),
+              writeMissLabel(e.allocationPolicy))
+        << when << ": Write miss";
+    EXPECT_EQ(cfg->findChild<QComboBox *>("repPolComboBox")->currentText().toStdString(),
+              replacementLabel(e.replacementPolicy))
+        << when << ": Replacement Policy";
+}
+
+class CacheTabConfig : public ::testing::TestWithParam<size_t>
+{
+};
+} // namespace
+
+TEST_P(CacheTabConfig, AFreshWindowShowsWhatTheEngineHas)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    const Level &l = kLevels[GetParam()];
+    const CacheConfig e = engineConfig(w, l);
+    // The engine defaults (pinned elsewhere): write-through, no-write-allocate, LRU.
+    EXPECT_EQ(e.writePolicy, WritePolicy::WriteThrough);
+    EXPECT_EQ(e.allocationPolicy, AllocationPolicy::NoWriteAllocate);
+    EXPECT_EQ(e.replacementPolicy, ReplacementPolicy::LRU);
+    expectShown(w, l, "fresh window");
+}
+
+TEST_P(CacheTabConfig, EditingOneFieldChangesOnlyThatField)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    const Level       &l      = kLevels[GetParam()];
+    const CacheConfig  before = engineConfig(w, l);
+    QSpinBox          *lines  = w.level(l.widget)->findChild<QSpinBox *>("linesSpinBox");
+    lines->setValue(lines->value() + 1);
+    QApplication::processEvents();
+    const CacheConfig after = engineConfig(w, l);
+    EXPECT_EQ(after.lineCount, before.lineCount * 2) << "the edited field";
+    EXPECT_EQ(after.wayCount, before.wayCount);
+    EXPECT_EQ(after.lineSizeInBytes, before.lineSizeInBytes);
+    EXPECT_EQ(after.writePolicy, before.writePolicy) << "Write hit changed by a 2^n Lines edit";
+    EXPECT_EQ(after.allocationPolicy, before.allocationPolicy) << "Write miss changed by a 2^n Lines edit";
+    EXPECT_EQ(after.replacementPolicy, before.replacementPolicy) << "Replacement changed by a 2^n Lines edit";
+    expectShown(w, l, "after the edit");
+}
+
+TEST_P(CacheTabConfig, EveryChoiceReachesTheEngine)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    const Level &l = kLevels[GetParam()];
+    w.configure(l.widget, 3, 1, 2, "Write Back", "Write Allocate", "FIFO");
+    CacheConfig e = engineConfig(w, l);
+    EXPECT_EQ(e.writePolicy, WritePolicy::WriteBack);
+    EXPECT_EQ(e.allocationPolicy, AllocationPolicy::WriteAllocate);
+    EXPECT_EQ(e.replacementPolicy, ReplacementPolicy::FIFO);
+    expectShown(w, l, "Write Back / Write Allocate / FIFO");
+    w.configure(l.widget, 3, 1, 2, "Write Through", "Write No Allocate", "LRU");
+    e = engineConfig(w, l);
+    EXPECT_EQ(e.writePolicy, WritePolicy::WriteThrough);
+    EXPECT_EQ(e.allocationPolicy, AllocationPolicy::NoWriteAllocate);
+    EXPECT_EQ(e.replacementPolicy, ReplacementPolicy::LRU);
+    expectShown(w, l, "Write Through / Write No Allocate / LRU");
+}
+
+TEST_P(CacheTabConfig, AModelSwitchKeepsTheShownConfiguration)
+{
+    CacheWindow w;
+    ASSERT_TRUE(w.ready());
+    const Level &l = kLevels[GetParam()];
+    w.use(ProcessorType::RVSS);
+    // L2 must stay at least as large as the others (enforceL2AtLeastL1).
+    w.configure(l.widget, 5, 1, 2, "Write Back", "Write Allocate", "FIFO");
+    expectShown(w, l, "before the switch");
+    w.use(ProcessorType::RV5Stage_H_F); // a new processor, new memory, new caches
+    expectShown(w, l, "after switching to h_f");
+}
+
+INSTANTIATE_TEST_SUITE_P(Levels, CacheTabConfig, ::testing::Values(0, 1, 2),
+                         [](const ::testing::TestParamInfo<size_t> &info) {
+                             return std::string(kLevels[info.param].name);
+                         });

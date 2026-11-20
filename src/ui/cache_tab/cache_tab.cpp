@@ -136,6 +136,7 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->L1Config->setConfig(m_memoryController->getL1Cache()->getConfig());
     ui->L2Config->setConfig(m_memoryController->getL2Cache()->getConfig());
     ui->InstructionConfig->setConfig(m_memoryController->getInstructionCache()->getConfig());
+    m_widgetsShowEngine = true;
 
 }
 
@@ -201,6 +202,35 @@ void CacheTab::changeMemoryController(MemoryController *memoryController)
             &CacheConfigWidget::customPolicyScriptLoadedSlot);
     connect(m_memoryController->getInstructionCache(), &Cache::customPolicyScriptLoadedSignal,
             ui->InstructionConfig, &CacheConfigWidget::customPolicyScriptLoadedSlot);
+
+    // A processor switch builds new caches with the engine's defaults. Keep
+    // what the three sub-tabs show: apply it to the new caches. (At
+    // construction the widgets are filled FROM the engine instead.)
+    if (m_widgetsShowEngine)
+        applyShownConfigs();
+}
+
+void CacheTab::applyShownConfigs()
+{
+    const std::pair<CacheConfigWidget *, Cache *> levels[] = {
+        {ui->InstructionConfig, m_memoryController->getInstructionCache()},
+        {ui->L1Config, m_memoryController->getL1Cache()},
+        {ui->L2Config, m_memoryController->getL2Cache()}};
+    for (const auto &[widget, cache] : levels)
+    {
+        CacheConfig config = widget->getConfig();
+        // A custom policy needs its script loaded into the new cache: apply
+        // the rest with LRU, then load the script (which selects Custom).
+        const bool custom = config.replacementPolicy == ReplacementPolicy::Custom;
+        if (custom)
+            config.replacementPolicy = ReplacementPolicy::LRU;
+        cache->reconfigure(config);
+        const std::string script = widget->customPolicyScriptPath();
+        if (custom && !script.empty())
+            cache->loadCustomPolicyScript(script);
+        else if (custom)
+            widget->setConfig(cache->getConfig()); // nothing to load: show LRU, as the engine has
+    }
 }
 
 bool CacheTab::enforceL2AtLeastL1()

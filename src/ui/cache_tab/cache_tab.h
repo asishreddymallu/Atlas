@@ -51,6 +51,9 @@ signals:
 private:
 	//void updateCacheConfig(CacheLevel cacheLevel, CacheConfig newConfig);
     bool enforceL2AtLeastL1();
+    /// Applies what the three sub-tabs show to the current caches.
+    void applyShownConfigs();
+    bool m_widgetsShowEngine = false; ///< set once the widgets were filled from the engine
 
     std::array<CacheModel*, CacheLevelCount> m_cacheModels{};
     MemoryController  *m_memoryController    {nullptr};
