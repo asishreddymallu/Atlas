@@ -36,6 +36,10 @@ class AppSettings : public QObject
     int editorFontSize() const;
     void setEditorFontSize(int size);
 
+    /// The Pipeline timing overlay's height in pixels; 0 when never set.
+    int timingOverlayHeight() const;
+    void setTimingOverlayHeight(int height);
+
     BorderStyle compilerOutputBorderStyle() const;
     void setCompilerOutputBorderStyle(BorderStyle style);
 

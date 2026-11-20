@@ -20,6 +20,7 @@ namespace Kites
 {
 class OutputDock;
 class TimingGridPanel;
+class TimingOverlay;
 QT_BEGIN_NAMESPACE
 namespace Ui
 {
@@ -139,7 +140,7 @@ private:
     // The Output panel, and a manual Step held until a read's input is
     // entered there.
     OutputDock        *m_outputDock {nullptr};
-    QDockWidget       *m_timingDock {nullptr};
+    TimingOverlay     *m_timingOverlay {nullptr};
     TimingGridPanel   *m_timingPanel {nullptr};
     QAction           *m_timingToggleAction {nullptr};
     bool               m_stepAwaitingInput {false};

@@ -10,6 +10,7 @@ constexpr const char *kEditorThemeIdKey = "theme/editorId";
 constexpr const char *kEditorFontFamilyKey = "editor/fontFamily";
 constexpr const char *kEditorFontSizeKey = "editor/fontSize";
 constexpr const char *kCompilerOutputBorderStyleKey = "compilerOutput/borderStyle";
+constexpr const char *kTimingOverlayHeightKey = "timingOverlay/height";
 
 constexpr int kDefaultEditorFontSize = 11;
 } // namespace
@@ -62,6 +63,16 @@ int AppSettings::editorFontSize() const
 void AppSettings::setEditorFontSize(int size)
 {
     m_settings.setValue(kEditorFontSizeKey, size);
+}
+
+int AppSettings::timingOverlayHeight() const
+{
+    return m_settings.value(kTimingOverlayHeightKey, 0).toInt();
+}
+
+void AppSettings::setTimingOverlayHeight(int height)
+{
+    m_settings.setValue(kTimingOverlayHeightKey, height);
 }
 
 BorderStyle AppSettings::compilerOutputBorderStyle() const

@@ -24,7 +24,6 @@
 #include <QAction>
 #include <QApplication>
 #include <QDir>
-#include <QDockWidget>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
@@ -75,7 +74,7 @@ struct GridWindow
     Editor          *editor{nullptr};
     QAction         *run{nullptr}, *debug{nullptr}, *step{nullptr}, *undo{nullptr};
     TimingGridPanel *panel{nullptr};
-    QDockWidget     *dock{nullptr};
+    QWidget         *dock{nullptr}; ///< the timing overlay (T6; was a QDockWidget)
 
     GridWindow()
     {
@@ -106,7 +105,7 @@ struct GridWindow
             if (spinBox->suffix() == " ms")
                 spinBox->setValue(1);
         panel = window.findChild<TimingGridPanel *>("timingGridPanel");
-        dock  = window.findChild<QDockWidget *>("timingDock");
+        dock  = window.findChild<QWidget *>("timingDock");
         if (dock)
             dock->show();
     }

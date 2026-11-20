@@ -1,4 +1,5 @@
 #include "ui/timing_grid/timing_grid.h"
+#include "ui/timing_grid/timing_overlay.h"
 #include "main_window.h"
 #include "assembler/assembler.h"
 #include "common/assembled_program.h"
@@ -142,6 +143,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     mainLayout->addWidget(splitter, 1);
 
     setCentralWidget(central);
+    m_timingOverlay->setHost(central, m_ribbon);
     resize(1200, 800);
     // requestRun/requestDebugRun snapshot the stop epoch on THIS thread
     // and post it with the invocation, so a Stop issued afterwards
@@ -241,18 +243,25 @@ void MainWindow::setUpProblemsDock()
     setActionHint(outputToggle, "Show or hide the program's output");
     viewMenu->addAction(outputToggle);
 
-    // WP-03: the pipeline timing grid, a bottom dock like Output so it can sit
-    // under the Processor tab's circuit. Hidden until asked for.
-    m_timingDock = new QDockWidget("Pipeline timing", this);
-    m_timingDock->setObjectName("timingDock");
-    m_timingPanel = new TimingGridPanel(m_timingDock);
+    // WP-03: the pipeline timing grid. T6: laid over the bottom of the
+    // central area rather than docked, so opening it moves nothing else (a
+    // dock took its height from the editor, the circuit and the registers).
+    // Hidden until asked for; placed over the central widget once that
+    // exists (setHost, in the constructor).
+    //
+    // The toggle is created first and owned by the window, where the dock's
+    // toggleViewAction sat in the window's object tree, and the overlay is a
+    // direct child of the window like the dock was: harnesses list the
+    // window's actions and spin boxes in tree order.
+    m_timingToggleAction = new QAction("Pipeline timing", this);
+    m_timingToggleAction->setCheckable(true);
+    m_timingPanel = new TimingGridPanel();
     m_timingPanel->setUp(m_processorManager, m_stepAction, m_undoAction, m_redoAction);
-    m_timingDock->setWidget(m_timingPanel);
-    addDockWidget(Qt::BottomDockWidgetArea, m_timingDock);
-    tabifyDockWidget(m_outputDock, m_timingDock);
-    m_timingDock->hide();
-    m_timingToggleAction = m_timingDock->toggleViewAction();
-    m_timingToggleAction->setText("Pipeline timing");
+    m_timingOverlay = new TimingOverlay("Pipeline timing", m_timingPanel, this);
+    m_timingOverlay->setObjectName("timingDock");
+    m_timingOverlay->hide();
+    connect(m_timingToggleAction, &QAction::toggled, m_timingOverlay, &QWidget::setVisible);
+    connect(m_timingOverlay, &TimingOverlay::visibilityChanged, m_timingToggleAction, &QAction::setChecked);
     setActionHint(m_timingToggleAction, "Show or hide the pipeline timing grid");
     viewMenu->addAction(m_timingToggleAction);
     // Queued: the processor emits these on the worker thread during a Run.
