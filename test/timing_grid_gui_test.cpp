@@ -538,7 +538,7 @@ bool findStalled(const TimingGridData &g, const QString &label, int &row, int &c
             if (g.rows[r].cells[c].kind == TimingCell::Stalled)
             {
                 row = r;
-                col = c;
+                col = static_cast<int>(g.rows[r].firstCycle - g.firstCycle) + c; // cells are the row's own cycles
                 return true;
             }
     }

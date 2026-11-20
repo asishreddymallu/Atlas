@@ -13,7 +13,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
-#include <QScrollArea>
+#include <QLocale>
 #include <QScrollBar>
 #include <QSpinBox>
 #include <QTextBrowser>
@@ -97,55 +97,246 @@ TimingCellColors timingCellColors(TraceStage stage)
     return timingCellColorsFrom(accent, surface(), t.getTextColor());
 }
 
-TimingGridData buildTimingGrid(const std::vector<TraceCycle> &records, const AssembledProgram &program)
+// ---- Model -----------------------------------------------------------------
+namespace
 {
-    TimingGridData grid;
-    grid.records = records;
-    if (records.empty())
-        return grid;
-    grid.singleCycle = records.front().singleCycle;
-    grid.firstCycle  = records.front().cycle;
-    std::map<uint32_t, int> rowOf;
-    const int               columns = static_cast<int>(records.size());
-    for (int c = 0; c < columns; ++c)
+/// Enough of a record to tell two histories apart at one cycle.
+uint64_t fingerprint(const TraceCycle &r)
+{
+    uint64_t h   = 1469598103934665603ull;
+    auto     mix = [&h](uint64_t v) {
+        h ^= v;
+        h *= 1099511628211ull;
+    };
+    mix(r.cycle);
+    for (const TraceOccupant &o : r.occ)
     {
-        const TraceCycle &r = records[static_cast<size_t>(c)];
-        for (size_t s = 0; s < kTraceStages; ++s)
+        mix(o.id);
+        mix(o.pc);
+        mix(o.instruction);
+    }
+    for (uint32_t id : r.postIds)
+        mix(id);
+    mix(r.stalled);
+    mix(r.nextIdBefore);
+    mix(r.nextIdAfter);
+    mix(static_cast<uint64_t>(r.redirect.kind));
+    for (const TraceOccupant &o : r.redirect.squashed)
+        mix(o.id);
+    return h;
+}
+
+void recomputeSquashed(TimingRow &row)
+{
+    row.squashed = std::any_of(row.cells.begin(), row.cells.end(),
+                               [](const TimingCell &c) { return c.kind == TimingCell::Squashed; });
+}
+} // namespace
+
+int TimingGridData::rowOfId(uint32_t id) const
+{
+    const auto it = std::lower_bound(rows.begin(), rows.end(), id,
+                                     [](const TimingRow &r, uint32_t v) { return r.id < v; });
+    return it != rows.end() && it->id == id ? static_cast<int>(it - rows.begin()) : -1;
+}
+
+void TimingGridModel::clear()
+{
+    m_data = {};
+    m_prints.clear();
+    m_labels.clear();
+    m_maxSpan = 0;
+}
+
+const QString &TimingGridModel::labelOf(const TraceOccupant &o, const AssembledProgram &program)
+{
+    const quint64 key = (static_cast<quint64>(o.pc) << 32) ^ o.instruction;
+    auto          it  = m_labels.find(key);
+    if (it == m_labels.end())
+    {
+        QString label = traceDisassembly(program, o.pc);
+        if (label.isEmpty())
+            label = QStringLiteral("0x%1").arg(o.pc, 0, 16);
+        it = m_labels.insert(key, label);
+    }
+    return it.value();
+}
+
+void TimingGridModel::append(const TraceCycle &r, const AssembledProgram &program)
+{
+    const uint32_t c = r.cycle;
+    if (m_data.firstCycle == 0)
+    {
+        m_data.firstCycle  = c;
+        m_data.singleCycle = r.singleCycle;
+    }
+    m_data.lastCycle = c;
+    m_prints.push_back(fingerprint(r));
+    QList<TimingRow> &rows = m_data.rows;
+    for (size_t s = 0; s < kTraceStages; ++s)
+    {
+        const TraceOccupant &o = r.occ[s];
+        if (o.bubble())
+            continue;
+        // Rows stay in id order, which is fetch order (one id per fetch).
+        // A new fetch is the youngest, so it nearly always goes at the end.
+        qsizetype idx;
+        if (!rows.isEmpty() && rows.back().id == o.id)
+            idx = rows.size() - 1;
+        else if (rows.isEmpty() || rows.back().id < o.id)
+            idx = rows.size();
+        else
+            idx = std::lower_bound(rows.begin(), rows.end(), o.id,
+                                   [](const TimingRow &row, uint32_t v) { return row.id < v; }) -
+                  rows.begin();
+        if (idx == rows.size() || rows[idx].id != o.id)
         {
-            const TraceOccupant &o = r.occ[s];
-            if (o.bubble())
-                continue;
-            auto it = rowOf.find(o.id);
-            if (it == rowOf.end())
-            {
-                TimingRow row;
-                row.id    = o.id;
-                row.pc    = o.pc;
-                row.label = traceDisassembly(program, o.pc);
-                if (row.label.isEmpty())
-                    row.label = QStringLiteral("0x%1").arg(o.pc, 0, 16);
-                row.cells.resize(columns);
-                it = rowOf.emplace(o.id, static_cast<int>(grid.rows.size())).first;
-                grid.rows.push_back(row);
-            }
-            TimingRow  &row  = grid.rows[it->second];
-            TimingCell &cell = row.cells[c];
-            cell.stage       = static_cast<TraceStage>(s);
-            cell.kind        = TimingCell::Stage;
-            if (s == 1 && r.stalled)
-                cell.kind = TimingCell::Stalled;
-            // IF held: the same fetch is still in IF next cycle.
-            if (s == 0 && r.postIds[0] == o.id)
-                cell.kind = TimingCell::Held;
-            if (std::find(r.redirect.squashed.begin(), r.redirect.squashed.end(), o) !=
-                r.redirect.squashed.end())
-            {
-                cell.kind    = TimingCell::Squashed;
-                row.squashed = true;
-            }
+            TimingRow row;
+            row.id         = o.id;
+            row.pc         = o.pc;
+            row.label      = labelOf(o, program);
+            row.firstCycle = c;
+            rows.insert(idx, row);
+        }
+        TimingRow      &row = rows[idx];
+        const qsizetype off = static_cast<qsizetype>(c - row.firstCycle);
+        if (row.cells.size() <= off)
+            row.cells.resize(off + 1);
+        m_maxSpan        = std::max(m_maxSpan, static_cast<int>(row.cells.size()));
+        TimingCell &cell = row.cells[off];
+        cell.stage       = static_cast<TraceStage>(s);
+        cell.kind        = TimingCell::Stage;
+        if (s == 1 && r.stalled)
+            cell.kind = TimingCell::Stalled;
+        // IF held: the same fetch is still in IF next cycle.
+        if (s == 0 && r.postIds[0] == o.id)
+            cell.kind = TimingCell::Held;
+        if (std::find(r.redirect.squashed.begin(), r.redirect.squashed.end(), o) != r.redirect.squashed.end())
+        {
+            cell.kind    = TimingCell::Squashed;
+            row.squashed = true;
         }
     }
-    return grid;
+}
+
+void TimingGridModel::truncateAfter(uint32_t lastKept)
+{
+    QList<TimingRow> &rows = m_data.rows;
+    // Rows are in fetch order, so the first cycles never decrease down the
+    // list: the rows fetched after lastKept are a tail.
+    while (!rows.isEmpty() && rows.back().firstCycle > lastKept)
+        rows.removeLast();
+    for (qsizetype i = rows.size() - 1; i >= 0; --i)
+    {
+        TimingRow &row = rows[i];
+        // No row lives longer than m_maxSpan cycles, and the rows above
+        // started no later: none of them reaches past lastKept.
+        if (row.firstCycle + static_cast<uint32_t>(m_maxSpan) <= lastKept)
+            break;
+        if (row.lastCycle() > lastKept)
+        {
+            row.cells.resize(static_cast<qsizetype>(lastKept - row.firstCycle + 1));
+            recomputeSquashed(row);
+        }
+    }
+    while (m_data.lastCycle > lastKept)
+    {
+        m_prints.pop_back();
+        --m_data.lastCycle;
+    }
+}
+
+void TimingGridModel::dropBefore(uint32_t first)
+{
+    QList<TimingRow> &rows = m_data.rows;
+    // The rows that started before `first` are a head; trim them, and drop
+    // the ones with nothing left. The kept ones are packed against the rest
+    // so the head comes off the front of the list in one cheap erase.
+    qsizetype head = 0;
+    while (head < rows.size() && rows[head].firstCycle < first)
+        ++head;
+    qsizetype keep = head;
+    for (qsizetype i = head - 1; i >= 0; --i)
+    {
+        TimingRow &row = rows[i];
+        if (row.lastCycle() < first)
+            continue;
+        row.cells.remove(0, static_cast<qsizetype>(first - row.firstCycle));
+        row.firstCycle = first;
+        recomputeSquashed(row);
+        --keep;
+        if (keep != i)
+            rows[keep] = std::move(row);
+    }
+    rows.erase(rows.begin(), rows.begin() + keep);
+    while (m_data.firstCycle < first)
+    {
+        m_prints.pop_front();
+        ++m_data.firstCycle;
+    }
+}
+
+void TimingGridModel::rebuild(const ExecutionTrace &trace, const AssembledProgram &program)
+{
+    clear();
+    for (const TraceCycle &r : trace.all())
+        append(r, program);
+}
+
+bool TimingGridModel::sync(const ExecutionTrace &trace, const AssembledProgram &program)
+{
+    const uint32_t tFirst = trace.firstCycle();
+    const uint32_t tLast  = trace.lastCycle();
+    if (tLast == 0)
+    {
+        if (m_data.firstCycle == 0)
+            return false;
+        clear();
+        return true;
+    }
+    const bool have = m_data.firstCycle != 0;
+    const uint32_t shared = have ? std::min(m_data.lastCycle, tLast) : 0;
+    bool same = have && tFirst >= m_data.firstCycle && shared >= tFirst;
+    if (same)
+    {
+        // The two histories agree at the last cycle they share.
+        const std::vector<TraceCycle> at = trace.window(shared, 1);
+        same = at.size() == 1 && at.front().cycle == shared &&
+               fingerprint(at.front()) == m_prints[shared - m_data.firstCycle];
+    }
+    if (!same)
+    {
+        rebuild(trace, program);
+        return true;
+    }
+    bool changed = false;
+    if (shared < m_data.lastCycle)
+    {
+        truncateAfter(shared); // Undo
+        changed = true;
+    }
+    if (tLast > shared)
+    {
+        for (const TraceCycle &r : trace.window(shared + 1, tLast - shared))
+            if (r.cycle == m_data.lastCycle + 1)
+                append(r, program);
+        changed = true;
+    }
+    const uint32_t front = trace.firstCycle(); // the buffer may have moved on meanwhile
+    if (front > m_data.firstCycle && front <= m_data.lastCycle)
+    {
+        dropBefore(front); // the ring buffer let these go
+        changed = true;
+    }
+    return changed;
+}
+
+TimingGridData buildTimingGrid(const std::vector<TraceCycle> &records, const AssembledProgram &program)
+{
+    TimingGridModel model;
+    for (const TraceCycle &r : records)
+        model.append(r, program);
+    return model.data();
 }
 
 QStringList timingGridDiagram(const TimingGridData &grid)
@@ -154,8 +345,9 @@ QStringList timingGridDiagram(const TimingGridData &grid)
     for (const TimingRow &row : grid.rows)
     {
         QStringList tokens;
-        for (const TimingCell &cell : row.cells)
+        for (int c = 0; c < grid.columns(); ++c)
         {
+            const TimingCell cell = row.at(grid.firstCycle + static_cast<uint32_t>(c));
             if (cell.kind == TimingCell::Empty)
             {
                 tokens << QStringLiteral(".");
@@ -176,114 +368,159 @@ QStringList timingGridDiagram(const TimingGridData &grid)
 }
 
 // ---- View ------------------------------------------------------------------
-TimingGridView::TimingGridView(QWidget *parent) : QWidget(parent)
+TimingGridView::TimingGridView(QWidget *parent) : QAbstractScrollArea(parent)
 {
     setObjectName("timingGridView");
     setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    viewport()->setFont(font());
     setMouseTracking(false);
-}
-
-int TimingGridView::labelWidth() const
-{
-    int w = 120;
-    for (const TimingRow &row : m_grid.rows)
-        w = std::max(w, fontMetrics().horizontalAdvance(row.label) + 16);
-    return std::min(w, 260);
+    horizontalScrollBar()->setSingleStep(kCellW);
+    verticalScrollBar()->setSingleStep(kCellH);
 }
 
 QSize TimingGridView::sizeHint() const
 {
-    return {labelWidth() + m_grid.columns() * kCellW + 2,
-            kHeaderH + static_cast<int>(m_grid.rows.size()) * kCellH + 2};
+    const TimingGridData &g = grid();
+    const int w = labelWidth() + std::min(g.columns(), 40) * kCellW + 2 + 2 * frameWidth();
+    const int h = kHeaderH + static_cast<int>(std::min<qsizetype>(g.rows.size(), 12)) * kCellH + 2 +
+                  2 * frameWidth();
+    return {w, h};
 }
 
-void TimingGridView::setGrid(const TimingGridData &grid)
+void TimingGridView::updateScrollRange()
 {
-    m_grid = grid;
-    // A new grid has no selection; the panel puts it back when the same
+    const TimingGridData &g     = grid();
+    const QSize           vp    = viewport()->size();
+    const qint64          fullW = static_cast<qint64>(g.columns()) * kCellW;
+    const qint64          fullH = static_cast<qint64>(g.rows.size()) * kCellH;
+    const int             viewW = std::max(0, vp.width() - labelWidth());
+    const int             viewH = std::max(0, vp.height() - kHeaderH);
+    horizontalScrollBar()->setRange(0, static_cast<int>(std::max<qint64>(0, fullW - viewW)));
+    horizontalScrollBar()->setPageStep(viewW);
+    verticalScrollBar()->setRange(0, static_cast<int>(std::max<qint64>(0, fullH - viewH)));
+    verticalScrollBar()->setPageStep(viewH);
+}
+
+void TimingGridView::gridChanged()
+{
+    // A changed grid has no selection; the panel puts it back when the same
     // cell of the same trace is still drawn (TimingGridPanel::refresh).
     m_selRow = m_selCol = -1;
-    resize(sizeHint());
-    setMinimumSize(sizeHint());
-    update();
+    const auto &labels = m_model.labels();
+    if (labels.isEmpty())
+    {
+        m_labelWidth     = 120;
+        m_labelsMeasured = 0;
+    }
+    else if (labels.size() != m_labelsMeasured)
+    {
+        // Labels are few (one per instruction of the program): measure them all.
+        int w = 120;
+        for (const QString &label : labels)
+            w = std::max(w, fontMetrics().horizontalAdvance(label) + 16);
+        m_labelWidth     = std::min(w, 260);
+        m_labelsMeasured = labels.size();
+    }
+    updateScrollRange();
+    followCurrentCycle();
+    viewport()->update();
+}
+
+void TimingGridView::followCurrentCycle()
+{
+    horizontalScrollBar()->setValue(horizontalScrollBar()->maximum());
+    verticalScrollBar()->setValue(verticalScrollBar()->maximum());
+}
+
+void TimingGridView::resizeEvent(QResizeEvent *event)
+{
+    QAbstractScrollArea::resizeEvent(event);
+    updateScrollRange();
 }
 
 void TimingGridView::clearSelection()
 {
     m_selRow = m_selCol = -1;
-    update();
+    viewport()->update();
 }
 
 void TimingGridView::restoreSelection(int row, int column)
 {
-    if (row < 0 || column < 0 || row >= m_grid.rows.size() || column >= m_grid.columns())
+    if (row < 0 || column < 0 || row >= grid().rows.size() || column >= grid().columns())
         return;
     m_selRow = row;
     m_selCol = column;
-    update();
+    viewport()->update();
 }
 
 void TimingGridView::select(int row, int column)
 {
-    if (row < 0 || column < 0 || row >= m_grid.rows.size() || column >= m_grid.columns())
+    if (row < 0 || column < 0 || row >= grid().rows.size() || column >= grid().columns())
         return;
     m_selRow = row;
     m_selCol = column;
-    update();
+    viewport()->update();
     emit cellSelected(row, column);
 }
 
 void TimingGridView::mousePressEvent(QMouseEvent *event)
 {
-    const QPoint p   = event->position().toPoint();
-    const int    col = (p.x() - labelWidth()) / kCellW;
-    const int    row = (p.y() - kHeaderH) / kCellH;
-    if (p.x() >= labelWidth() && p.y() >= kHeaderH)
-        select(row, col);
+    const QPoint p  = event->position().toPoint();
+    const int    lw = labelWidth();
+    if (p.x() < lw || p.y() < kHeaderH)
+        return;
+    const int col = (p.x() - lw + horizontalScrollBar()->value()) / kCellW;
+    const int row = (p.y() - kHeaderH + verticalScrollBar()->value()) / kCellH;
+    select(row, col);
 }
 
 void TimingGridView::paintEvent(QPaintEvent *)
 {
-    QPainter            p(this);
-    const ThemeManager &theme = ThemeManager::getInstance();
-    const QColor        base  = surface();
-    const QColor        text  = theme.getTextColor();
+    QPainter              p(viewport());
+    const TimingGridData &g     = grid();
+    const ThemeManager   &theme = ThemeManager::getInstance();
+    const QColor          base  = surface();
+    const QColor          text  = theme.getTextColor();
     // Header numbers and flushed labels use the theme's text colour, not the
     // placeholder grey: that read at well under 4.5:1 on Tokyo Night. The
     // strike-through, not a fainter colour, marks a flushed row.
-    const QColor        muted = text;
-    const QColor        grid  = blend(text, base, 0.15);
-    p.fillRect(rect(), base);
+    const QColor muted = text;
+    const QColor line  = blend(text, base, 0.15);
+    const QRect  vp    = viewport()->rect();
+    p.fillRect(vp, base);
     const int lw   = labelWidth();
-    const int cols = m_grid.columns();
+    const int cols = g.columns();
+    const int nrow = static_cast<int>(g.rows.size());
+    const int sx   = horizontalScrollBar()->value();
+    const int sy   = verticalScrollBar()->value();
 
+    // Only what shows: columns c0..c1, rows r0..r1.
+    const int c0 = std::min(cols, sx / kCellW);
+    const int c1 = std::min(cols, (sx + std::max(0, vp.width() - lw)) / kCellW + 1);
+    const int r0 = std::min(nrow, sy / kCellH);
+    const int r1 = std::min(nrow, (sy + std::max(0, vp.height() - kHeaderH)) / kCellH + 1);
+    auto colX = [&](int c) { return lw + c * kCellW - sx; };
+    auto rowY = [&](int r) { return kHeaderH + r * kCellH - sy; };
+
+    // The cells, clipped to the area right of the labels and under the header.
+    p.save();
+    p.setClipRect(QRect(lw, kHeaderH, vp.width() - lw, vp.height() - kHeaderH));
     // The current cycle (the last recorded one) is highlighted.
     if (cols > 0)
-        p.fillRect(QRect(lw + (cols - 1) * kCellW, 0, kCellW, height()), theme.getCurrentLineColor());
-
-    // Header: cycle numbers.
-    p.setPen(muted);
-    for (int c = 0; c < cols; ++c)
-        p.drawText(QRect(lw + c * kCellW, 0, kCellW, kHeaderH), Qt::AlignCenter,
-                   QString::number(m_grid.firstCycle + static_cast<uint32_t>(c)));
-
-    for (int r = 0; r < m_grid.rows.size(); ++r)
+        p.fillRect(QRect(colX(cols - 1), 0, kCellW, vp.height()), theme.getCurrentLineColor());
+    for (int r = r0; r < r1; ++r)
     {
-        const TimingRow &row = m_grid.rows[r];
-        const int        y   = kHeaderH + r * kCellH;
-        p.setPen(row.squashed ? muted : text);
-        QFont f = font();
-        f.setStrikeOut(row.squashed); // a flushed instruction is struck through
-        p.setFont(f);
-        p.drawText(QRect(6, y, lw - 10, kCellH), Qt::AlignVCenter | Qt::AlignLeft,
-                   fontMetrics().elidedText(row.label, Qt::ElideRight, lw - 10));
-        p.setFont(font());
-        for (int c = 0; c < cols; ++c)
+        const TimingRow &row = g.rows[r];
+        const int        y   = rowY(r);
+        // Only the row's own cycles can hold anything.
+        const int from = std::max(c0, static_cast<int>(row.firstCycle - g.firstCycle));
+        const int to   = std::min(c1, static_cast<int>(row.lastCycle() - g.firstCycle) + 1);
+        for (int c = from; c < to; ++c)
         {
-            const TimingCell &cell = row.cells[c];
-            const QRect       box(lw + c * kCellW + 1, y + 1, kCellW - 2, kCellH - 2);
+            const TimingCell cell = row.at(g.firstCycle + static_cast<uint32_t>(c));
             if (cell.kind == TimingCell::Empty)
                 continue;
+            const QRect            box(colX(c) + 1, y + 1, kCellW - 2, kCellH - 2);
             const TimingCellColors colors = timingCellColors(cell.stage);
             p.fillRect(box, colors.fill);
             p.fillRect(QRect(box.left(), box.top(), 3, box.height()), colors.accent);
@@ -306,15 +543,49 @@ void TimingGridView::paintEvent(QPaintEvent *)
                 p.drawLine(box.bottomLeft(), box.topRight());
             }
         }
-        p.setPen(grid);
-        p.drawLine(0, y + kCellH, lw + cols * kCellW, y + kCellH);
+        p.setPen(line);
+        p.drawLine(lw, y + kCellH, vp.width(), y + kCellH);
     }
-    if (m_selRow >= 0 && m_selCol >= 0)
+    if (m_selRow >= r0 && m_selRow < r1 && m_selCol >= c0 && m_selCol < c1)
     {
         p.setPen(QPen(theme.getInfoColor(), 2));
         p.setBrush(Qt::NoBrush);
-        p.drawRect(QRect(lw + m_selCol * kCellW, kHeaderH + m_selRow * kCellH, kCellW, kCellH));
+        p.drawRect(QRect(colX(m_selCol), rowY(m_selRow), kCellW, kCellH));
     }
+    p.restore();
+
+    // Header: cycle numbers, pinned to the top.
+    p.save();
+    p.setClipRect(QRect(lw, 0, vp.width() - lw, kHeaderH));
+    p.fillRect(QRect(lw, 0, vp.width() - lw, kHeaderH), base);
+    if (cols > 0)
+        p.fillRect(QRect(colX(cols - 1), 0, kCellW, kHeaderH), theme.getCurrentLineColor());
+    p.setPen(muted);
+    for (int c = c0; c < c1; ++c)
+        p.drawText(QRect(colX(c), 0, kCellW, kHeaderH), Qt::AlignCenter,
+                   QString::number(g.firstCycle + static_cast<uint32_t>(c)));
+    p.restore();
+
+    // Labels, pinned to the left.
+    p.save();
+    p.setClipRect(QRect(0, kHeaderH, lw, vp.height() - kHeaderH));
+    p.fillRect(QRect(0, kHeaderH, lw, vp.height() - kHeaderH), base);
+    for (int r = r0; r < r1; ++r)
+    {
+        const TimingRow &row = g.rows[r];
+        const int        y   = rowY(r);
+        p.setPen(row.squashed ? muted : text);
+        QFont f = font();
+        f.setStrikeOut(row.squashed); // a flushed instruction is struck through
+        p.setFont(f);
+        p.drawText(QRect(6, y, lw - 10, kCellH), Qt::AlignVCenter | Qt::AlignLeft,
+                   fontMetrics().elidedText(row.label, Qt::ElideRight, lw - 10));
+        p.setFont(font());
+        p.setPen(line);
+        p.drawLine(0, y + kCellH, lw, y + kCellH);
+    }
+    p.restore();
+    p.fillRect(QRect(0, 0, lw, kHeaderH), base);
 }
 
 // ---- Panel -----------------------------------------------------------------
@@ -345,12 +616,9 @@ TimingGridPanel::TimingGridPanel(QWidget *parent) : QWidget(parent)
     m_message->setWordWrap(true);
     layout->addWidget(m_message);
 
-    m_view   = new TimingGridView;
-    m_scroll = new QScrollArea(this);
-    m_scroll->setWidget(m_view);
-    m_scroll->setWidgetResizable(false);
-    m_scroll->setMinimumHeight(140);
-    layout->addWidget(m_scroll, 1);
+    m_view = new TimingGridView(this);
+    m_view->setMinimumHeight(140);
+    layout->addWidget(m_view, 1);
 
     m_explain = new QTextBrowser(this);
     m_explain->setObjectName("timingExplanation");
@@ -374,7 +642,7 @@ void TimingGridPanel::setUp(ProcessorManager *manager, QAction *stepAction, QAct
     m_stepBack->setDefaultAction(undoAction); // step back IS Undo: the same action
     m_stepBack->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     if (manager)
-        connect(manager, &ProcessorManager::processorStateChangedSignal, this, &TimingGridPanel::refresh,
+        connect(manager, &ProcessorManager::processorStateChangedSignal, this, &TimingGridPanel::scheduleRefresh,
                 Qt::QueuedConnection);
     auto sync = [this]()
     {
@@ -408,6 +676,37 @@ QString TimingGridPanel::explanation() const
     return m_explain->toPlainText();
 }
 
+void TimingGridPanel::useTrace(const ExecutionTrace *trace)
+{
+    m_traceOverride = trace;
+}
+
+const ExecutionTrace *TimingGridPanel::trace() const
+{
+    if (m_traceOverride)
+        return m_traceOverride;
+    return m_manager ? &m_manager->trace() : nullptr;
+}
+
+void TimingGridPanel::scheduleRefresh()
+{
+    // A Run clocks many cycles per event-loop turn; one sync covers them all.
+    if (m_refreshQueued)
+        return;
+    m_refreshQueued = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_refreshQueued = false;
+        refresh();
+    });
+}
+
+void TimingGridPanel::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (m_stale)
+        refresh();
+}
+
 void TimingGridPanel::refresh()
 {
     if (!m_manager)
@@ -415,37 +714,53 @@ void TimingGridPanel::refresh()
         m_message->setText("No processor.");
         return;
     }
-    // Every Undo, Redo and Step queues a refresh. During a jump that was one
-    // grid rebuild per cycle, nearly all of a long jump's time; the jump
-    // refreshes once when it lands instead.
+    // Every Undo, Redo and Step asks for a refresh. During a jump that was one
+    // grid update per cycle; the jump refreshes once when it lands instead.
     if (jumping())
         return;
-    const ExecutionTrace &trace = m_manager->trace();
-    const TraceMeta       meta  = m_manager->traceMeta();
+    // Closed, the grid costs nothing: it catches up when it is opened.
+    if (!isVisible())
+    {
+        m_stale = true;
+        return;
+    }
+    m_stale = false;
+    const TraceMeta meta = m_manager->traceMeta();
     if (meta.singleCycle)
     {
         m_message->setText("Single-cycle processor: every instruction runs from fetch to "
                            "write-back in one cycle, so there is no pipeline timing to draw. "
                            "Choose a 5-stage processor (Processor...) to see the grid.");
         m_message->show();
-        m_scroll->hide();
-        m_view->setGrid({});
+        m_view->hide();
+        m_view->model().clear();
+        m_view->gridChanged();
         clearSelection();
         return;
     }
-    m_scroll->show();
-    const uint32_t last  = trace.lastCycle();
-    const uint32_t first = last > kVisibleCycles ? last - kVisibleCycles + 1 : 1;
-    const auto     recs  = last ? trace.window(first, kVisibleCycles) : std::vector<TraceCycle>{};
-    m_view->setGrid(buildTimingGrid(recs, m_manager->currentProgram()));
-    keepOrClearSelection(meta);
-    if (recs.empty())
+    m_view->show();
+    const ExecutionTrace &t = *trace();
+    if (m_view->model().sync(t, m_manager->currentProgram()))
+    {
+        m_view->gridChanged(); // follows the current cycle
+        keepOrClearSelection(meta);
+    }
+    const TimingGridData &g = m_view->grid();
+    if (g.columns() == 0)
         m_message->setText("Step or run a program to draw its timing.");
+    else if (g.firstCycle > 1)
+    {
+        const QLocale en(QLocale::English);
+        m_message->setText(QStringLiteral("Showing cycles %1 to %2; older cycles were dropped (the trace keeps "
+                                          "%3). Each row is one fetched instruction; * = stalled, hatched = "
+                                          "bubble, crossed = flushed.")
+                               .arg(en.toString(g.firstCycle), en.toString(g.lastCycle),
+                                    en.toString(static_cast<qulonglong>(t.capacity()))));
+    }
     else
         m_message->setText(QStringLiteral("Cycle %1 of the run. Each row is one fetched instruction; "
                                           "* = stalled, hatched = bubble, crossed = flushed.")
-                               .arg(last));
-    m_scroll->horizontalScrollBar()->setValue(m_scroll->horizontalScrollBar()->maximum());
+                               .arg(g.lastCycle));
 }
 
 void TimingGridPanel::jumpToCycle(uint32_t cycle)
@@ -520,22 +835,18 @@ void TimingGridPanel::keepOrClearSelection(const TraceMeta &meta)
     // same model, the same cycle with the same record, the same instance.
     // A new Run, a reload, a reset, a model switch or an Undo past that cycle
     // all fail one of these, and the old sentence would then be false.
-    const TimingGridData &g = m_view->grid();
-    if (meta.model == m_selected->model)
-        for (int c = 0; c < g.columns(); ++c)
+    const TimingGridData &g     = m_view->grid();
+    const uint32_t        cycle = m_selected->record.cycle;
+    if (meta.model == m_selected->model && g.columns() > 0 && cycle >= g.firstCycle && cycle <= g.lastCycle)
+    {
+        const std::vector<TraceCycle> at = trace()->window(cycle, 1);
+        const int                     row = g.rowOfId(m_selected->id);
+        if (at.size() == 1 && at.front() == m_selected->record && row >= 0)
         {
-            if (g.records[c].cycle != m_selected->record.cycle)
-                continue;
-            if (!(g.records[c] == m_selected->record))
-                break;
-            for (int r = 0; r < g.rows.size(); ++r)
-                if (g.rows[r].id == m_selected->id)
-                {
-                    m_view->restoreSelection(r, c);
-                    return;
-                }
-            break;
+            m_view->restoreSelection(row, static_cast<int>(cycle - g.firstCycle));
+            return;
         }
+    }
     clearSelection();
 }
 
@@ -546,11 +857,20 @@ void TimingGridPanel::explainSelection(int row, int column)
         return;
     // The sentence comes from the trace's record for that cycle and nothing
     // else (trace_explain.h): no stall is mentioned that it did not record.
-    const TraceMeta         meta    = m_manager->traceMeta();
-    m_selected = SelectedCell{meta.model, g.rows[row].id, g.records[column]};
+    // A stall's sentence looks at the cycles around it, so it gets a slice.
+    constexpr uint32_t kContext = 32;
+    const uint32_t     cycle    = g.firstCycle + static_cast<uint32_t>(column);
+    const uint32_t     from     = std::max(g.firstCycle, cycle > kContext ? cycle - kContext : 1u);
+    const uint32_t     to       = std::min(g.lastCycle, cycle + kContext);
+    const std::vector<TraceCycle> records = trace()->window(from, to - from + 1);
+    const size_t                  index   = cycle - from;
+    if (index >= records.size() || records[index].cycle != cycle)
+        return;
+    const TraceMeta meta = m_manager->traceMeta();
+    m_selected           = SelectedCell{meta.model, g.rows[row].id, records[index]};
     const AssembledProgram &program = m_manager->currentProgram();
     const std::string       text    = explainTraceCell(
-        g.records, static_cast<size_t>(column), g.rows[row].id, ExplainModel{meta.hazardDetection, meta.forwarding},
+        records, index, g.rows[row].id, ExplainModel{meta.hazardDetection, meta.forwarding},
         [&program](uint64_t pc) { return traceDisassembly(program, pc).toStdString(); });
     m_explain->setPlainText(QString::fromStdString(text));
 }

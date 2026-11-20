@@ -13,20 +13,23 @@
 #include "common/assembled_program.h"
 #include "processor/execution_trace.h"
 
+#include <QAbstractScrollArea>
 #include <QColor>
+#include <QHash>
+#include <QList>
 #include <QPointer>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 #include <QWidget>
 
+#include <deque>
 #include <optional>
 #include <vector>
 
 class QAction;
 class QLabel;
 class QPushButton;
-class QScrollArea;
 class QSpinBox;
 class QTextBrowser;
 class QToolButton;
@@ -51,25 +54,77 @@ struct TimingCell
     TraceStage stage = TraceStage::IF;
 };
 
+/// One fetched instruction. Its cells cover the cycles it was in the
+/// pipeline: cells[i] is cycle firstCycle + i (a handful per row, so a long
+/// run costs rows x lifetime, not rows x columns).
 struct TimingRow
 {
     uint32_t            id = 0;
     uint64_t            pc = 0;
     QString             label; ///< the disassembly
     bool                squashed = false;
-    QVector<TimingCell> cells; ///< one per column
+    uint32_t            firstCycle = 0; ///< the cycle of cells[0]
+    QVector<TimingCell> cells;
+    /// The cell in `cycle` (Empty outside the row's cycles).
+    TimingCell at(uint32_t cycle) const
+    {
+        if (cycle < firstCycle || cycle - firstCycle >= static_cast<uint32_t>(cells.size()))
+            return {};
+        return cells[static_cast<qsizetype>(cycle - firstCycle)];
+    }
+    uint32_t lastCycle() const { return firstCycle + static_cast<uint32_t>(cells.size()) - 1; }
 };
 
+/// The grid: columns are the cycles firstCycle..lastCycle, rows are the
+/// instructions seen in them, in fetch order (increasing instance id).
 struct TimingGridData
 {
-    bool               singleCycle = false;
-    uint32_t           firstCycle  = 0; ///< the cycle of column 0 (0 = empty grid)
-    QVector<TimingRow> rows;
-    std::vector<TraceCycle> records; ///< the columns' records, in order
-    int columns() const { return static_cast<int>(records.size()); }
+    bool             singleCycle = false;
+    uint32_t         firstCycle  = 0; ///< the cycle of column 0 (0 = empty grid)
+    uint32_t         lastCycle   = 0; ///< the cycle of the last column, the current one
+    QList<TimingRow> rows;
+    int columns() const { return firstCycle ? static_cast<int>(lastCycle - firstCycle + 1) : 0; }
+    TimingCell cell(int row, int column) const
+    {
+        return rows[row].at(firstCycle + static_cast<uint32_t>(column));
+    }
+    /// The row of instance `id`, or -1 (binary search: rows are in id order).
+    int rowOfId(uint32_t id) const;
 };
 
-/// The grid for these records (consecutive cycles), rows in order of first fetch.
+/**
+ * @brief The grid kept in step with an ExecutionTrace, incrementally.
+ *
+ * sync() compares the grid with the trace at the last cycle they share
+ * (one record) and then only appends the new cycles, cuts the cycles an
+ * Undo removed, and drops the ones the ring buffer let go. Anything else
+ * (a reset, a new program, a different history) rebuilds from the trace.
+ */
+class TimingGridModel
+{
+  public:
+    void clear();
+    /// Brings the grid in line with `trace`; true when anything changed.
+    bool sync(const ExecutionTrace &trace, const AssembledProgram &program);
+    /// Adds the next cycle (its cycle must be lastCycle + 1, or the first).
+    void append(const TraceCycle &record, const AssembledProgram &program);
+    const TimingGridData &data() const { return m_data; }
+    /// Every label met so far (for the label column's width).
+    const QHash<quint64, QString> &labels() const { return m_labels; }
+
+  private:
+    void           truncateAfter(uint32_t lastKept);
+    void           dropBefore(uint32_t first);
+    void           rebuild(const ExecutionTrace &trace, const AssembledProgram &program);
+    const QString &labelOf(const TraceOccupant &o, const AssembledProgram &program);
+
+    TimingGridData          m_data;
+    std::deque<uint64_t>    m_prints;      ///< a fingerprint of each column's record
+    QHash<quint64, QString> m_labels;      ///< by pc and instruction word
+    int                     m_maxSpan = 0; ///< the longest row seen (cells)
+};
+
+/// The grid for these records (consecutive cycles), rows in fetch order.
 TimingGridData buildTimingGrid(const std::vector<TraceCycle> &records, const AssembledProgram &program);
 
 /// The grid in the notation of the hand-drawn diagrams (execution_trace_test.cpp):
@@ -93,18 +148,26 @@ TimingCellColors timingCellColorsFrom(const QColor &accent, const QColor &surfac
 /// WCAG 2 contrast ratio of two opaque colours.
 double contrastRatio(const QColor &a, const QColor &b);
 
-/// The painted grid. Click a cell to select it.
-class TimingGridView : public QWidget
+/// The painted grid: only the visible cells are drawn, with the cycle
+/// numbers and the instruction labels pinned while it scrolls. Click a cell
+/// to select it.
+class TimingGridView : public QAbstractScrollArea
 {
     Q_OBJECT
   public:
     explicit TimingGridView(QWidget *parent = nullptr);
-    void setGrid(const TimingGridData &grid);
-    const TimingGridData &grid() const { return m_grid; }
+    /// The grid this view draws (the panel keeps it in step with the trace).
+    TimingGridModel      &model() { return m_model; }
+    const TimingGridData &grid() const { return m_model.data(); }
+    /// After the model changed: the selection is dropped (the panel puts it
+    /// back), the scroll range follows, and the current cycle is shown.
+    void gridChanged();
+    /// Scrolls so the current cycle (the last column) and the newest rows show.
+    void followCurrentCycle();
     void select(int row, int column);
     /// Drops the selection without explaining anything.
     void clearSelection();
-    /// Puts a selection back after setGrid, without emitting cellSelected.
+    /// Puts a selection back after gridChanged, without emitting cellSelected.
     void restoreSelection(int row, int column);
     int  selectedRow() const { return m_selRow; }
     int  selectedColumn() const { return m_selCol; }
@@ -116,12 +179,17 @@ class TimingGridView : public QWidget
   protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
   private:
-    TimingGridData m_grid;
-    int            m_selRow = -1;
-    int            m_selCol = -1;
-    int            labelWidth() const;
+    void updateScrollRange();
+    int  labelWidth() const { return m_labelWidth; }
+
+    TimingGridModel m_model;
+    int             m_selRow       = -1;
+    int             m_selCol       = -1;
+    int             m_labelWidth   = 120;
+    qsizetype       m_labelsMeasured = 0;
 };
 
 /// The dock's contents: controls, the grid and the explanation panel.
@@ -129,7 +197,6 @@ class TimingGridPanel : public QWidget
 {
     Q_OBJECT
   public:
-    static constexpr int kVisibleCycles = 40;
     /// Work per event-loop turn while jumping (one frame is ~16 ms).
     static constexpr int kJumpChunkMs = 8;
 
@@ -139,8 +206,12 @@ class TimingGridPanel : public QWidget
     void setUp(ProcessorManager *manager, QAction *stepAction, QAction *undoAction,
                QAction *redoAction = nullptr);
 
-    /// Re-reads the trace (the last kVisibleCycles cycles).
+    /// Brings the grid up to date with the trace: every stored cycle, rows in
+    /// fetch order. Incremental, so its cost is the cycles that changed. While
+    /// the panel is hidden it only notes that it is behind (showEvent catches up).
     void refresh();
+    /// Tests: read this trace instead of the machine's (nullptr: the machine's).
+    void useTrace(const ExecutionTrace *trace);
     /// Steps or undoes until the machine is at `cycle`, a chunk per event-
     /// loop turn so the window keeps painting. Emits jumpFinished.
     void jumpToCycle(uint32_t cycle);
@@ -159,7 +230,12 @@ class TimingGridPanel : public QWidget
   signals:
     void jumpFinished(uint32_t cycle);
 
+  protected:
+    void showEvent(QShowEvent *event) override;
+
   private:
+    const ExecutionTrace *trace() const;
+    void scheduleRefresh();
     void jumpChunk();
     void explainSelection(int row, int column);
     void keepOrClearSelection(const TraceMeta &meta);
@@ -178,7 +254,6 @@ class TimingGridPanel : public QWidget
     QPointer<QAction>          m_undoAction;
     QPointer<QAction>          m_redoAction;
     QLabel                    *m_message   = nullptr;
-    QScrollArea               *m_scroll    = nullptr;
     TimingGridView            *m_view      = nullptr;
     QToolButton               *m_stepBack  = nullptr;
     QSpinBox                  *m_jumpSpin  = nullptr;
@@ -186,5 +261,8 @@ class TimingGridPanel : public QWidget
     QTextBrowser              *m_explain   = nullptr;
     std::optional<uint32_t>    m_jumpTarget;
     bool                       m_redoDrained = false; ///< this jump found nothing left to Redo
+    const ExecutionTrace      *m_traceOverride = nullptr;
+    bool                       m_refreshQueued = false;
+    bool                       m_stale = false; ///< refresh skipped while hidden
 };
 } // namespace Kites
