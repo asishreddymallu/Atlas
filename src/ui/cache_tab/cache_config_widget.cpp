@@ -128,7 +128,9 @@ void CacheConfigWidget::cacheStatsUpdatedSlot(CacheStats newStats)
     ui->hitsLineEdit->setText(QString::number(newStats.hitCount));
     ui->missesLineEdit->setText(QString::number(newStats.missCount));
     ui->writeBackLineEdit->setText(QString::number(newStats.writeBackCount));
-    ui->hitrateLineEdit->setText(QString::number(newStats.hitRate, 'f', 2) + " %");
+    // CacheStats::hitRate is a fraction (0..1, Cache::updateStats); shown as
+    // a percentage.
+    ui->hitrateLineEdit->setText(QString::number(newStats.hitRate * 100.0, 'f', 2) + " %");
 }
 
 void CacheConfigWidget::customPolicyScriptLoadedSlot(bool success, const std::string &message)
