@@ -25,6 +25,7 @@
 #include "ui_main_window.h"
 #include "utils/utils.h"
 #include <QActionGroup>
+#include <QThread>
 #include <QApplication>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -1052,6 +1053,27 @@ void MainWindow::setUpTabs()
     m_tabs[TabIndex::MemoryTabIndex]    = new MemoryTab(this, m_processorManager->getMemoryController());
     m_tabs[TabIndex::ProcessorTabIndex] = new ProcessorTab(this, m_processorManager);                      
     m_tabs[TabIndex::CacheTabIndex]     = new CacheTab(this, m_processorManager->getMemoryController());
+    if (auto *cacheTab = dynamic_cast<CacheTab *>(m_tabs[TabIndex::CacheTabIndex]))
+    {
+        // The live cache view may take a full copy of the caches only when
+        // nothing is changing them. A clock or state change emitted on the
+        // GUI thread is a manual step, an undo/redo or a load: the GUI
+        // thread did it, so the caches are idle. One emitted by the worker
+        // is a run in progress, which the observers already follow access
+        // by access, so it is ignored here (Direct, to see which thread).
+        const auto resyncIfIdle = [cacheTab]
+        {
+            if (QThread::currentThread() == cacheTab->thread())
+                cacheTab->resyncLiveView();
+        };
+        connect(m_processorManager, &ProcessorManager::processorClockedSignal, cacheTab,
+                resyncIfIdle, Qt::DirectConnection);
+        connect(m_processorManager, &ProcessorManager::processorStateChangedSignal, cacheTab,
+                resyncIfIdle, Qt::DirectConnection);
+        // Queued from the worker: delivered after it has left the run.
+        connect(m_processorManager, &ProcessorManager::runFinishedSignal, cacheTab,
+                &CacheTab::resyncLiveView, Qt::QueuedConnection);
+    }
     m_tabs[TabIndex::CompilerTabIndex]  = new CompilerTab(this);
     m_tabs[TabIndex::ProfilerTabIndex]  = new ProfilerTab(this, m_processorManager->getProfiler());
     static_cast<ProfilerTab *>(m_tabs[TabIndex::ProfilerTabIndex])
@@ -1126,6 +1148,8 @@ bool MainWindow::tryParseAndLoadProgram()
         
         m_processorManager->loadProgram(assembledProgram);
         m_processorManager->setBreakpoints(editor->getBreakpoints());
+        if (auto *cacheTab = dynamic_cast<CacheTab *>(m_tabs[TabIndex::CacheTabIndex]))
+            cacheTab->resyncLiveView(); // the load reset the caches; no run yet
         return true;
     }
     catch (const std::exception &e)

@@ -3,11 +3,16 @@
 #include "cache_grid_delegate.h"
 #include "cache_config_widget.h"
 #include "ui_cache_tab.h"
+#include "cache_live_view.h"
+#include <QSplitter>
+#include <QTableView>
+#include <QTimer>
 #include <QLayout>
 #include <QMargins>
 #include <QSignalBlocker>
 #include <QTabWidget>
 #include <algorithm>
+#include <tuple>
 #include <iterator>
 
 namespace Atlas
@@ -71,6 +76,32 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->L2tableView->setItemDelegate(new CacheGridDelegate(this));
     ui->InstructiontableView->setItemDelegate(new CacheGridDelegate(this));
 
+    // The live cache-line view: in each sub-tab the right side of the
+    // splitter becomes a vertical splitter, the live view above the existing
+    // per-line data table. Built here so the .ui and every widget name in it
+    // stay as they are.
+    const std::tuple<CacheLevel, QSplitter *, QTableView *> livePages[] = {
+        {CacheLevel::Instruction, ui->splitter_4, ui->InstructiontableView},
+        {CacheLevel::L1, ui->splitter_2, ui->L1tableView},
+        {CacheLevel::L2, ui->splitter_3, ui->L2tableView}};
+    for (const auto &[level, splitter, table] : livePages)
+    {
+        m_liveObservers[level] = new CacheLiveObserver(this);
+        m_liveViews[level]     = new CacheLiveView(this);
+        const int at           = splitter->indexOf(table);
+        auto *right            = new QSplitter(Qt::Vertical);
+        right->setObjectName(QStringLiteral("cacheLiveSplitter"));
+        right->addWidget(m_liveViews[level]);
+        right->addWidget(table); // reparents it out of the outer splitter
+        right->setStretchFactor(0, 3);
+        right->setStretchFactor(1, 2);
+        splitter->insertWidget(at, right);
+    }
+    m_liveTimer = new QTimer(this);
+    m_liveTimer->setInterval(50); // at most one refresh every 50 ms during a run
+    connect(m_liveTimer, &QTimer::timeout, this, &CacheTab::refreshLiveView);
+    m_liveTimer->start();
+
     ui->tabWidget->setTabText(0, "Instruction Cache");
     ui->tabWidget->setTabText(1, "L1 Cache");
     ui->tabWidget->setTabText(2, "L2 Cache");
@@ -120,6 +151,7 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
             m_memoryController->getL2Cache()->reconfigure(ui->L2Config->getConfig());
         }
         m_memoryController->getL1Cache()->reconfigure(ui->L1Config->getConfig());
+        resyncLiveView();
     });
     connect(ui->InstructionConfig, &CacheConfigWidget::configChangedSignal, this, [this]{
         if(enforceL2AtLeastL1())
@@ -127,9 +159,11 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
             m_memoryController->getL2Cache()->reconfigure(ui->L2Config->getConfig());
         }
         m_memoryController->getInstructionCache()->reconfigure(ui->InstructionConfig->getConfig());
+        resyncLiveView();
     });
     connect(ui->L2Config, &CacheConfigWidget::configChangedSignal, this, [this]{
         m_memoryController->getL2Cache()->reconfigure(ui->L2Config->getConfig());
+        resyncLiveView();
     });
 
     //set initial config values in the UI from the memory controller's caches
@@ -137,6 +171,7 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     ui->L2Config->setConfig(m_memoryController->getL2Cache()->getConfig());
     ui->InstructionConfig->setConfig(m_memoryController->getInstructionCache()->getConfig());
     m_widgetsShowEngine = true;
+    resyncLiveView();
 
 }
 
@@ -208,6 +243,48 @@ void CacheTab::changeMemoryController(MemoryController *memoryController)
     // construction the widgets are filled FROM the engine instead.)
     if (m_widgetsShowEngine)
         applyShownConfigs();
+    attachLiveObservers();
+}
+
+void CacheTab::attachLiveObservers()
+{
+    if (!m_liveObservers[CacheLevel::L1])
+        return; // constructor: the views are not built yet
+    m_liveObservers[CacheLevel::Instruction]->attach(m_memoryController->getInstructionCache());
+    m_liveObservers[CacheLevel::L1]->attach(m_memoryController->getL1Cache());
+    m_liveObservers[CacheLevel::L2]->attach(m_memoryController->getL2Cache());
+    resyncLiveView();
+}
+
+void CacheTab::resyncLiveView()
+{
+    for (CacheLiveObserver *observer : m_liveObservers)
+        if (observer)
+            observer->resync();
+    refreshLiveView();
+}
+
+void CacheTab::refreshLiveView()
+{
+    for (size_t level = 0; level < CacheLevelCount; ++level)
+    {
+        CacheLiveObserver *observer = m_liveObservers[level];
+        if (!observer || !m_liveViews[level] || observer->version() == m_shownVersions[level])
+            continue;
+        const CacheLiveObserver::State state = observer->state();
+        m_liveViews[level]->showState(state);
+        m_shownVersions[level] = state.version;
+    }
+}
+
+CacheLiveView *CacheTab::liveView(CacheLevel level) const
+{
+    return level < CacheLevelCount ? m_liveViews[level] : nullptr;
+}
+
+CacheLiveObserver *CacheTab::liveObserver(CacheLevel level) const
+{
+    return level < CacheLevelCount ? m_liveObservers[level] : nullptr;
 }
 
 void CacheTab::applyShownConfigs()

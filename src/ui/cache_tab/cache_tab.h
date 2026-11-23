@@ -2,13 +2,18 @@
 #include "cache_grid_delegate.h"
 #include "cache_config_widget.h"
 #include "cache_model.h"
+#include "cache_live_observer.h"
 #include "ui/common/atlas_tab.h"
 #include "processor/memory_controller.h"
 #include <QWidget>
 
+class QTimer;
+
 
 namespace Atlas
 {
+class CacheLiveView;
+
 namespace Ui
 {
 class CacheTab;
@@ -43,6 +48,20 @@ public:
     /// The level the inner tab widget is currently showing.
     CacheLevel currentCacheLevel() const;
 
+    /// The live cache-line view of a level, and the observer behind it.
+    CacheLiveView *liveView(CacheLevel level) const;
+    CacheLiveObserver   *liveObserver(CacheLevel level) const;
+
+public slots:
+    /// Takes a full copy of every level's lines and shows it now. Call only
+    /// when no run is changing the caches (GUI-thread step, undo, load,
+    /// reconfigure, a finished run); during a run the observers keep the
+    /// views current from the accesses themselves.
+    void resyncLiveView();
+    /// Shows whatever the observers have, if it changed. The 50 ms timer
+    /// calls it; tests may too.
+    void refreshLiveView();
+
 signals:
     /// Emitted whenever the inner tab widget lands on another level,
     /// whoever moved it, so a second view of the same choice can follow it.
@@ -56,6 +75,11 @@ private:
     bool m_widgetsShowEngine = false; ///< set once the widgets were filled from the engine
 
     std::array<CacheModel*, CacheLevelCount> m_cacheModels{};
+    std::array<CacheLiveObserver*, CacheLevelCount> m_liveObservers{};
+    std::array<CacheLiveView*, CacheLevelCount> m_liveViews{};
+    std::array<uint64_t, CacheLevelCount> m_shownVersions{};
+    QTimer *m_liveTimer{nullptr};
+    void attachLiveObservers();
     MemoryController  *m_memoryController    {nullptr};
     Ui::CacheTab *ui;
 signals:

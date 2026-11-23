@@ -103,6 +103,7 @@ std::span<const uint8_t> Cache::readLine(uint64_t address, size_t lineSize)
     uint64_t tag    = getTag(address);
     size_t wayIndex = findWay(setIndex, tag);
     bool hit = false;
+    beginAccessRecord(address, lineSize, false, wayIndex < m_wayCount);
     if (wayIndex >= m_wayCount)
     {
         ++m_missCount;
@@ -135,6 +136,7 @@ void Cache::writeLine(uint64_t address, std::span<const uint8_t> data)
     uint64_t tag    = getTag(address);
     size_t wayIndex = findWay(setIndex, tag);
     bool hit = false;
+    beginAccessRecord(address, data.size(), true, wayIndex < m_wayCount);
     if (wayIndex >= m_wayCount)
     {
         m_missCount++;
@@ -245,6 +247,11 @@ size_t Cache::evictCacheLine(size_t setIndex)
     CacheLineView victim_view = line_views[victim];
     m_ReplacementPolicy->onEvict(victim_view, request, context);
     ++m_evictionCount; // every way is valid here, so this fill replaces a valid line
+    if (!m_lastAccess.evicted) // passive record for the live view
+    {
+        m_lastAccess.evicted    = true;
+        m_lastAccess.evictedTag = ways[victim].tag;
+    }
 
     if (ways[victim].dirty && m_writePolicy == WritePolicy::WriteBack)
     {
@@ -494,6 +501,7 @@ T Cache::readGeneric(uint64_t address)
     }
 
     bool hit = isHit<T>(address);
+    beginAccessRecord(address, sizeof(T), false, hit);
     if(hit)
     {
         ++m_hitCount;
@@ -541,6 +549,7 @@ void Cache::writeGeneric(uint64_t address, T value)
     }
 
     bool hit = isHit<T>(address);
+    beginAccessRecord(address, sizeof(T), true, hit);
     if(hit)
     {
         ++m_hitCount;
@@ -805,6 +814,49 @@ CacheConfig Cache::getConfig() const
         .allocationPolicy = m_allocationPolicy,
         .replacementPolicy = m_ReplacementPolicy->type()
     };
+}
+
+void Cache::beginAccessRecord(uint64_t address, size_t size, bool isWrite, bool hit)
+{
+    const uint64_t sequence = m_lastAccess.sequence + 1;
+    m_lastAccess            = CacheAccessRecord{};
+    m_lastAccess.sequence   = sequence;
+    m_lastAccess.address    = address;
+    m_lastAccess.setIndex   = getSetIndex(address);
+    m_lastAccess.tag        = getTag(address);
+    m_lastAccess.size       = size;
+    m_lastAccess.isWrite    = isWrite;
+    m_lastAccess.hit        = hit;
+}
+
+const CacheAccessRecord &Cache::lastAccess() const
+{
+    return m_lastAccess;
+}
+
+std::vector<CacheLineSnapshot> Cache::setSnapshot(size_t setIndex) const
+{
+    std::vector<CacheLineSnapshot> out;
+    if (setIndex >= m_setCount)
+        return out;
+    out.reserve(m_wayCount);
+    for (const CacheLine &line : m_sets[setIndex])
+        out.push_back({line.valid, line.dirty, line.tag, line.lastAccess, line.insertTime});
+    return out;
+}
+
+CacheSnapshot Cache::snapshot() const
+{
+    CacheSnapshot out;
+    out.sets        = m_setCount;
+    out.ways        = m_wayCount;
+    out.lineBytes   = m_lineSizeInBytes;
+    out.replacement = m_ReplacementPolicy ? m_ReplacementPolicy->type() : ReplacementPolicy::LRU;
+    out.lines.reserve(m_setCount * m_wayCount);
+    for (const auto &set : m_sets)
+        for (const CacheLine &line : set)
+            out.lines.push_back({line.valid, line.dirty, line.tag, line.lastAccess, line.insertTime});
+    return out;
 }
 }//namespace Atlas
 

@@ -61,6 +61,47 @@ struct CacheChange
     uint64_t oldTimestamp{0};
     uint64_t newTimestamp{0};
 };
+// The most recent access, for the Cache tab's live view. Passive: written by
+// the four access paths and read through lastAccess(); nothing in the cache
+// reads it back, so it cannot change counters, replacement or data.
+struct CacheAccessRecord
+{
+    uint64_t sequence{0};   // 1 for the first access; 0 means none yet
+    uint64_t address{0};
+    size_t   setIndex{0};
+    uint64_t tag{0};
+    size_t   size{0};       // bytes asked for (a line, for an access from a higher level)
+    bool     isWrite{false};
+    bool     hit{false};
+    bool     evicted{false};    // a valid line was replaced to make room
+    uint64_t evictedTag{0};     // its tag, when evicted
+};
+
+// A copy of one line's bookkeeping, without its data.
+struct CacheLineSnapshot
+{
+    bool     valid{false};
+    bool     dirty{false};
+    uint64_t tag{0};
+    uint64_t lastAccess{0}; // what LRU orders by
+    uint64_t insertTime{0}; // what FIFO orders by
+};
+
+// Every line's bookkeeping, set-major: line (set, way) is lines[set * ways + way].
+struct CacheSnapshot
+{
+    size_t sets{0};
+    size_t ways{0};
+    size_t lineBytes{0};
+    ReplacementPolicy replacement{ReplacementPolicy::LRU};
+    std::vector<CacheLineSnapshot> lines;
+
+    [[nodiscard]] const CacheLineSnapshot &at(size_t set, size_t way) const
+    {
+        return lines[set * ways + way];
+    }
+};
+
 //default values for cache configuration
 //maybe we will move its location later on
 namespace default_cache_config
@@ -147,6 +188,12 @@ public:
     void updateStats();
 
     const CacheLine &getCacheLine(size_t setIndex, size_t wayIndex) const;
+
+    // Read-only views for the live cache view. The record is complete when
+    // cacheHitSignal/cacheMissSignal is emitted for that access.
+    [[nodiscard]] const CacheAccessRecord &lastAccess() const;
+    [[nodiscard]] CacheSnapshot snapshot() const;
+    [[nodiscard]] std::vector<CacheLineSnapshot> setSnapshot(size_t setIndex) const;
 public slots:
     void loadCustomPolicyScript(const std::string &path);
 
@@ -203,6 +250,9 @@ private:
     CacheChange m_pendingChange;  // the step being recorded
     bool m_recording{false};
     uint64_t m_generation{0};
+    // Passive; see CacheAccessRecord. Never read by the cache itself.
+    CacheAccessRecord m_lastAccess{};
+    void beginAccessRecord(uint64_t address, size_t size, bool isWrite, bool hit);
 signals:
     //TODO : Maybe we can combine hit and miss into one signal with a bool parameter
     void cacheMissSignal(uint64_t address);
