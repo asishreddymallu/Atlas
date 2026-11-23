@@ -10,7 +10,8 @@
 #include <QWidget>
 
 class QLabel;
-class QListWidget;
+class QListView;
+class QStringListModel;
 class QTableView;
 
 namespace Atlas
@@ -34,6 +35,9 @@ class CacheLiveView : public QWidget
     CacheSetModel *m_model{nullptr};
     QTableView    *m_table{nullptr};
     QLabel        *m_lastAccess{nullptr};
-    QListWidget   *m_log{nullptr};
+    // A QListView over a model rather than a QListWidget: the window is
+    // checked to hold no QListWidget (the retired sidebar, ribbon tests).
+    QListView        *m_log{nullptr};
+    QStringListModel *m_logModel{nullptr};
 };
 } // namespace Atlas

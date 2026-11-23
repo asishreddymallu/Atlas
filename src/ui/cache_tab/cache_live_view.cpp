@@ -5,7 +5,8 @@
 
 #include <QHeaderView>
 #include <QLabel>
-#include <QListWidget>
+#include <QListView>
+#include <QStringListModel>
 #include <QTableView>
 #include <QVBoxLayout>
 
@@ -41,8 +42,11 @@ CacheLiveView::CacheLiveView(QWidget *parent) : QWidget(parent)
     m_lastAccess->setObjectName(QStringLiteral("cacheLastAccess"));
     m_lastAccess->setTextInteractionFlags(Qt::TextSelectableByMouse);
 
-    m_log = new QListWidget(this);
+    m_logModel = new QStringListModel(this);
+    m_log      = new QListView(this);
     m_log->setObjectName(QStringLiteral("cacheAccessLog"));
+    m_log->setModel(m_logModel);
+    m_log->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_log->setSelectionMode(QAbstractItemView::NoSelection);
     m_log->setUniformItemSizes(true);
     m_log->setMaximumHeight(m_log->sizeHintForRow(0) > 0 ? m_log->sizeHintForRow(0) * 8 : 160);
@@ -64,9 +68,10 @@ void CacheLiveView::showState(const CacheLiveObserver::State &state)
     m_model->setState(state.snapshot, last);
     m_lastAccess->setText(CacheLiveObserver::describe(last));
 
-    m_log->clear();
+    QStringList lines;
     for (const CacheAccessRecord &record : state.log)
-        m_log->addItem(CacheLiveObserver::describe(record));
+        lines << CacheLiveObserver::describe(record);
+    m_logModel->setStringList(lines);
     m_log->scrollToBottom();
 
     const QModelIndex touched = m_model->touchedIndex();
@@ -81,9 +86,6 @@ QString CacheLiveView::lastAccessText() const
 
 QStringList CacheLiveView::logLines() const
 {
-    QStringList out;
-    for (int i = 0; i < m_log->count(); ++i)
-        out << m_log->item(i)->text();
-    return out;
+    return m_logModel->stringList();
 }
 } // namespace Atlas
