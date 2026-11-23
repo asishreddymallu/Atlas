@@ -8,6 +8,7 @@
 #include "processor/processor_choice.h"
 #include "processor/processor_manager.h"
 #include "ui/cache_tab/cache_tab.h"
+#include "cache_lab/lab_presets.h"
 #include "ui/compiler_tab/compiler_tab.h"
 #include "scheduler_gate/reorder_gate.h"
 #include "ui/dialogs/about_dialog.h"
@@ -1073,6 +1074,10 @@ void MainWindow::setUpTabs()
         // Queued from the worker: delivered after it has left the run.
         connect(m_processorManager, &ProcessorManager::runFinishedSignal, cacheTab,
                 &CacheTab::resyncLiveView, Qt::QueuedConnection);
+        // A lab preset also sets the step delay, through the window's own
+        // spin box so it shows what the processor uses.
+        connect(cacheTab, &CacheTab::labPresetChosenSignal, this,
+                [this] { m_stepDelaySpin->setValue(static_cast<int>(kLabPresetStepDelayMs)); });
     }
     m_tabs[TabIndex::CompilerTabIndex]  = new CompilerTab(this);
     m_tabs[TabIndex::ProfilerTabIndex]  = new ProfilerTab(this, m_processorManager->getProfiler());

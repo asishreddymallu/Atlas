@@ -8,6 +8,9 @@
 #include <QWidget>
 
 class QTimer;
+class QComboBox;
+class QLabel;
+class QPushButton;
 
 
 namespace Atlas
@@ -61,6 +64,14 @@ public slots:
     /// Shows whatever the observers have, if it changed. The 50 ms timer
     /// calls it; tests may too.
     void refreshLiveView();
+    /// Sets L1 to the lab preset called `name` through the L1 sub-tab's own
+    /// fields, as a user would, and announces it (the window then sets the
+    /// step delay). False, changing nothing, for an unknown name.
+    bool applyLabPreset(const QString &name);
+
+public:
+    /// The preset L1 currently matches, or empty when it was set by hand.
+    QString activeLabPreset() const;
 
 signals:
     /// Emitted whenever the inner tab widget lands on another level,
@@ -82,7 +93,15 @@ private:
     void attachLiveObservers();
     MemoryController  *m_memoryController    {nullptr};
     Ui::CacheTab *ui;
+    QComboBox *m_labSetupCombo{nullptr};
+    QLabel    *m_labSetupDescription{nullptr};
+    /// What the L1 sub-tab's configChangedSignal does: reconfigure (L2 first
+    /// if it must grow), resync the live view, and drop a preset L1 no
+    /// longer matches.
+    void applyL1Config();
 signals:
     void cacheConfigChangedSignal(CacheLevel cacheLevel, CacheConfig newConfig);
+    /// A lab preset was chosen; carries its name.
+    void labPresetChosenSignal(const QString &name);
 };
 } // namespace Atlas

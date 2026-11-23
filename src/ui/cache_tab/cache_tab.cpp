@@ -4,6 +4,12 @@
 #include "cache_config_widget.h"
 #include "ui_cache_tab.h"
 #include "cache_live_view.h"
+#include "cache_lab/lab_presets.h"
+#include <QComboBox>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
 #include <QSplitter>
 #include <QTableView>
 #include <QTimer>
@@ -119,10 +125,12 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
     // The amount is asked of the style rather than written down, so it is
     // the same number the other five tabs' layouts were given. The .ui is
     // untouched.
+    int labBarInset = 0;
     if (QLayout *outer = layout())
     {
         const QMargins margins = outer->contentsMargins();
         const int      inset   = margins.left();
+        labBarInset            = inset;
         outer->setContentsMargins(0, margins.top(), margins.right(), margins.bottom());
 
         for (QWidget *page : {ui->tab, ui->L1Tab, ui->L2Tab})
@@ -132,6 +140,49 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
                 pageLayout->setContentsMargins(pageMargins.left() + inset, pageMargins.top(),
                                                pageMargins.right(), pageMargins.bottom());
             }
+    }
+
+    // The lab bar above the sub-tabs: one click sets L1 to a lab setup.
+    // The presets are the table in cache_lab/lab_presets.cpp the tests use.
+    if (auto *grid = qobject_cast<QGridLayout *>(layout()))
+    {
+        auto *bar = new QWidget(this);
+        bar->setObjectName(QStringLiteral("cacheLabBar"));
+        auto *barLayout = new QHBoxLayout(bar);
+        barLayout->setContentsMargins(labBarInset, 0, 0, 0);
+        auto *caption = new QLabel(QStringLiteral("Lab setup"), bar);
+        m_labSetupCombo = new QComboBox(bar);
+        m_labSetupCombo->setObjectName(QStringLiteral("labSetupComboBox"));
+        m_labSetupCombo->setToolTip(
+            QStringLiteral("Sets the L1 cache to a lab setup and the step delay to %1 ms")
+                .arg(kLabPresetStepDelayMs));
+        m_labSetupCombo->addItem(QStringLiteral("None (set by hand)"), QString());
+        for (const LabPreset &preset : labPresets())
+        {
+            const QString name = QString::fromUtf8(preset.name.data(),
+                                                   static_cast<qsizetype>(preset.name.size()));
+            m_labSetupCombo->addItem(name, name);
+        }
+        m_labSetupDescription = new QLabel(bar);
+        m_labSetupDescription->setObjectName(QStringLiteral("labSetupDescription"));
+        caption->setBuddy(m_labSetupCombo);
+        barLayout->addWidget(caption);
+        barLayout->addWidget(m_labSetupCombo);
+        barLayout->addWidget(m_labSetupDescription, 1);
+
+        grid->removeWidget(ui->tabWidget);
+        grid->addWidget(bar, 0, 0);
+        grid->addWidget(ui->tabWidget, 1, 0);
+
+        connect(m_labSetupCombo, &QComboBox::currentIndexChanged, this,
+                [this](int index)
+                {
+                    const QString name = m_labSetupCombo->itemData(index).toString();
+                    if (!name.isEmpty())
+                        applyLabPreset(name);
+                    else
+                        m_labSetupDescription->clear();
+                });
     }
 
     ui->tabWidget->setCurrentIndex(0); // show Instruction cache by default
@@ -145,14 +196,8 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
 
     changeMemoryController(m_memoryController);
     
-    connect(ui->L1Config, &CacheConfigWidget::configChangedSignal, this, [this]{
-        if (enforceL2AtLeastL1())
-        {
-            m_memoryController->getL2Cache()->reconfigure(ui->L2Config->getConfig());
-        }
-        m_memoryController->getL1Cache()->reconfigure(ui->L1Config->getConfig());
-        resyncLiveView();
-    });
+    connect(ui->L1Config, &CacheConfigWidget::configChangedSignal, this,
+            &CacheTab::applyL1Config);
     connect(ui->InstructionConfig, &CacheConfigWidget::configChangedSignal, this, [this]{
         if(enforceL2AtLeastL1())
         {
@@ -244,6 +289,62 @@ void CacheTab::changeMemoryController(MemoryController *memoryController)
     if (m_widgetsShowEngine)
         applyShownConfigs();
     attachLiveObservers();
+}
+
+void CacheTab::applyL1Config()
+{
+    if (enforceL2AtLeastL1())
+    {
+        m_memoryController->getL2Cache()->reconfigure(ui->L2Config->getConfig());
+    }
+    m_memoryController->getL1Cache()->reconfigure(ui->L1Config->getConfig());
+    resyncLiveView();
+
+    // Edited by hand away from the chosen preset: it no longer applies.
+    if (m_labSetupCombo && !activeLabPreset().isEmpty())
+    {
+        const LabPreset  *preset = findLabPreset(activeLabPreset().toStdString());
+        const CacheConfig want   = preset->config();
+        const CacheConfig have   = ui->L1Config->getConfig();
+        const bool same = want.lineCount == have.lineCount && want.wayCount == have.wayCount &&
+                          want.lineSizeInBytes == have.lineSizeInBytes &&
+                          want.writePolicy == have.writePolicy &&
+                          want.allocationPolicy == have.allocationPolicy &&
+                          want.replacementPolicy == have.replacementPolicy;
+        if (!same)
+        {
+            QSignalBlocker blocker(m_labSetupCombo);
+            m_labSetupCombo->setCurrentIndex(0);
+            m_labSetupDescription->clear();
+        }
+    }
+}
+
+bool CacheTab::applyLabPreset(const QString &name)
+{
+    const LabPreset *preset = findLabPreset(name.toStdString());
+    if (!preset || !m_labSetupCombo)
+        return false;
+    {
+        QSignalBlocker blocker(m_labSetupCombo);
+        m_labSetupCombo->setCurrentIndex(m_labSetupCombo->findData(name));
+    }
+    m_labSetupDescription->setText(QString::fromUtf8(
+        preset->description.data(), static_cast<qsizetype>(preset->description.size())));
+    {
+        // All six fields at once, then one reconfigure through the same path
+        // a user's edit takes.
+        QSignalBlocker blocker(ui->L1Config);
+        ui->L1Config->setConfig(preset->config());
+    }
+    applyL1Config();
+    emit labPresetChosenSignal(name);
+    return true;
+}
+
+QString CacheTab::activeLabPreset() const
+{
+    return m_labSetupCombo ? m_labSetupCombo->currentData().toString() : QString();
 }
 
 void CacheTab::attachLiveObservers()
