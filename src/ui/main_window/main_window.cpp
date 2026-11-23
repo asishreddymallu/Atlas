@@ -30,6 +30,7 @@
 #include <QApplication>
 #include <QDockWidget>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSpinBox>
@@ -1010,6 +1011,7 @@ void MainWindow::setUpMenubar()
                     {
                         QTextStream in(&file);
                         QString content = in.readAll();
+                        m_programName = QFileInfo(filename).fileName();
                         auto editorTab =
                             dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
                         if (editorTab)
@@ -1078,6 +1080,23 @@ void MainWindow::setUpTabs()
         // spin box so it shows what the processor uses.
         connect(cacheTab, &CacheTab::labPresetChosenSignal, this,
                 [this] { m_stepDelaySpin->setValue(static_cast<int>(kLabPresetStepDelayMs)); });
+        cacheTab->setLabRunInfoProvider(
+            [this]
+            {
+                CacheTab::LabRunInfo info;
+                info.programName = m_programName.toStdString();
+                info.source      = m_loadedSource;
+                if (info.source.empty())
+                    if (auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]))
+                        info.source = editorTab->getRawText();
+                info.processor = processorDescription(m_processorManager->getProcessorType());
+                info.cycles    = m_processorManager->getCycles();
+                info.instructionsRetired = m_processorManager->getInstructionsRetired();
+                // A run stopped early is reset, and a paused one has not
+                // ended: only a program that ran to its end counts.
+                info.completed = m_processorManager->programEnded();
+                return info;
+            });
     }
     m_tabs[TabIndex::CompilerTabIndex]  = new CompilerTab(this);
     m_tabs[TabIndex::ProfilerTabIndex]  = new ProfilerTab(this, m_processorManager->getProfiler());
@@ -1133,6 +1152,7 @@ bool MainWindow::tryParseAndLoadProgram()
     try
     {
         std::string rawText = editor->getRawText();
+        m_loadedSource      = rawText;
         // The assembler runs on the expanded text, so every line and column it
         // reports is an expanded one. Keep the mapping so the editor can point
         // diagnostics back at the line the user actually wrote. With no custom

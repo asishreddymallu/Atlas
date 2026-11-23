@@ -118,6 +118,10 @@ private:
     QAction           *m_wiresStayActiveAction {nullptr};
     // File > Suggest reordering, also on the Editor page's Schedule group.
     QAction           *m_suggestReorderAction {nullptr};
+    // For the cache lab record: the opened file's name, and the source the
+    // last successful load assembled.
+    QString            m_programName {QStringLiteral("untitled.s")};
+    std::string        m_loadedSource;
     // The execution controls. They used to be locals in setUpToolBar(), and
     // runFinishedSlot() recovered them by walking findChildren<QToolBar*>()[0]
     // and comparing action->text() - text those same handlers rewrite at

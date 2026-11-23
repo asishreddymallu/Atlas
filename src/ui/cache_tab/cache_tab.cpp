@@ -5,6 +5,10 @@
 #include "ui_cache_tab.h"
 #include "cache_live_view.h"
 #include "cache_lab/lab_presets.h"
+#include "cache_lab/lab_record_capture.h"
+#include <QFile>
+#include <QFileDialog>
+#include <QMessageBox>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -169,6 +173,12 @@ CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
         barLayout->addWidget(caption);
         barLayout->addWidget(m_labSetupCombo);
         barLayout->addWidget(m_labSetupDescription, 1);
+        auto *exportButton = new QPushButton(QStringLiteral("Export lab record..."), bar);
+        exportButton->setObjectName(QStringLiteral("exportLabRecordButton"));
+        exportButton->setToolTip(QStringLiteral(
+            "Save this run's setup and results as a JSON lab record (atlas.lab-record/1)"));
+        connect(exportButton, &QPushButton::clicked, this, &CacheTab::exportLabRecord);
+        barLayout->addWidget(exportButton);
 
         grid->removeWidget(ui->tabWidget);
         grid->addWidget(bar, 0, 0);
@@ -340,6 +350,48 @@ bool CacheTab::applyLabPreset(const QString &name)
     applyL1Config();
     emit labPresetChosenSignal(name);
     return true;
+}
+
+void CacheTab::setLabRunInfoProvider(std::function<LabRunInfo()> provider)
+{
+    m_labRunInfo = std::move(provider);
+}
+
+LabRecordInput CacheTab::labRecordInput() const
+{
+    const LabRunInfo run = m_labRunInfo ? m_labRunInfo() : LabRunInfo{};
+    LabRecordInput   in;
+    in.atlasVersion        = atlasVersion();
+    in.timestamp           = utcTimestamp();
+    in.programName         = run.programName;
+    in.programSha256       = sha256Hex(run.source);
+    in.processor           = run.processor;
+    in.cycles              = run.cycles;
+    in.instructionsRetired = run.instructionsRetired;
+    in.completed           = run.completed;
+    if (const QString preset = activeLabPreset(); !preset.isEmpty())
+        in.preset = preset.toStdString();
+    in.caches = {captureLabRecordCache("instruction", *m_memoryController->getInstructionCache()),
+                 captureLabRecordCache("l1", *m_memoryController->getL1Cache()),
+                 captureLabRecordCache("l2", *m_memoryController->getL2Cache())};
+    return in;
+}
+
+void CacheTab::exportLabRecord()
+{
+    const QString path = QFileDialog::getSaveFileName(
+        this, QStringLiteral("Export lab record"), QStringLiteral("lab_record.json"),
+        QStringLiteral("JSON (*.json)"));
+    if (path.isEmpty())
+        return;
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
+    {
+        QMessageBox::warning(this, QStringLiteral("Export lab record"),
+                             QStringLiteral("Could not write %1").arg(path));
+        return;
+    }
+    file.write(QByteArray::fromStdString(buildLabRecordJson(labRecordInput())));
 }
 
 QString CacheTab::activeLabPreset() const

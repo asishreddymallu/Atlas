@@ -3,6 +3,9 @@
 #include "cache_config_widget.h"
 #include "cache_model.h"
 #include "cache_live_observer.h"
+#include "cache_lab/lab_record.h"
+#include <functional>
+#include <string>
 #include "ui/common/atlas_tab.h"
 #include "processor/memory_controller.h"
 #include <QWidget>
@@ -73,6 +76,26 @@ public:
     /// The preset L1 currently matches, or empty when it was set by hand.
     QString activeLabPreset() const;
 
+    /// What the window knows about the run, for the lab record.
+    struct LabRunInfo
+    {
+        std::string programName;
+        std::string source;
+        std::string processor;
+        uint64_t    cycles{0};
+        uint64_t    instructionsRetired{0};
+        bool        completed{false};
+    };
+    void setLabRunInfoProvider(std::function<LabRunInfo()> provider);
+    /// Everything the record holds, gathered now. "Export lab record..."
+    /// writes buildLabRecordJson() of this.
+    LabRecordInput labRecordInput() const;
+
+public slots:
+    /// Asks for a file name and writes the lab record there.
+    void exportLabRecord();
+public:
+
 signals:
     /// Emitted whenever the inner tab widget lands on another level,
     /// whoever moved it, so a second view of the same choice can follow it.
@@ -95,6 +118,7 @@ private:
     Ui::CacheTab *ui;
     QComboBox *m_labSetupCombo{nullptr};
     QLabel    *m_labSetupDescription{nullptr};
+    std::function<LabRunInfo()> m_labRunInfo;
     /// What the L1 sub-tab's configChangedSignal does: reconfigure (L2 first
     /// if it must grow), resync the live view, and drop a preset L1 no
     /// longer matches.

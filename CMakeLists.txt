@@ -61,6 +61,25 @@ list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/scheduler/.*")
 file(GLOB SCHEDULER_SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.cpp")
 file(GLOB SCHEDULER_HEADER_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.h")
 
+# ATLAS_VERSION for the cache lab record: `git describe` at configure time,
+# "unknown" without git. Given to one source file, so a new commit rebuilds
+# only that file (after a re-configure).
+set(ATLAS_VERSION "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    OUTPUT_VARIABLE ATLAS_GIT_DESCRIBE
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET
+                    RESULT_VARIABLE ATLAS_GIT_RESULT)
+    if(ATLAS_GIT_RESULT EQUAL 0 AND ATLAS_GIT_DESCRIBE)
+        set(ATLAS_VERSION "${ATLAS_GIT_DESCRIBE}")
+    endif()
+endif()
+set_source_files_properties(${SRC_DIR}/cache_lab/lab_record.cpp PROPERTIES
+    COMPILE_DEFINITIONS "ATLAS_VERSION=\"${ATLAS_VERSION}\"")
+
 list(APPEND SRC_FILES ${LUA_SRC_FILES})
 
 ##############resourecs setup#################
