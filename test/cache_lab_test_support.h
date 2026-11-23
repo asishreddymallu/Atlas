@@ -54,7 +54,10 @@ struct LabRun
 /// Assembles `program`, sets L1 to `l1`, and runs to the end. With `observe`,
 /// a CacheLiveObserver watches L1 as the Cache tab's does, and every record
 /// it is handed is also kept in full in `records`.
-inline LabRun runOnRvss(const std::string &program, const CacheConfig &l1, bool observe = true)
+/// `resyncAtEnd` false leaves the observer's shadow exactly as the accesses
+/// left it, so a test can check the per-access copying itself.
+inline LabRun runOnRvss(const std::string &program, const CacheConfig &l1, bool observe = true,
+                        bool resyncAtEnd = true)
 {
     LabRun run;
     setupVmStateDirectory();
@@ -77,7 +80,7 @@ inline LabRun runOnRvss(const std::string &program, const CacheConfig &l1, bool 
     }
     run.vm->LoadProgram(assemble(examplePath(program)));
     run.vm->DebugRun();
-    if (run.observer)
+    if (run.observer && resyncAtEnd)
         run.observer->resync(); // the run is over: a full copy is safe
     return run;
 }
