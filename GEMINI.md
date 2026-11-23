@@ -8,7 +8,7 @@ See [AGENTS.md](AGENTS.md) for primary instructions.
 - **Build**: `cmake -S . -B build -G Ninja && cmake --build build` (or `./scripts/build.sh`)
 - **Tests**: `cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure` (or `./scripts/test.sh`)
   - Always run tests via `ctest --test-dir build-tests` (tests open `../examples/...` and require working directory `test/`).
-  - Active test baseline: **4,172/4,172 pass** under serial CTest.
+  - Active test baseline: **4,212/4,212 pass** under serial CTest.
 - **Core Rules**:
   - One feature per branch; one commit per logical working change.
   - Test after every change (`ctest --test-dir build-tests`).

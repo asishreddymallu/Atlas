@@ -35,6 +35,15 @@ ctest --test-dir build-tests --output-on-failure   # serially; see docs/TESTING.
 ./scripts/test.sh
 ```
 
+## Suggest reordering
+
+Editor ribbon > Schedule > Suggest reordering proposes a faster order for
+independent instructions, shown only when a measured run on the selected
+five-stage processor proves it gives the same result in fewer cycles. See
+[docs/scheduler.md](docs/scheduler.md).
+
+Reordering scheduler by Nandan Nihal (CS25BTECH11014).
+
 ## Licence and attribution
 
 MIT; see [LICENSE.md](LICENSE.md). Atlas is a fork of an earlier project; see

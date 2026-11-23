@@ -83,6 +83,8 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/processor/rvss/` | Single-cycle processor model and its control unit. |
 | `src/processor/rv5s/` | Five-stage pipelined model, in four variants by hazard-detection and forwarding (`h_f`, `h_nf`, `nh_f`, `nh_nf`), plus the hazard detection unit. |
 | `src/processor/cache/` | Cache hierarchy, configuration, and replacement policies (`fifo`, `lru`, and the Lua-backed `custom_policy` engine). |
+| `src/scheduler/` | The reordering scheduler (original author: Nandan Nihal, CS25BTECH11014): `basic_block_scheduler.*` (basic blocks, dependency edges, list scheduling) and `reorder_apply.*` (moves source lines). Its own Qt-free static library, `atlas_scheduler`, kept out of `atlas_core`'s globs. See `docs/scheduler.md`. |
+| `src/scheduler_gate/` | `reorder_gate.*`: the measured safety gate in front of Suggest reordering. It runs the original and the suggestion headless and offers the suggestion only if both are equivalent and measured faster. |
 | `src/common/` | Shared value types: `assembled_program.h`, `instructions.*`, `register_names.h`, `diagnostic_severity.h`, `undo_buffer.h`, and `globals.*` (runtime file paths). |
 | `src/language_service/` | Editor-facing language support: the `Diagnostic` model (`diagnostic.h/.cpp`), `LanguageService`, and `CompletionProvider` (static RV32/64 autocomplete data). |
 | `src/config/` | `config.*` (assembler configuration options) and `app_settings.*` (persisted UI preferences — theme, font, panel state). |
@@ -108,7 +110,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/ui/compiler_tab/` | C-to-assembly compiler front end (`compiler_tab.*`) and its read-only `compiler_editor.h`. |
 | `src/ui/problems_panel/` | `ProblemsModel` and `ProblemsDock` — the diagnostics list, with double-click navigation back into the editor. |
 | `src/ui/log_panel/` | A plain text edit used for debug logging. |
-| `src/ui/dialogs/` | `settings_dialog.*`, `processor_dialog.*`, `addpseudo_dialog.*` (each with a `.ui`). |
+| `src/ui/dialogs/` | `settings_dialog.*`, `processor_dialog.*`, `addpseudo_dialog.*` (each with a `.ui`), plus `reorder_dialog.*` (Suggest reordering) and `about_dialog.*` (Help > About), both built in code. |
 | `src/ui/theme/` | `ThemeManager` (loads the theme JSON and renders `template.qss`), `FontManager`, `IconManager`, and `app_style.h` (a `QProxyStyle`). |
 | `src/ui/common/` | Shared UI pieces: `atlas_tab.*` (tab base class), `atlas_editor.*`, `syntax_highlighter.*`, `line_number_gutter_column.*`, `gutter_column.h`, `collapsible_section.*`, `data_table_style.*`, `table_font.*`, `display_base_types.h`. |
 
