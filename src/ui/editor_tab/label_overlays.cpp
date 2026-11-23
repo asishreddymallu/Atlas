@@ -17,7 +17,7 @@
 #include <QWheelEvent>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -30,7 +30,7 @@ constexpr int rowPadX  = 6;
 /// were, and at max zoom the header read "loop - 4" with `found` clipped.
 QString headerText(const QString &name, int count)
 {
-    return QCoreApplication::translate("Kites::ReferencesBar", "%1 - %2 found")
+    return QCoreApplication::translate("Atlas::ReferencesBar", "%1 - %2 found")
         .arg(name)
         .arg(count);
 }
@@ -482,4 +482,4 @@ RenameCheck checkRename(const QString &oldName, const QString &newName,
     return {true, {}};
 }
 
-} // namespace Kites
+} // namespace Atlas

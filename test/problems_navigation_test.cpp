@@ -20,7 +20,7 @@
 #include <filesystem>
 #include <QTextEdit>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
@@ -46,7 +46,7 @@ QList<QTextEdit::ExtraSelection> squiggles(QPlainTextEdit *pane)
 void feed(EditorTab &tab, int line, int startColumn, int endColumn,
           const char *message = "boom")
 {
-    const auto path = std::filesystem::temp_directory_path() / "kites_nav_errors.json";
+    const auto path = std::filesystem::temp_directory_path() / "atlas_nav_errors.json";
     QFile file(QString::fromStdString(path.string()));
     EXPECT_TRUE(file.open(QIODevice::WriteOnly));
     file.write(QString(R"({"errorCode":1,"errors":[{"line":%1,"column":%2,"endColumn":%3,)"

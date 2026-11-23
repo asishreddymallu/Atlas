@@ -2,7 +2,7 @@
 #include <QHeaderView>
 #include <QTableView>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -29,4 +29,4 @@ void applyDataTableStyle(QTableView *view, Qt::Alignment headerAlignment)
     view->horizontalHeader()->setDefaultAlignment(headerAlignment);
     view->horizontalHeader()->setHighlightSections(false);
 }
-} // namespace Kites
+} // namespace Atlas

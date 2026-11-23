@@ -15,8 +15,8 @@
 #include <QTextCursor>
 #include <QTextDocument>
 
-using namespace Kites;
-using namespace Kites::FindEngine;
+using namespace Atlas;
+using namespace Atlas::FindEngine;
 
 namespace
 {

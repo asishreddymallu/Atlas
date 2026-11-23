@@ -2,7 +2,7 @@
 #define MUX_ITEM_H
 #include "base_component.h"
 #include <QJsonObject>
-namespace Kites
+namespace Atlas
 {
 class MuxItem : public BaseComponent
 {
@@ -48,5 +48,5 @@ class MuxItem : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // MUX_ITEM_H

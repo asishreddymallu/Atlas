@@ -34,7 +34,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 
 enum SyscallCode
@@ -461,7 +461,7 @@ class ProcessorBase : public QObject
     void updateCircuitStateSignal(const QList<QString> &wireList);
     // the same cycle with each wire's stage and the stage table's cells;
     // this is what the circuit scene is connected to
-    void circuitSnapshotSignal(const Kites::CircuitSnapshot &snapshot);
+    void circuitSnapshotSignal(const Atlas::CircuitSnapshot &snapshot);
     // we emit this signal when vm is paused at breakpoint
     //  so that gui can chane paused button to resume
     void processorPausedAtBreakpointSignal();
@@ -473,6 +473,6 @@ class ProcessorBase : public QObject
     void inputRequestedSignal();
 };
 
-}  // namespace Kites
+}  // namespace Atlas
 
 #endif // VM_BASE_H

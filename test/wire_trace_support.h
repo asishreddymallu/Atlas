@@ -11,8 +11,8 @@
  * the code follows that reading; it cannot prove the reading is the
  * textbook's.
  */
-#ifndef KITES_TEST_WIRE_TRACE_SUPPORT_H
-#define KITES_TEST_WIRE_TRACE_SUPPORT_H
+#ifndef ATLAS_TEST_WIRE_TRACE_SUPPORT_H
+#define ATLAS_TEST_WIRE_TRACE_SUPPORT_H
 
 #include <QSet>
 #include <QString>
@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites::test_support::wire_trace
+namespace Atlas::test_support::wire_trace
 {
 /// What the control unit decodes for each traced instruction, written out
 /// literally (rv5s_control_unit.cpp). `taken` and `jump` are what the
@@ -141,6 +141,6 @@ inline std::vector<Traced> traced()
 
     return t;
 }
-} // namespace Kites::test_support::wire_trace
+} // namespace Atlas::test_support::wire_trace
 
-#endif // KITES_TEST_WIRE_TRACE_SUPPORT_H
+#endif // ATLAS_TEST_WIRE_TRACE_SUPPORT_H

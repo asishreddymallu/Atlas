@@ -50,7 +50,7 @@
 #include <string>
 #include <vector>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

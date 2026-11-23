@@ -23,14 +23,14 @@
 #include <string>
 #include <vector>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
 /// Writes `source` to a temp file, parses it, and returns the recorded errors.
 std::vector<ParseError> parseErrors(const std::string &stem, const std::string &source)
 {
-    const auto path = std::filesystem::temp_directory_path() / ("kites_pe_" + stem + ".s");
+    const auto path = std::filesystem::temp_directory_path() / ("atlas_pe_" + stem + ".s");
     { std::ofstream out(path); out << source; }
 
     Lexer lexer(path.string());
@@ -164,7 +164,7 @@ TEST(LexerTokenSpanNonAscii, ColumnsCountBytesNotCharacters)
     //    is UTF-16 column 21 - one less, matching the one extra byte before it.
     //    Converting byte columns to cursor offsets is the UI's job (stage 5).
     const std::string source = "    .data\nm:\n    .string \"caf\xc3\xa9\", \"x\"\n";
-    const auto path = std::filesystem::temp_directory_path() / "kites_pe_utf8.s";
+    const auto path = std::filesystem::temp_directory_path() / "atlas_pe_utf8.s";
     { std::ofstream out(path); out << source; }
     Lexer lexer(path.string());
     const auto tokens = lexer.getTokenList();

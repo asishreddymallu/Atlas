@@ -3,7 +3,7 @@
 
 class QLineEdit;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The "go to line" overlay.
@@ -60,4 +60,4 @@ void repositionOverlay(QWidget *bar, const QWidget *viewport);
 /// both bars position against it and FindBar::fitToWidth() has to know
 /// the same number the positioning uses.
 inline constexpr int overlayMargin = 8;
-} // namespace Kites
+} // namespace Atlas

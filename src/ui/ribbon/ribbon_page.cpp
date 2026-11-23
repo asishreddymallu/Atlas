@@ -4,7 +4,7 @@
 
 #include <QHBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 RibbonPage::RibbonPage(QWidget *parent) : QWidget(parent)
 {
@@ -57,4 +57,4 @@ QSize RibbonPage::minimumSizeHint() const
 {
     return QSize(0, QWidget::minimumSizeHint().height());
 }
-} // namespace Kites
+} // namespace Atlas

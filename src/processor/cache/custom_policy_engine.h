@@ -6,7 +6,7 @@
 
 #include "processor/cache/policies/cache_replacement_policy.h"
 
-namespace Kites
+namespace Atlas
 {
 // This is defined in the lua souruce files,
 //  this is basically the runtime environment for running the custom policy scripts
@@ -59,4 +59,4 @@ class CustomPolicyEngine
                                   std::span<const CacheLineView> cacheLines,
                                   const CacheRequestView &request, const CacheContextView &context);
 };
-}//namespace Kites
+}//namespace Atlas

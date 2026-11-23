@@ -4,7 +4,7 @@
 #include "processor/processor_manager.h"
 #include "rv5s_control_unit.h"
 
-namespace Kites
+namespace Atlas
 {
 struct PipelineRegisterChange
 {
@@ -182,4 +182,4 @@ class RV5StageVM_Base : public ProcessorBase
     /// and refetch everything younger, like an ecall (known_issues 104).
     void serve_csr_at_writeback();
 };
-}//namespace Kites
+}//namespace Atlas

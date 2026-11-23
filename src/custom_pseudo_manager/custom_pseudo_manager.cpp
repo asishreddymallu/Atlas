@@ -5,7 +5,7 @@
 #include <QJsonDocument>
 #include <set>
 #include <unordered_map>
-namespace Kites
+namespace Atlas
 {
 namespace customPseudoManager
 {
@@ -624,4 +624,4 @@ bool saveToDisk(const QJsonObject &root, QString &errorMessage)
     return true;
 }
 }// namespace customPseudoManager
-}// namespace Kites
+}// namespace Atlas

@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <iterator>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -41,7 +41,7 @@ CacheTab::CacheLevel levelForTabIndex(int index)
 } // namespace
 
 CacheTab::CacheTab(QWidget *parent, MemoryController *memoryController)
-   : KitesTab(parent), m_memoryController(memoryController),ui(new Ui::CacheTab)
+   : AtlasTab(parent), m_memoryController(memoryController),ui(new Ui::CacheTab)
 {
     assert(m_memoryController && "MemoryController must not be null when initializing CacheTab");
     ui->setupUi(this);
@@ -271,4 +271,4 @@ CacheTab::~CacheTab()
 {
     delete ui;
 }
-} // namespace Kites
+} // namespace Atlas

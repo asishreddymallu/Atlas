@@ -1,6 +1,6 @@
 #include "ribbon_layout.h"
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -92,4 +92,4 @@ int ribbonMinimumWidth(const RibbonLayoutInput &input)
         minimum += input.chevronWidth;
     return minimum;
 }
-} // namespace Kites
+} // namespace Atlas

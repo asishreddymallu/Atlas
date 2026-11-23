@@ -28,7 +28,7 @@
 #include <QToolButton>
 #include <random>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

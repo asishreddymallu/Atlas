@@ -27,13 +27,13 @@
 #include <string>
 #include <vector>
 
-using namespace Kites;
-using namespace Kites::test_support;
+using namespace Atlas;
+using namespace Atlas::test_support;
 
-namespace Kites::test_support
+namespace Atlas::test_support
 {
 void PrintTo(Model model, std::ostream *os);
-} // namespace Kites::test_support
+} // namespace Atlas::test_support
 
 namespace
 {

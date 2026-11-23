@@ -16,7 +16,7 @@
 #include "processor/memory_device.h"
 #include "common/undo_buffer.h"
 
-namespace Kites
+namespace Atlas
 {
 
 struct CacheLine
@@ -212,4 +212,4 @@ signals:
     void cacheStatsUpdatedSignal(CacheStats newStats);
     void customPolicyScriptLoadedSignal(bool success, const std::string &errorMessage = "");
 };
-}//namespace Kites
+}//namespace Atlas

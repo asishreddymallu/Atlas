@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <string_view>
 
-namespace Kites
+namespace Atlas
 {
 extern "C"
 {
@@ -289,4 +289,4 @@ void CustomPolicyEngine::callOptionalVoidFunction(const char *functionName,
                                  "' failed: " + message);
     }
 }
-}//namespace Kites
+}//namespace Atlas

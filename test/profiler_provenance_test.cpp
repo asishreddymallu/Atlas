@@ -22,7 +22,7 @@
 #include <fstream>
 #include <string>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

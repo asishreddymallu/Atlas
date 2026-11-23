@@ -20,7 +20,7 @@
 
 #include <QObject>
 
-using namespace Kites;
+using namespace Atlas;
 
 TEST(ProcessorHighlight, AClockedStateWithNoProgramCountersIsNotSubscripted)
 {

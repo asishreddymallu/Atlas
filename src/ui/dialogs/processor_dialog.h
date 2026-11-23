@@ -4,7 +4,7 @@
 #include "processor/processor_types.h"
 #include <QDialog>
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
@@ -53,5 +53,5 @@ class ProcessorDialog : public QDialog
   signals:
     void vmSelected(const ProcessorType &vmType);
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // PROCESSOR_DIALOG_H

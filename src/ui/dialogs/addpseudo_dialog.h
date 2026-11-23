@@ -2,7 +2,7 @@
 #define ADDPSEUDO_DIALOG_H
 
 #include <QDialog>
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
@@ -27,5 +27,5 @@ class AddPseudoDialog : public QDialog
     Ui::AddPseudoDialog *ui;
     bool m_isUpdate = false;
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // ADDPSEUDO_DIALOG_H

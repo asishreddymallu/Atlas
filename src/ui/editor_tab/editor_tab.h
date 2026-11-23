@@ -6,7 +6,7 @@
 #include "language_service/diagnostic.h"
 #include "language_service/language_service.h"
 #include "processor/processor_manager.h"
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include <QPlainTextEdit>
 #include <QString>
 #include <QTextCharFormat>
@@ -14,14 +14,14 @@
 #include <filesystem>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
 class EditorTab;
 }
 
-class EditorTab : public KitesTab
+class EditorTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -156,5 +156,5 @@ signals:
     /// view selects the stages holding that line's instructions.
     void cursorLineChangedSignal(int line);
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // EDITORTAB__H

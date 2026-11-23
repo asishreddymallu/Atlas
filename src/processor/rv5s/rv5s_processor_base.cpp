@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <thread>
 
-namespace Kites
+namespace Atlas
 {
 void RV5StageVM_Base::Run()
 {
@@ -1606,4 +1606,4 @@ void RV5StageVM_Base::trace_finalize()
     addToTotals(trace_totals_, t, +1);
     trace_.push(t);
 }
-}//namespace Kites
+}//namespace Atlas

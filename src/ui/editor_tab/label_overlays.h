@@ -9,7 +9,7 @@
 class QLabel;
 class QLineEdit;
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -152,4 +152,4 @@ struct RenameCheck
 RenameCheck checkRename(const QString &oldName, const QString &newName,
                         const LabelIndex::Index &index);
 
-} // namespace Kites
+} // namespace Atlas

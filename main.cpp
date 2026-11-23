@@ -23,8 +23,8 @@ int main(int argc, char *argv[])
 
     #ifdef LOG_PANEL
     qRegisterMetaType<QtMsgType>("QtMsgType");
-    auto logPanel = new Kites::LogPanel();
-    qInstallMessageHandler(Kites::LogPanel::logHandler);
+    auto logPanel = new Atlas::LogPanel();
+    qInstallMessageHandler(Atlas::LogPanel::logHandler);
     logPanel->show();
     
     qDebug() << "This is a debug message";
@@ -33,9 +33,9 @@ int main(int argc, char *argv[])
     qInfo() << "This is an info message";
     #endif
 
-    a.setStyle(new Kites::AppStyle(QStyleFactory::create("Fusion")));
+    a.setStyle(new Atlas::AppStyle(QStyleFactory::create("Fusion")));
     
-    Kites::MainWindow w;
+    Atlas::MainWindow w;
     w.setWindowState(Qt::WindowMaximized);
     w.show();
 

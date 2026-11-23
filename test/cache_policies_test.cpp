@@ -3,22 +3,22 @@
 #include "processor/main_memory.h"
 #include "processor/cache/cache.h"
 
-using namespace Kites;
+using namespace Atlas;
     // ── FIFO detailed tests ───────────────────────────────────────────────────────
 class FIFOTest : public ::testing::Test
 {
 protected:
     // 1 set, 1 word/line, 3 ways
     // 0x00, 0x04, 0x08, 0x0C all map to set 0
-    Kites::MainMemory ram;
+    Atlas::MainMemory ram;
 };
 
 TEST_F(FIFOTest, BasicEvictionOrder)
 {
-    Kites::Cache cache(ram, 1, 4, 3,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 1, 4, 3,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.readWord(0x00);   // A — inserted first
     cache.readWord(0x04);   // B
@@ -41,10 +41,10 @@ TEST_F(FIFOTest, BasicEvictionOrder)
 
 TEST_F(FIFOTest, HitsDoNotAffectEvictionOrder)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.readWord(0x00);   // A — inserted first
     cache.readWord(0x04);   // B
@@ -70,10 +70,10 @@ TEST_F(FIFOTest, HitsDoNotAffectEvictionOrder)
 
 TEST_F(FIFOTest, CircularEvictionOrder)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.readWord(0x00);   // A
     cache.readWord(0x04);   // B — full
@@ -91,10 +91,10 @@ TEST_F(FIFOTest, CircularEvictionOrder)
 
 TEST_F(FIFOTest, FIFOWithWriteBack)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.writeWord(0x00, 0xAAAAAAAA);  // A dirty
     cache.writeWord(0x04, 0xBBBBBBBB); // B dirty — full
@@ -113,10 +113,10 @@ TEST_F(FIFOTest, FIFOWithMultipleSets)
     // 2 sets, 1 word/line, 2 ways
     // set 0: 0x00, 0x08  (stride = 2 sets * 1 word * 4 bytes = 8)
     // set 1: 0x04, 0x0C
-    Kites::Cache cache(ram, 2, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 2, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.readWord(0x00);   // set 0, way 0 — A
     cache.readWord(0x08);   // set 0, way 1 — B
@@ -142,7 +142,7 @@ class LRUTest : public ::testing::Test
 {
 protected:
     // 1 set, 1 word/line, 3 ways
-    Kites::MainMemory ram;
+    Atlas::MainMemory ram;
 };
 
 // Was disabled: it re-read the evicted line first, and that miss itself evicts the next
@@ -203,10 +203,10 @@ TEST_F(LRUTest, AccessPromotesToMostRecent)
 
 TEST_F(LRUTest, WritePromotesToMostRecent)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::LRU);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::LRU);
 
     cache.readWord(0x00);               // A — LRU
     cache.readWord(0x04);               // B
@@ -228,10 +228,10 @@ TEST_F(LRUTest, WritePromotesToMostRecent)
 
 TEST_F(LRUTest, LRUWithWriteBack)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::LRU);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::LRU);
 
     cache.writeWord(0x00, 0xAAAAAAAA);  // A dirty — LRU
     cache.writeWord(0x04, 0xBBBBBBBB); // B dirty
@@ -251,10 +251,10 @@ TEST_F(LRUTest, LRUWithWriteBack)
 TEST_F(LRUTest, LRUWithMultipleSets)
 {
     // 2 sets, 1 word/line, 2 ways
-    Kites::Cache cache(ram, 2, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::LRU);
+    Atlas::Cache cache(ram, 2, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::LRU);
 
     // set 0
     cache.readWord(0x00);   // A
@@ -286,10 +286,10 @@ TEST_F(LRUTest, LRUWithMultipleSets)
 // The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(LRUTest, LRUAgeingAcrossManyCycles)
 {
-    Kites::Cache cache(ram, 1, 4, 3,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::LRU);
+    Atlas::Cache cache(ram, 1, 4, 3,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::LRU);
 
     cache.readWord(0x00);   // A
     cache.readWord(0x04);   // B
@@ -325,21 +325,21 @@ protected:
     // with 3 ways:
     // LRU  — no misses on A B C repeats, only D causes eviction of C
     // FIFO — A B C fills, D evicts A, then next A is miss
-    Kites::MainMemory ram_lru;
-    Kites::MainMemory ram_fifo;
+    Atlas::MainMemory ram_lru;
+    Atlas::MainMemory ram_fifo;
 };
 
 TEST_F(PolicyComparisonTest, LRUBetterThanFIFOOnRepeatingPattern)
 {
-    Kites::Cache lru_cache(ram_lru, 1, 4, 3,
-                    Kites::WritePolicy::WriteBack,
-                    Kites::AllocationPolicy::WriteAllocate,
-                    Kites::ReplacementPolicy::LRU);
+    Atlas::Cache lru_cache(ram_lru, 1, 4, 3,
+                    Atlas::WritePolicy::WriteBack,
+                    Atlas::AllocationPolicy::WriteAllocate,
+                    Atlas::ReplacementPolicy::LRU);
 
-    Kites::Cache fifo_cache(ram_fifo, 1, 4, 3,
-                     Kites::WritePolicy::WriteBack,
-                     Kites::AllocationPolicy::WriteAllocate,
-                     Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache fifo_cache(ram_fifo, 1, 4, 3,
+                     Atlas::WritePolicy::WriteBack,
+                     Atlas::AllocationPolicy::WriteAllocate,
+                     Atlas::ReplacementPolicy::FIFO);
 
     // access pattern: A B C A B C D A B C
     std::vector<uint64_t> pattern = {

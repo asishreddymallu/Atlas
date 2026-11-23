@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -132,4 +132,4 @@ AssembledProgram assemble(std::istream& source)
     return program;
 }
 
-}//namespace Kites
+}//namespace Atlas

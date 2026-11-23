@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The one knob for the interface's text size.
@@ -28,4 +28,4 @@ inline constexpr int smallFontPixelSize = baseFontPixelSize - 2;
 /// Numeric table cells. A step below body text, so a dense grid of hex
 /// digits does not shout over the chrome around it.
 inline constexpr int tableFontPixelSize = baseFontPixelSize - 1;
-} // namespace Kites
+} // namespace Atlas

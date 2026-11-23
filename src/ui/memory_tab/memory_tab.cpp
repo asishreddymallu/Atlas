@@ -1,7 +1,7 @@
 #include "memory_tab.h"
 #include "ui/common/data_table_style.h"
 #include "ui_memory_tab.h"
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -48,7 +48,7 @@ ByteOrder orderForText(const QString &text)
 } // namespace
 
 MemoryTab::MemoryTab(QWidget *parent, MemoryController *memoryController)
-    : KitesTab(parent), ui(new Ui::MemoryTab),
+    : AtlasTab(parent), ui(new Ui::MemoryTab),
       m_memoryModel(new MemoryModel(this, memoryController))
 {
     ui->setupUi(this);
@@ -157,4 +157,4 @@ MemoryTab::~MemoryTab()
 {
     delete ui;
 }
-} // namespace Kites
+} // namespace Atlas

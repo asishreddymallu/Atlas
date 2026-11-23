@@ -2,17 +2,17 @@
 #define PROCESSORTAB_H
 
 #include "processor/processor_manager.h"
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include "vm_state_table_model.h"
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
 class ProcessorTab;
 }
 
-class ProcessorTab : public KitesTab
+class ProcessorTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -32,5 +32,5 @@ class ProcessorTab : public KitesTab
   public slots:
     void onVMChanged();
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // PROCESSORTAB_H

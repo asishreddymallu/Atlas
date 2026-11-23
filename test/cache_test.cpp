@@ -3,7 +3,7 @@
 #include "processor/main_memory.h"
 #include "processor/cache/cache.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 // ── Fixture ───────────────────────────────────────────────────────────────────
 class CacheTest : public ::testing::Test
@@ -12,18 +12,18 @@ protected:
     void SetUp() override
     {
         // 4 sets, 4 words/line (16 bytes), 4 ways
-        cache = std::make_unique<Kites::Cache>(
+        cache = std::make_unique<Atlas::Cache>(
             ram,
             /*num_sets*/  4,
             /*block_size*/16,  // 4 words = 16 bytes per line
             /*num_ways*/  4,
-            Kites::WritePolicy::WriteBack,
-            Kites::AllocationPolicy::WriteAllocate,
-            Kites::ReplacementPolicy::LRU);
+            Atlas::WritePolicy::WriteBack,
+            Atlas::AllocationPolicy::WriteAllocate,
+            Atlas::ReplacementPolicy::LRU);
     }
 
-    Kites::MainMemory              ram;
-    std::unique_ptr<Kites::Cache> cache;
+    Atlas::MainMemory              ram;
+    std::unique_ptr<Atlas::Cache> cache;
 };
 
 // ── Basic read/write ──────────────────────────────────────────────────────────
@@ -119,25 +119,25 @@ TEST_F(CacheTest, WriteBackFlushesToMemory)
 
 TEST_F(CacheTest, WriteThroughImmediatelyUpdatesMemory)
 {
-    Kites::MainMemory ram2;
-    Kites::Cache wt_cache(ram2,
+    Atlas::MainMemory ram2;
+    Atlas::Cache wt_cache(ram2,
                    /*num_sets*/  4,
                    /*block_size*/4,
                    /*num_ways*/  4,
-                   Kites::WritePolicy::WriteThrough,
-                   Kites::AllocationPolicy::WriteAllocate,
-                   Kites::ReplacementPolicy::LRU);
+                   Atlas::WritePolicy::WriteThrough,
+                   Atlas::AllocationPolicy::WriteAllocate,
+                   Atlas::ReplacementPolicy::LRU);
     wt_cache.writeWord(0x00, 0xCAFEBABE);
     EXPECT_EQ(ram2.readWord(0x00), 0xCAFEBABE);
 }
 
 TEST_F(CacheTest, WriteThroughLineNotDirty)
 {
-    Kites::MainMemory ram2;
-    Kites::Cache wt_cache(ram2, 4, 4, 4,
-                   Kites::WritePolicy::WriteThrough,
-                   Kites::AllocationPolicy::WriteAllocate,
-                   Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache wt_cache(ram2, 4, 4, 4,
+                   Atlas::WritePolicy::WriteThrough,
+                   Atlas::AllocationPolicy::WriteAllocate,
+                   Atlas::ReplacementPolicy::LRU);
     wt_cache.writeWord(0x00, 0xCAFEBABE);
     EXPECT_FALSE(wt_cache.getCacheLine(0, 0).dirty);
 }
@@ -145,22 +145,22 @@ TEST_F(CacheTest, WriteThroughLineNotDirty)
 // ── Allocation policies ───────────────────────────────────────────────────────
 TEST_F(CacheTest, NoWriteAllocateGoesDirectToMemory)
 {
-    Kites::MainMemory ram2;
-    Kites::Cache nwa_cache(ram2, 4, 4, 4,
-                    Kites::WritePolicy::WriteBack,
-                    Kites::AllocationPolicy::NoWriteAllocate,
-                    Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache nwa_cache(ram2, 4, 4, 4,
+                    Atlas::WritePolicy::WriteBack,
+                    Atlas::AllocationPolicy::NoWriteAllocate,
+                    Atlas::ReplacementPolicy::LRU);
     nwa_cache.writeWord(0x00, 0x12345678);
     EXPECT_EQ(ram2.readWord(0x00), 0x12345678);
 }
 
 TEST_F(CacheTest, NoWriteAllocateDoesNotBringLineIntoCache)
 {
-    Kites::MainMemory ram2;
-    Kites::Cache nwa_cache(ram2, 4, 4, 4,
-                    Kites::WritePolicy::WriteBack,
-                    Kites::AllocationPolicy::NoWriteAllocate,
-                    Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache nwa_cache(ram2, 4, 4, 4,
+                    Atlas::WritePolicy::WriteBack,
+                    Atlas::AllocationPolicy::NoWriteAllocate,
+                    Atlas::ReplacementPolicy::LRU);
     nwa_cache.writeWord(0x00, 0x12345678);
     bool any_valid = false;
     for (size_t s = 0; s < nwa_cache.getSetCount(); ++s)
@@ -174,11 +174,11 @@ TEST_F(CacheTest, EvictionWritesBackDirtyLine)
 {
     // 4 sets, 1 word/line (4 bytes), 1 way — direct mapped
     // 0x00 and 0x10 map to same set (4 sets * 1 word * 4 bytes = 16 byte stride)
-    Kites::MainMemory ram2;
-    Kites::Cache dm_cache(ram2, 4, 4, 1,
-                   Kites::WritePolicy::WriteBack,
-                   Kites::AllocationPolicy::WriteAllocate,
-                   Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache dm_cache(ram2, 4, 4, 1,
+                   Atlas::WritePolicy::WriteBack,
+                   Atlas::AllocationPolicy::WriteAllocate,
+                   Atlas::ReplacementPolicy::LRU);
 
     dm_cache.writeWord(0x00, 0xAAAAAAAA);  // dirty in set 0
     dm_cache.writeWord(0x10, 0xBBBBBBBB); // evicts set 0 → writes back
@@ -188,11 +188,11 @@ TEST_F(CacheTest, EvictionWritesBackDirtyLine)
 
 TEST_F(CacheTest, CleanLineEvictedWithoutWriteback)
 {
-    Kites::MainMemory ram2;
-    Kites::Cache dm_cache(ram2, 4, 4, 1,
-                   Kites::WritePolicy::WriteBack,
-                   Kites::AllocationPolicy::WriteAllocate,
-                   Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache dm_cache(ram2, 4, 4, 1,
+                   Atlas::WritePolicy::WriteBack,
+                   Atlas::AllocationPolicy::WriteAllocate,
+                   Atlas::ReplacementPolicy::LRU);
 
     dm_cache.readWord(0x00);   // bring in clean line
     dm_cache.readWord(0x10);   // evict — should NOT writeback
@@ -234,11 +234,11 @@ TEST_F(CacheTest, FlushThenInvalidates)
 TEST_F(CacheTest, CrossLineWriteDoesNotCorruptUnrelatedMemory)
 {
     // 1-word lines force a word store at +2 to span two cache lines.
-    Kites::MainMemory ram2;
-    Kites::Cache dm_cache(ram2, 4, 4, 1,
-                   Kites::WritePolicy::WriteBack,
-                   Kites::AllocationPolicy::WriteAllocate,
-                   Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache dm_cache(ram2, 4, 4, 1,
+                   Atlas::WritePolicy::WriteBack,
+                   Atlas::AllocationPolicy::WriteAllocate,
+                   Atlas::ReplacementPolicy::LRU);
 
     dm_cache.writeWord(0x02, 0xA1B2C3D4);
     dm_cache.flush ();
@@ -262,7 +262,7 @@ TEST_F(CacheTest, PeekByteSeesDirtyDataWithoutSideEffects)
 
     const size_t hits_before   = cache->getHitCount();
     const size_t misses_before = cache->getMissCount();
-    const Kites::CacheLine line_before = cache->getCacheLine(0, 0);
+    const Atlas::CacheLine line_before = cache->getCacheLine(0, 0);
 
     EXPECT_EQ(cache->peekByte(0x00), 0x78); // from the dirty line, not memory
     EXPECT_EQ(cache->peekByte(0x03), 0x12);
@@ -271,7 +271,7 @@ TEST_F(CacheTest, PeekByteSeesDirtyDataWithoutSideEffects)
 
     EXPECT_EQ(cache->getHitCount(), hits_before);
     EXPECT_EQ(cache->getMissCount(), misses_before);
-    const Kites::CacheLine &line_after = cache->getCacheLine(0, 0);
+    const Atlas::CacheLine &line_after = cache->getCacheLine(0, 0);
     EXPECT_EQ(line_after.frequency, line_before.frequency);
     EXPECT_EQ(line_after.lastAccess, line_before.lastAccess);
     EXPECT_EQ(line_after.age, line_before.age);
@@ -289,11 +289,11 @@ TEST_F(CacheTest, PeekByteSeesDirtyDataWithoutSideEffects)
 TEST_F(CacheTest, LineCrossingReadDoesNotDuplicateDirtyLine)
 {
     // 1 set, 1 word/line, 2 ways
-    Kites::MainMemory ram2;
-    Kites::Cache cache2(ram2, 1, 4, 2,
-                        Kites::WritePolicy::WriteBack,
-                        Kites::AllocationPolicy::WriteAllocate,
-                        Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache cache2(ram2, 1, 4, 2,
+                        Atlas::WritePolicy::WriteBack,
+                        Atlas::AllocationPolicy::WriteAllocate,
+                        Atlas::ReplacementPolicy::LRU);
 
     cache2.readWord(0x200);      // X -> way 0
     cache2.writeWord(0x100, 5);  // A -> way 1, dirty (memory still 0)
@@ -309,11 +309,11 @@ TEST_F(CacheTest, LineCrossingReadDoesNotDuplicateDirtyLine)
 TEST_F(CacheTest, LineCrossingReadDoesNotEvictItsOwnLine)
 {
     // 1 set, 1 word/line, 1 way
-    Kites::MainMemory ram2;
-    Kites::Cache cache2(ram2, 1, 4, 1,
-                        Kites::WritePolicy::WriteBack,
-                        Kites::AllocationPolicy::WriteAllocate,
-                        Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache cache2(ram2, 1, 4, 1,
+                        Atlas::WritePolicy::WriteBack,
+                        Atlas::AllocationPolicy::WriteAllocate,
+                        Atlas::ReplacementPolicy::LRU);
 
     ram2.writeDoubleWord(0x00, 0x0807060504030201);
     EXPECT_EQ(cache2.readWord(0x02), 0x06050403u);
@@ -324,11 +324,11 @@ TEST_F(CacheTest, LineCrossingReadDoesNotEvictItsOwnLine)
 TEST_F(CacheTest, NoWriteAllocatePartialHitUpdatesCachedLine)
 {
     // 1 set, 1 word/line, 2 ways (the default write/allocate policies)
-    Kites::MainMemory ram2;
-    Kites::Cache cache2(ram2, 1, 4, 2,
-                        Kites::WritePolicy::WriteThrough,
-                        Kites::AllocationPolicy::NoWriteAllocate,
-                        Kites::ReplacementPolicy::LRU);
+    Atlas::MainMemory ram2;
+    Atlas::Cache cache2(ram2, 1, 4, 2,
+                        Atlas::WritePolicy::WriteThrough,
+                        Atlas::AllocationPolicy::NoWriteAllocate,
+                        Atlas::ReplacementPolicy::LRU);
 
     cache2.readWord(0x100);  // caches line 0x100
     cache2.writeDoubleWord(0x100, 0x1111111122222222);
@@ -343,15 +343,15 @@ class ReplacementPolicyTest : public ::testing::Test
 protected:
     // 1 set, 1 word/line, 2 ways
     // 0x00 and 0x04 and 0x08 all map to set 0
-    Kites::MainMemory ram;
+    Atlas::MainMemory ram;
 };
 
 TEST_F(ReplacementPolicyTest, LRUEvictsLeastRecentlyUsed)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::LRU);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::LRU);
 
     cache.readWord(0x00);   // way 0 — A
     cache.readWord(0x04);   // way 1 — B
@@ -374,10 +374,10 @@ TEST_F(ReplacementPolicyTest, LRUEvictsLeastRecentlyUsed)
 // The probes are reordered: the survivors are checked before the evicted line.
 TEST_F(ReplacementPolicyTest, FIFOEvictsFirstInserted)
 {
-    Kites::Cache cache(ram, 1, 4, 2,
-                Kites::WritePolicy::WriteBack,
-                Kites::AllocationPolicy::WriteAllocate,
-                Kites::ReplacementPolicy::FIFO);
+    Atlas::Cache cache(ram, 1, 4, 2,
+                Atlas::WritePolicy::WriteBack,
+                Atlas::AllocationPolicy::WriteAllocate,
+                Atlas::ReplacementPolicy::FIFO);
 
     cache.readWord(0x00);   // A — inserted first
     cache.readWord(0x04);   // B
@@ -401,28 +401,28 @@ class HierarchyTest : public ::testing::Test
 protected:
     void SetUp() override
     {
-        l2 = std::make_unique<Kites::Cache>(
+        l2 = std::make_unique<Atlas::Cache>(
             ram,
             /*num_sets*/  16,
             /*block_size*/4,
             /*num_ways*/  4,
-            Kites::WritePolicy::WriteBack,
-            Kites::AllocationPolicy::WriteAllocate,
-            Kites::ReplacementPolicy::LRU);
+            Atlas::WritePolicy::WriteBack,
+            Atlas::AllocationPolicy::WriteAllocate,
+            Atlas::ReplacementPolicy::LRU);
 
-        l1 = std::make_unique<Kites::Cache>(
+        l1 = std::make_unique<Atlas::Cache>(
             *l2,
             /*num_sets*/  4,
             /*block_size*/4,
             /*num_ways*/  2,
-            Kites::WritePolicy::WriteBack,
-            Kites::AllocationPolicy::WriteAllocate,
-            Kites::ReplacementPolicy::LRU);
+            Atlas::WritePolicy::WriteBack,
+            Atlas::AllocationPolicy::WriteAllocate,
+            Atlas::ReplacementPolicy::LRU);
     }
 
-    Kites::MainMemory             ram;
-    std::unique_ptr<Kites::Cache> l2;
-    std::unique_ptr<Kites::Cache> l1;
+    Atlas::MainMemory             ram;
+    std::unique_ptr<Atlas::Cache> l2;
+    std::unique_ptr<Atlas::Cache> l1;
 };
 
 TEST_F(HierarchyTest, WriteGoesToL1)

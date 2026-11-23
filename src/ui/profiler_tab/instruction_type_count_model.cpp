@@ -1,7 +1,7 @@
 #include "instruction_type_count_model.h"
 #include "ui/common/table_font.h"
 #include "utils/to_index.h"
-namespace Kites
+namespace Atlas
 { 
 namespace instr = instruction_set;
 
@@ -102,4 +102,4 @@ void InstructionTypeCountModel::countsChangedSlot()
     // Only the numbers move; the rows (the types) never do.
     emit dataChanged(index(0, 1), index(rowCount() - 1, 1), {Qt::DisplayRole});
 }
-} // namespace kites
+} // namespace Atlas

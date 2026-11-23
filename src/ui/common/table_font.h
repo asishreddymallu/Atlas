@@ -1,7 +1,7 @@
 #pragma once
 #include <QFont>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Monospace font used by data tables, at the table size from the type
@@ -13,4 +13,4 @@ namespace Kites
  * exists; it is deliberately not a namespace-scope object.
  */
 const QFont &tableNumericFont();
-} // namespace Kites
+} // namespace Atlas

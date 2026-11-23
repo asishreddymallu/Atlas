@@ -4,7 +4,7 @@
 #include <QMessageBox>
 
 
-namespace Kites
+namespace Atlas
 {
 
 CacheConfigWidget::CacheConfigWidget(QWidget *parent)
@@ -195,4 +195,4 @@ CacheConfigWidget::~CacheConfigWidget()
 {
     delete ui;
 }
-} // namespace Kites
+} // namespace Atlas

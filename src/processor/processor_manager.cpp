@@ -28,7 +28,7 @@
 #include "assembler/assembler.h"
 #include "utils/utils.h"
 
-namespace Kites
+namespace Atlas
 {
 ProcessorManager::ProcessorManager(QObject *parent, ProcessorType vmType) : QObject(parent)
 {
@@ -450,7 +450,7 @@ MemoryController *ProcessorManager::getMemoryController() const
     return &m_currentProcessor->memory_controller_;
 }
 
-Kites::CircuitScene *ProcessorManager::getCircuitScene() const
+Atlas::CircuitScene *ProcessorManager::getCircuitScene() const
 {
     return m_currentProcessor->circuit_scene_.get();
 }
@@ -616,4 +616,4 @@ bool ProcessorManager::exportTraceJson(const QString &path, QString *error) cons
     return true;
 }
 
-}//namespace Kites
+}//namespace Atlas

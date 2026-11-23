@@ -20,7 +20,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace Kites
+namespace Atlas
 {
 class RVSSProcessor;        
 class RV5StageProcessorNHNF;
@@ -187,4 +187,4 @@ signals:
         const std::vector<std::pair<int,std::string>> &disassemblyLines);
     // std::unique_ptr<> m_instance;
 };
-}//namespace Kites
+}//namespace Atlas

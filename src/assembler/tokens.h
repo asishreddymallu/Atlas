@@ -9,7 +9,7 @@
 
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Enum class representing the type of a token.
@@ -94,5 +94,5 @@ struct Token
  * @return A string representing the TokenType.
  */
 inline std::string tokenTypeToString(TokenType type);
-}// namespace Kites
+}// namespace Atlas
 #endif // TOKENS_H

@@ -8,7 +8,7 @@ class QLineEdit;
 class QToolButton;
 class QWidget;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The find (and replace) overlay for an editor pane.
@@ -122,4 +122,4 @@ class FindBar : public QWidget
     QToolButton *m_next        {nullptr};
     QToolButton *m_close       {nullptr};
 };
-} // namespace Kites
+} // namespace Atlas

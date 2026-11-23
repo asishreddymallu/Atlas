@@ -1,7 +1,7 @@
 #include "profiler/profiler.h"
 #include "common/instructions.h"
 
-namespace Kites
+namespace Atlas
 {
 
 namespace instr = instruction_set;
@@ -170,4 +170,4 @@ instr::InstructionType Profiler::getInstructionTypeForLine(int lineNumber) const
     }
     return instr::InstructionType::UNKNOWN;
 }
-}//namespace Kites
+}//namespace Atlas

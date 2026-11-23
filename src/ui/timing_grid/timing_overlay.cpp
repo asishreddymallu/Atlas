@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -168,4 +168,4 @@ bool TimingOverlay::eventFilter(QObject *watched, QEvent *event)
     }
     return QWidget::eventFilter(watched, event);
 }
-} // namespace Kites
+} // namespace Atlas

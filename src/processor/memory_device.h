@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <span>
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -32,4 +32,4 @@ class MemoryDevice
     virtual std::span<const uint8_t> readLine(uint64_t address, size_t lineSize) = 0;
     virtual void writeLine(uint64_t address, std::span<const uint8_t> data) = 0;
 };
-}//namespace Kites
+}//namespace Atlas

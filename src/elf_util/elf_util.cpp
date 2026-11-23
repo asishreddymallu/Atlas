@@ -8,7 +8,7 @@
 #include <iostream>
 #include <variant>
 
-namespace Kites
+namespace Atlas
 {
 void generateElfFile(const AssembledProgram &program, const std::string &output_filename)
 {
@@ -92,4 +92,4 @@ void generateElfFile(const AssembledProgram &program, const std::string &output_
 
     std::cout << "ELF file generated: " << output_filename << std::endl;
 }
-}//namespace Kites
+}//namespace Atlas

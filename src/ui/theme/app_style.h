@@ -1,7 +1,7 @@
 #pragma once
 #include <QProxyStyle>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief This class is a custom QProxyStyle that will provide styling for the application,
@@ -22,4 +22,4 @@ public:
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
 };
-} // namespace Kites
+} // namespace Atlas

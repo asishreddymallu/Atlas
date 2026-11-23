@@ -13,7 +13,7 @@
 #include <stack>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 // --- Programmer NOP Requirements for Mode 2 ---
 // * Data Hazards (ALU-ALU): 0 NOPs (Handled by Forwarding)
@@ -53,4 +53,4 @@ class RV5StageProcessorNHF : public RV5StageVM_Base
 
     // void print_pipeline_registers_debug();
 };
-}//namespace Kites
+}//namespace Atlas

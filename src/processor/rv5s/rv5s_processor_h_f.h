@@ -14,7 +14,7 @@
 #include <stack>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 class RV5StageProcessorHF : public RV5StageVM_Base
 {
@@ -58,4 +58,4 @@ class RV5StageProcessorHF : public RV5StageVM_Base
 
     // void print_pipeline_registers_debug();
 };
-}//namespace Kites
+}//namespace Atlas

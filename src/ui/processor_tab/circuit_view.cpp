@@ -1,6 +1,6 @@
 #include "circuit_view.h"
 
-namespace Kites
+namespace Atlas
 {
 // void CircuitView::mouseMoveEvent(QMouseEvent *event)
 // {
@@ -77,4 +77,4 @@ void CircuitView::drawBackground(QPainter *painter, const QRectF &rect)
         }
     }
 } */
-} // namespace Kites
+} // namespace Atlas

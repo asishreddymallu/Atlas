@@ -34,8 +34,8 @@
 #include <QMimeData>
 #include <QPlainTextEdit>
 
-using namespace Kites;
-using namespace Kites::EditorCommands;
+using namespace Atlas;
+using namespace Atlas::EditorCommands;
 
 namespace
 {
@@ -656,9 +656,9 @@ TEST(EditorKeysWiring, AnOpenCompletionPopupDoesNotSwallowTheModifiedKeys)
     editor->setCompletionSource(
         [](const QString &)
         {
-            return QList<Kites::Completion::Item>{
-                {QStringLiteral("addi"), Kites::Completion::Kind::Instruction, {}},
-                {QStringLiteral("add"), Kites::Completion::Kind::Instruction, {}}};
+            return QList<Atlas::Completion::Item>{
+                {QStringLiteral("addi"), Atlas::Completion::Kind::Instruction, {}},
+                {QStringLiteral("add"), Atlas::Completion::Kind::Instruction, {}}};
         });
 
     place(editor, "", 0, 0);

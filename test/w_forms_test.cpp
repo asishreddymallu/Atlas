@@ -25,8 +25,8 @@
 #include <stdexcept>
 #include <string>
 
-using namespace Kites;
-using namespace Kites::test_support;
+using namespace Atlas;
+using namespace Atlas::test_support;
 
 namespace
 {

@@ -11,10 +11,10 @@
 #include "ui/common/syntax_highlighter.h"
 #include "instruction_type_gutter_column.h"
 #include "execution_count_gutter_column.h"
-namespace Kites
+namespace Atlas
 {
 
-ProfilerEditor::ProfilerEditor(QWidget *parent, [[maybe_unused]] Profiler* profiler) : KitesEditor(parent)
+ProfilerEditor::ProfilerEditor(QWidget *parent, [[maybe_unused]] Profiler* profiler) : AtlasEditor(parent)
 // m_lineStatsModel(new LineStatsModel(this, profiler))
 {
     m_syntaxHighlighter = new SyntaxHighlighter(this->document());
@@ -157,4 +157,4 @@ void ProfilerEditor::updateLineInstructionTypeSlot
     viewport()->update();
     emit marginChangedSignal();
 }
-} // namespace Kites
+} // namespace Atlas

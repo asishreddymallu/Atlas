@@ -15,11 +15,11 @@ namespace
 template <typename VmType>
 std::unique_ptr<VmType> runSource(const std::string &source)
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     auto vm = std::make_unique<VmType>();
     std::istringstream stream(source);
-    Kites::AssembledProgram program = Kites::assemble(stream);
+    Atlas::AssembledProgram program = Atlas::assemble(stream);
     vm->LoadProgram(program);
     vm->DebugRun();
     return vm;
@@ -108,20 +108,20 @@ void runBackwardPseudoBranch()
 
 TEST(PseudoBranch, SingleCycle)
 {
-    runPseudoBranchMatrix<Kites::RVSSProcessor>();
+    runPseudoBranchMatrix<Atlas::RVSSProcessor>();
 }
 
 TEST(PseudoBranch, FiveStageHazardForwarding)
 {
-    runPseudoBranchMatrix<Kites::RV5StageProcessorHF>();
+    runPseudoBranchMatrix<Atlas::RV5StageProcessorHF>();
 }
 
 TEST(PseudoBranch, BackwardLabelSingleCycle)
 {
-    runBackwardPseudoBranch<Kites::RVSSProcessor>();
+    runBackwardPseudoBranch<Atlas::RVSSProcessor>();
 }
 
 TEST(PseudoBranch, BackwardLabelFiveStageHazardForwarding)
 {
-    runBackwardPseudoBranch<Kites::RV5StageProcessorHF>();
+    runBackwardPseudoBranch<Atlas::RV5StageProcessorHF>();
 }

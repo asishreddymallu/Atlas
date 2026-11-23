@@ -19,13 +19,13 @@
 #include <fstream>
 #include <sstream>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
 std::filesystem::path tempErrorsFile(const std::string &stem)
 {
-    return std::filesystem::temp_directory_path() / ("kites_" + stem + "_errors.json");
+    return std::filesystem::temp_directory_path() / ("atlas_" + stem + "_errors.json");
 }
 
 QByteArray readAll(const std::filesystem::path &path)

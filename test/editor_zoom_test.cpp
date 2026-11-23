@@ -18,7 +18,7 @@
 #include <QKeyEvent>
 #include <QTextDocument>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
@@ -314,7 +314,7 @@ TEST(EditorZoom, AReadOnlyPaneZoomsToo)
 /**
  * @brief Changing the font in Settings must not drop the session zoom.
  *
- * FontManager emits fontChangedSignal; KitesEditor re-clamps the standing
+ * FontManager emits fontChangedSignal; AtlasEditor re-clamps the standing
  * delta and re-applies it on top of the NEW size, then re-measures the
  * gutter. Three things can go wrong and all three are asserted: the delta
  * silently resetting to 0, the new size being rendered without the delta,
@@ -361,7 +361,7 @@ TEST(EditorZoomFontChange, ASettingsFontChangeKeepsTheDeltaAndRemeasures)
     QApplication::processEvents();
     const QFont small = bench.editor.font();
     const int   smallSize = small.pixelSize() > 0 ? small.pixelSize() : small.pointSize();
-    EXPECT_GE(smallSize, KitesEditor::minRenderedSize)
+    EXPECT_GE(smallSize, AtlasEditor::minRenderedSize)
         << "a small Settings font let the zoom render below the floor";
 
     fonts.setSize(original);

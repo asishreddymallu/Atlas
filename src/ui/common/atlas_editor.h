@@ -4,7 +4,7 @@ class QWheelEvent;
 
 #include <QPlainTextEdit>
 #include <QTextEdit>
-namespace Kites
+namespace Atlas
 {
 /// How many columns a tab stands for in every Kites editor. It sets the tab
 /// stop distance here, and it is what one outdent removes from a line that
@@ -13,13 +13,13 @@ namespace Kites
 inline constexpr int editorTabWidth = 4;
 
 class GutterColumn; //forward declaration
-class KitesEditor : public QPlainTextEdit
+class AtlasEditor : public QPlainTextEdit
 {
     Q_OBJECT
     friend class GutterColumn;
 public:
-    explicit KitesEditor(QWidget *parent = nullptr);
-    ~KitesEditor() {};
+    explicit AtlasEditor(QWidget *parent = nullptr);
+    ~AtlasEditor() {};
 
     // Diagnostic squiggles are kept in their own list so that moving the cursor
     // (which recomputes only the current-line highlight) can no longer erase
@@ -138,4 +138,4 @@ private:
     QList<QTextEdit::ExtraSelection> m_linkSelections{};
     QList<QTextEdit::ExtraSelection> m_diagnosticSelections{};
 };
-} // namespace Kites
+} // namespace Atlas

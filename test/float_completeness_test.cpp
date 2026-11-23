@@ -29,9 +29,9 @@
 #include <string>
 #include <vector>
 
-using namespace Kites;
+using namespace Atlas;
 
-using namespace Kites::test_support;
+using namespace Atlas::test_support;
 
 
 // ───────────────────── the harness itself ──────────────────────────────

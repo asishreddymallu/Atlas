@@ -19,7 +19,7 @@
 #include "processor/rvss/rvss_processor.h"
 #include "utils/utils.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

@@ -7,7 +7,7 @@
 
 #include <cstdint>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The pipeline stage a lit wire belongs to.
@@ -52,6 +52,6 @@ struct CircuitSnapshot
     QList<quint8>    stages; ///< active_wire_stages_, same length
     QList<StageCell> cells;  ///< IF/ID, ID/EX, EX/MEM, MEM/WB - or the one CI cell
 };
-} // namespace Kites
+} // namespace Atlas
 
-Q_DECLARE_METATYPE(Kites::CircuitSnapshot)
+Q_DECLARE_METATYPE(Atlas::CircuitSnapshot)

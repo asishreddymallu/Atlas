@@ -4,7 +4,7 @@
 #include <QString>
 #include <QVector>
 
-namespace Kites
+namespace Atlas
 {
 
 // A single reported problem, normalized from the assembler's various error
@@ -48,4 +48,4 @@ struct Diagnostic
  */
 QVector<Diagnostic> parseDiagnosticsJson(const QByteArray &json);
 
-} // namespace Kites
+} // namespace Atlas

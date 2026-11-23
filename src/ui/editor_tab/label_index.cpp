@@ -4,7 +4,7 @@
 #include <QStringView>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace LabelIndex
 {
@@ -281,4 +281,4 @@ QString nameAt(const QString &text, int offset)
 }
 
 } // namespace LabelIndex
-} // namespace Kites
+} // namespace Atlas

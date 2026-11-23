@@ -2,7 +2,7 @@
 #include "config/app_settings.h"
 #include <QFontDatabase>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -113,4 +113,4 @@ QStringList FontManager::recommendedFamilies() const
     return result;
 }
 
-} // namespace Kites
+} // namespace Atlas

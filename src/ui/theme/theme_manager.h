@@ -8,7 +8,7 @@
 #include <array>
 #include <QTextCharFormat>
 #include "utils/to_index.h"
-namespace Kites
+namespace Atlas
 {
 
 enum class ThemeAppearance
@@ -157,4 +157,4 @@ private:
     QString m_qssTemplate;
 
 };
-}//namespace Kites
+}//namespace Atlas

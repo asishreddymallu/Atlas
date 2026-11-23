@@ -15,7 +15,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace command_handler
 {
@@ -344,4 +344,4 @@ void ExecuteCommand(const Command &command, ProcessorManager &manager, ReplState
 }
 
 } // namespace command_handler
-}//namespace Kites
+}//namespace Atlas

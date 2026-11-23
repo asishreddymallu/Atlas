@@ -1,7 +1,7 @@
 #pragma once
 #include <QList>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief What one ribbon group costs, in both modes.
@@ -89,4 +89,4 @@ RibbonLayoutResult computeRibbonLayout(const RibbonLayoutInput &input);
  * nothing, because every one of them can go in the menu.
  */
 int ribbonMinimumWidth(const RibbonLayoutInput &input);
-} // namespace Kites
+} // namespace Atlas

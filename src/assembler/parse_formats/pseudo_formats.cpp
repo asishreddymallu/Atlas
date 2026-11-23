@@ -11,7 +11,7 @@
 #include "processor/registers.h"
 
 #include <string>
-namespace Kites
+namespace Atlas
 {
 bool Parser::parse_pseudo()
 {
@@ -1151,4 +1151,4 @@ bool Parser::parse_pseudo()
     } // call
     return false;
 }
-}// namespace Kites
+}// namespace Atlas

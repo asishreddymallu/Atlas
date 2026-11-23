@@ -20,7 +20,7 @@
 #include <system_error>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -971,4 +971,4 @@ const std::map<unsigned int, unsigned int> &Parser::getInstructionNumberLineNumb
 {
     return instruction_number_line_number_mapping_;
 }
-}//namespace Kites
+}//namespace Atlas

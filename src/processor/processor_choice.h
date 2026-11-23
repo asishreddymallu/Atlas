@@ -17,7 +17,7 @@
 
 #include "processor/processor_types.h"
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief A processor as the chooser's three controls describe it.
@@ -71,4 +71,4 @@ const char *processorDescription(ProcessorType type);
  */
 const char *processorNote(bool pipeline, bool hazard, bool forwarding);
 
-} // namespace Kites
+} // namespace Atlas

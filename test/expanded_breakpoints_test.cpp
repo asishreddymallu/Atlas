@@ -23,7 +23,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

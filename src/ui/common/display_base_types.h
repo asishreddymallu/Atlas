@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Kites
+namespace Atlas
 {
 enum class Base
 {
@@ -27,4 +27,4 @@ enum class ByteOrder
     Little,
     Big
 };
-} // namespace Kites
+} // namespace Atlas

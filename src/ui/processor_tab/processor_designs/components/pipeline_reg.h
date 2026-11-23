@@ -3,7 +3,7 @@
 #include "base_component.h"
 #include <QJsonObject>
 
-namespace Kites
+namespace Atlas
 {
 class PipelineReg : public BaseComponent
 {
@@ -36,5 +36,5 @@ class PipelineReg : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // PIPELINE_REG_H

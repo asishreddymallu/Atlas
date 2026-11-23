@@ -1,11 +1,11 @@
 #include "editor_commands.h"
 
-#include "ui/common/kites_editor.h"
+#include "ui/common/atlas_editor.h"
 #include "ui/editor_tab/find_engine.h"
 
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace EditorCommands
 {
@@ -811,4 +811,4 @@ Edit toggleComment(const QString &text, int anchor, int position)
     return spliced(text, anchor, position, splices);
 }
 } // namespace EditorCommands
-} // namespace Kites
+} // namespace Atlas

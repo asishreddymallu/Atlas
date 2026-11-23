@@ -2,7 +2,7 @@
 #include "ui/common/processor_metrics_model.h"
 #include "ui/common/table_font.h"
 
-namespace Kites
+namespace Atlas
 {
 VMStateTableModel::VMStateTableModel(QObject *parent, ProcessorManager *vmManager)
     : QAbstractTableModel(parent), m_vmManager(vmManager)
@@ -102,4 +102,4 @@ void VMStateTableModel::refresh()
     beginResetModel();
     endResetModel();
 }
-} // namespace Kites
+} // namespace Atlas

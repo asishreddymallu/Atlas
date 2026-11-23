@@ -1,6 +1,6 @@
 #pragma once
 #include "processor/processor_manager.h"
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include "ui/problems_panel/problems_dock.h"
 #include "ui/register_table/register_container.h"
 #include "ui/ribbon/ribbon_bar.h"
@@ -16,7 +16,7 @@
 class QLabel;
 class QSpinBox;
 
-namespace Kites
+namespace Atlas
 {
 class OutputDock;
 class TimingGridPanel;
@@ -155,7 +155,7 @@ private:
     QThread           *m_processorThread   {nullptr};
     ExecutionState     m_executionState    {ExecutionState::Stopped};
 
-    std::array<KitesTab*, toIndex(TabIndex::TabCount)> m_tabs;
+    std::array<AtlasTab*, toIndex(TabIndex::TabCount)> m_tabs;
 public slots:
     void processorChanged(const ProcessorType &vmType); // this will catch the signal from processor dialog
     void runFinishedSlot();
@@ -166,4 +166,4 @@ signals:
     void runProcessorSignal();
     void debugRunProcessorSignal();
 };
-} // namespace Kites
+} // namespace Atlas

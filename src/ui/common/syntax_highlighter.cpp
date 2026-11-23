@@ -6,7 +6,7 @@
 #include <QJsonParseError>
 #include <QJsonArray>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -150,4 +150,4 @@ void SyntaxHighlighter::themeChangedSlot([[maybe_unused]] const QString &themeId
     rehighlight();
 }
 
-} // namespace Kites
+} // namespace Atlas

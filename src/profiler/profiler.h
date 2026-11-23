@@ -11,7 +11,7 @@
 #include "utils/to_index.h"
 #include "processor/processor_state.h"
 
-namespace Kites
+namespace Atlas
 {
 
 using InstructionTypeCounts = std::array<size_t, 
@@ -80,4 +80,4 @@ signals:
     void updateLineInstructionTypeSignal(std::map<int, instruction_set::InstructionType> lineInstructionTypes = {});
     void updateInstructionTypeCountsSignal();
 };
-}//namespace Kites
+}//namespace Atlas

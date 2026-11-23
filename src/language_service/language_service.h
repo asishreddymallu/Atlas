@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVector>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -43,4 +43,4 @@ class LanguageService : public QObject
     QFutureWatcher<QVector<Diagnostic>> m_watcher;
 };
 
-} // namespace Kites
+} // namespace Atlas

@@ -7,7 +7,7 @@
 #include "processor/main_memory.h"
 #include "processor/cache/cache.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 class CustomPolicyTest : public ::testing::Test
 {
@@ -30,7 +30,7 @@ protected:
         return asm_path;
     }
 
-    Kites::MainMemory ram;
+    Atlas::MainMemory ram;
 };
 
 TEST_F(CustomPolicyTest, LoadedLFUEvictsLeastFrequentlyUsed)

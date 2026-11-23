@@ -1,6 +1,6 @@
 #include "log_panel.h"
 #include <QDateTime>
-namespace Kites
+namespace Atlas
 {
 LogPanel *LogPanel::instance = nullptr;
 LogPanel::LogPanel(QWidget *parent) : QPlainTextEdit(parent)
@@ -84,4 +84,4 @@ void LogPanel::appendLog(QtMsgType type, const QString &msg)
 
     setTextCursor(cursor);
 }
-} // namespace Kites
+} // namespace Atlas

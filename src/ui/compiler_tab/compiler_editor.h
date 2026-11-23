@@ -1,16 +1,16 @@
-#include "ui/common/kites_editor.h"
+#include "ui/common/atlas_editor.h"
 #include "ui/common/line_number_gutter_column.h"
-namespace Kites
+namespace Atlas
 {
-class CompilerEditor : public KitesEditor
+class CompilerEditor : public AtlasEditor
 {
     Q_OBJECT
 public:
     explicit CompilerEditor(QWidget *parent = nullptr)
-    : KitesEditor(parent)
+    : AtlasEditor(parent)
     {
         addLeftGutterColumn(new LineNumberGutterColumn(this));
-        // KitesEditor's constructor sizes the viewport margins before this
+        // AtlasEditor's constructor sizes the viewport margins before this
         // gutter exists, so without this the gutter overlaps the first couple
         // of characters until the block count next changes (same call that
         // Editor and ProfilerEditor already make after adding theirs).
@@ -18,4 +18,4 @@ public:
     }
     ~CompilerEditor() {};
 };
-} // namespace Kites
+} // namespace Atlas

@@ -14,7 +14,7 @@
 #include <functional>
 #include <map>
 
-namespace Kites
+namespace Atlas
 {
 using ProcessorContainer = std::map<ProcessorType, std::function<std::unique_ptr<ProcessorBase>(void)>>;
 
@@ -42,4 +42,4 @@ class ProcessorFactory
     }
     ProcessorContainer m_vmContainer;
 };
-}//namespace Kites
+}//namespace Atlas

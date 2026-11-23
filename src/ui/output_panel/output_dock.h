@@ -4,7 +4,7 @@
 class QLineEdit;
 class QPlainTextEdit;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief What the running program prints, and the line an ecall read
@@ -40,4 +40,4 @@ class OutputDock : public QDockWidget
     QPlainTextEdit *m_text{nullptr};
     QLineEdit      *m_input{nullptr};
 };
-} // namespace Kites
+} // namespace Atlas

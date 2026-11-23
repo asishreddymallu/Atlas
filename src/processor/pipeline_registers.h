@@ -10,7 +10,7 @@
 
 #include <cstdint>
 #include "processor/processor_constants.h"
-namespace Kites
+namespace Atlas
 {
 // --- Data passed from Fetch (IF) to Decode (ID) ---
 struct IF_ID_Register
@@ -227,4 +227,4 @@ struct MEM_WB_Register
         prev_freg_write = false;
     }
 };
-}// namespace Kites
+}// namespace Atlas

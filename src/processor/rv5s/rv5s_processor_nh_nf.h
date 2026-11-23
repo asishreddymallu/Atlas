@@ -25,7 +25,7 @@
 #include <stack>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 class RV5StageProcessorNHNF : public RV5StageVM_Base
 {
@@ -73,4 +73,4 @@ class RV5StageProcessorNHNF : public RV5StageVM_Base
     // void memory_float();
 
 };
-}//namespace Kites
+}//namespace Atlas

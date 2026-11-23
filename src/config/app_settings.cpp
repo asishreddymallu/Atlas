@@ -1,6 +1,6 @@
 #include "app_settings.h"
 
-namespace Kites
+namespace Atlas
 {
 
 namespace
@@ -87,4 +87,4 @@ void AppSettings::setCompilerOutputBorderStyle(BorderStyle style)
     emit compilerOutputBorderStyleChangedSignal(style);
 }
 
-} // namespace Kites
+} // namespace Atlas

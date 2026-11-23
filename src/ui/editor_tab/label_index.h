@@ -5,7 +5,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Where the labels are, as pure functions.
@@ -89,4 +89,4 @@ QString nameAt(const QString &text, int offset);
 QStringList definitionsOnLine(const QString &line);
 
 } // namespace LabelIndex
-} // namespace Kites
+} // namespace Atlas

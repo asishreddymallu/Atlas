@@ -12,7 +12,7 @@
 
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -496,4 +496,4 @@ bool ThemeManager::installTheme(const QString &sourceFilePath, QString &errorOut
     return true;
 }
 
-}//namespace Kites
+}//namespace Atlas

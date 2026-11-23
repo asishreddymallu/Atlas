@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace Kites::LabelIndex;
+using namespace Atlas::LabelIndex;
 
 namespace
 {

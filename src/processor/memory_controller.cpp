@@ -1,6 +1,6 @@
 #include "memory_controller.h"
 
-namespace Kites
+namespace Atlas
 {
     
 MemoryController::MemoryController() : 

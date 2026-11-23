@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Kites
+namespace Atlas
 {
 
 enum class ProcessorType
@@ -14,4 +14,4 @@ enum class ProcessorType
     ProcessorTypeCount
 };
 
-}  // namespace Kites
+}  // namespace Atlas

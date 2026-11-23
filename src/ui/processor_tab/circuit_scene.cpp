@@ -30,7 +30,7 @@
 #include <QHash>
 #include "common/instructions.h"
 
-namespace Kites
+namespace Atlas
 {
 
 CircuitScene::CircuitScene(QObject *parent) : QGraphicsScene(parent)
@@ -188,7 +188,7 @@ void CircuitScene::updateCircuitState(const QList<QString> &wireList)
     m_timer->start(); // restart the timer to turn off the wires after interval
 }
 
-void CircuitScene::updateCircuitSnapshot(const Kites::CircuitSnapshot &snapshot)
+void CircuitScene::updateCircuitSnapshot(const Atlas::CircuitSnapshot &snapshot)
 {
     m_cells = snapshot.cells;
     fillInstructionTable();
@@ -774,4 +774,4 @@ QList<CircuitScene::ComponentLabel> CircuitScene::componentLabels() const
     }
     return out;
 }
-} // namespace Kites
+} // namespace Atlas

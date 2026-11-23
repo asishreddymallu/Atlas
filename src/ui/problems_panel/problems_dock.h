@@ -8,7 +8,7 @@ class QLabel;
 class QStackedWidget;
 class QTableView;
 
-namespace Kites
+namespace Atlas
 {
 class ProblemsModel;
 
@@ -52,4 +52,4 @@ private:
     QLabel *m_emptyState = nullptr;
     QStackedWidget *m_stack = nullptr;
 };
-} // namespace Kites
+} // namespace Atlas

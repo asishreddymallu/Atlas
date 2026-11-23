@@ -13,7 +13,7 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The band below the tab strip, carrying a hairline at each edge.
@@ -321,4 +321,4 @@ void RibbonBar::retintIcons()
     for (int index = 0; index < m_tabIcons.size() && index < m_tabBar->count(); ++index)
         m_tabBar->setTabIcon(index, iconManager.getIcon(m_tabIcons.at(index)));
 }
-} // namespace Kites
+} // namespace Atlas

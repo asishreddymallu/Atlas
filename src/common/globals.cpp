@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <filesystem>
 
-namespace Kites
+namespace Atlas
 {
 namespace globals
 {
@@ -53,4 +53,4 @@ bool vm_as_backend = false;
 unsigned int text_section_start = 0x00000000;
 unsigned int data_section_start = 0x10000000;
 }//namespace globals
-}//namespace Kites
+}//namespace Atlas

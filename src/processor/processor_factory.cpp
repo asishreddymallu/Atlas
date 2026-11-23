@@ -10,7 +10,7 @@
 
 #include "processor/processor_factory.h"
 
-namespace Kites
+namespace Atlas
 {
 std::unique_ptr<ProcessorBase> ProcessorFactory::createVM(ProcessorType type)
 {
@@ -22,4 +22,4 @@ std::unique_ptr<ProcessorBase> ProcessorFactory::createVM(ProcessorType type)
     }
     throw std::runtime_error("ProcessorFactory: Unknown ProcessorType");
 }
-}//namespace Kites
+}//namespace Atlas

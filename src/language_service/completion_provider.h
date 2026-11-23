@@ -1,7 +1,7 @@
 #pragma once
 #include <QStringList>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -36,4 +36,4 @@ class CompletionProvider
     QStringList m_cachedAll;
 };
 
-} // namespace Kites
+} // namespace Atlas

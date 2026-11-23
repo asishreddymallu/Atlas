@@ -34,7 +34,7 @@ class QSpinBox;
 class QTextBrowser;
 class QToolButton;
 
-namespace Kites
+namespace Atlas
 {
 class ProcessorManager;
 struct TraceMeta;
@@ -265,4 +265,4 @@ class TimingGridPanel : public QWidget
     bool                       m_refreshQueued = false;
     bool                       m_stale = false; ///< refresh skipped while hidden
 };
-} // namespace Kites
+} // namespace Atlas

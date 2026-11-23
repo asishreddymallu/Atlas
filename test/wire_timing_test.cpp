@@ -52,9 +52,9 @@
 #include <string>
 #include <vector>
 
-using namespace Kites;
-using namespace Kites::test_support;
-using namespace Kites::test_support::wire_trace;
+using namespace Atlas;
+using namespace Atlas::test_support;
+using namespace Atlas::test_support::wire_trace;
 
 namespace
 {

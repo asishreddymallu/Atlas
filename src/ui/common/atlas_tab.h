@@ -2,13 +2,13 @@
 #include <QToolBar>
 #include <QWidget>
 
-namespace Kites
+namespace Atlas
 {
-class KitesTab : public QWidget
+class AtlasTab : public QWidget
 {
   public:
-    KitesTab(QWidget *parent = nullptr);
+    AtlasTab(QWidget *parent = nullptr);
   protected:
     QToolBar *m_toolbar = nullptr;
 };
-} // namespace Kites
+} // namespace Atlas

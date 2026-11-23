@@ -12,7 +12,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 std::vector<std::string>
 printIntermediateCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode)
@@ -442,4 +442,4 @@ generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode
     }
     return machine_code;
 }
-}// namespace Kites
+}// namespace Atlas

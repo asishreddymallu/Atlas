@@ -3,7 +3,7 @@
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 #include "ui/theme/theme_manager.h"
-namespace Kites
+namespace Atlas
 {
 class SyntaxHighlighter : public QSyntaxHighlighter
 {
@@ -48,4 +48,4 @@ class SyntaxHighlighter : public QSyntaxHighlighter
     //  QRegularExpression m_singleLineCommentPattern;
     //  QTextCharFormat m_singleLineCommentFormat;
 };
-} // namespace Kites
+} // namespace Atlas

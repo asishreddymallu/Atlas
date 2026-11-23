@@ -22,7 +22,7 @@ namespace
 template <typename VmType>
 void runSingleStoreCountsOneAccess()
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     auto vm = std::make_unique<VmType>();
     std::istringstream stream("addi x10, x0, 256\n"
@@ -31,10 +31,10 @@ void runSingleStoreCountsOneAccess()
                               "nop\n"
                               "nop\n"
                               "sw x11, 0(x10)\n");
-    vm->LoadProgram(Kites::assemble(stream));
+    vm->LoadProgram(Atlas::assemble(stream));
     vm->DebugRun();
 
-    Kites::Cache *l1 = vm->memory_controller_.getL1Cache();
+    Atlas::Cache *l1 = vm->memory_controller_.getL1Cache();
     EXPECT_EQ(l1->getMissCount(), 1u);
     EXPECT_EQ(l1->getHitCount(), 0u);
     EXPECT_EQ(vm->memory_controller_.peekByte(256), 42u);
@@ -44,25 +44,25 @@ void runSingleStoreCountsOneAccess()
 
 TEST(StoreCacheStats, SingleCycle)
 {
-    runSingleStoreCountsOneAccess<Kites::RVSSProcessor>();
+    runSingleStoreCountsOneAccess<Atlas::RVSSProcessor>();
 }
 
 TEST(StoreCacheStats, HazardForwarding)
 {
-    runSingleStoreCountsOneAccess<Kites::RV5StageProcessorHF>();
+    runSingleStoreCountsOneAccess<Atlas::RV5StageProcessorHF>();
 }
 
 TEST(StoreCacheStats, HazardNoForwarding)
 {
-    runSingleStoreCountsOneAccess<Kites::RV5StageProcessorHNF>();
+    runSingleStoreCountsOneAccess<Atlas::RV5StageProcessorHNF>();
 }
 
 TEST(StoreCacheStats, NoHazardForwarding)
 {
-    runSingleStoreCountsOneAccess<Kites::RV5StageProcessorNHF>();
+    runSingleStoreCountsOneAccess<Atlas::RV5StageProcessorNHF>();
 }
 
 TEST(StoreCacheStats, NoHazardNoForwarding)
 {
-    runSingleStoreCountsOneAccess<Kites::RV5StageProcessorNHNF>();
+    runSingleStoreCountsOneAccess<Atlas::RV5StageProcessorNHNF>();
 }

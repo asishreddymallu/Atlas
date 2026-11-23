@@ -19,7 +19,7 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent), ui(new Ui::SettingsDialog)
 {
@@ -294,4 +294,4 @@ void SettingsDialog::addPage(const QString &name, QWidget *page)
                 }
             });
 }
-} // namespace Kites
+} // namespace Atlas

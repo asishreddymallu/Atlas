@@ -1,7 +1,7 @@
 #pragma once
 #include "../circuit_scene.h"
 
-namespace Kites
+namespace Atlas
 {
 class RVSSCircuitScene : public CircuitScene
 {
@@ -12,4 +12,4 @@ class RVSSCircuitScene : public CircuitScene
         loadScene(":/circuit_designs/single_cycle_draft1.json");
     }
 };
-} // namespace Kites
+} // namespace Atlas

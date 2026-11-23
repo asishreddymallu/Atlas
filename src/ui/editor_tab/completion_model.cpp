@@ -5,7 +5,7 @@
 #include <QSet>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace Completion
 {
@@ -173,4 +173,4 @@ WordRange wordAt(const QString &text, int offset)
 }
 
 } // namespace Completion
-} // namespace Kites
+} // namespace Atlas

@@ -32,7 +32,7 @@
 
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 struct TraceMeta
 {
@@ -55,4 +55,4 @@ QJsonObject traceToJson(const std::vector<TraceCycle> &records, const TraceMeta 
 /// Reads back what traceToJson wrote: the structural fields (not "line" or
 /// "disassembly", which come from the program). False on a schema mismatch.
 bool traceFromJson(const QJsonObject &json, std::vector<TraceCycle> &records, TraceMeta &meta);
-} // namespace Kites
+} // namespace Atlas

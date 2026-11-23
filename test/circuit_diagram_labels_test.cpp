@@ -23,7 +23,7 @@
 
 #include <memory>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

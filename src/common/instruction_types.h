@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <string>
 #include "utils/to_index.h"
-namespace Kites
+namespace Atlas
 {
 /*TODO
 * Make the enum value name consistent across the code base 
@@ -61,4 +61,4 @@ inline const std::string &instructionTypeName(InstructionType type)
     return instructionTypeNames[index < kInstructionTypeCount ? index : toIndex(InstructionType::UNKNOWN)];
 }
 }// namespace instruction_set
-}// namespace Kites
+}// namespace Atlas

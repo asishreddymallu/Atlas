@@ -5,7 +5,7 @@
 
 #include <sstream>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -294,4 +294,4 @@ bool traceFromJson(const QJsonObject &root, std::vector<TraceCycle> &records, Tr
     }
     return true;
 }
-} // namespace Kites
+} // namespace Atlas

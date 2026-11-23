@@ -16,7 +16,7 @@
 
 
 #include "assembler/parser.h"
-namespace Kites
+namespace Atlas
 {
 struct AssembledProgram
 {
@@ -35,5 +35,5 @@ struct AssembledProgram
         data_buffer;
     std::vector<uint32_t> text_buffer;
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // VM_ASM_MW_H

@@ -19,11 +19,11 @@ namespace
 template <typename VmType>
 std::unique_ptr<VmType> runSource(const std::string &source)
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     auto vm = std::make_unique<VmType>();
     std::istringstream stream(source);
-    Kites::AssembledProgram program = Kites::assemble(stream);
+    Atlas::AssembledProgram program = Atlas::assemble(stream);
     vm->LoadProgram(program);
     vm->DebugRun();
     return vm;
@@ -42,7 +42,7 @@ constexpr const char *kPad = "addi x0, x0, 0\n"
 template <typename VmType>
 void expectPipelineCycles(const VmType &vm, unsigned int expected)
 {
-    if constexpr (!std::is_same_v<VmType, Kites::RVSSProcessor>)
+    if constexpr (!std::is_same_v<VmType, Atlas::RVSSProcessor>)
     {
         EXPECT_EQ(vm.cycle_s_, expected);
     }
@@ -96,25 +96,25 @@ void runControlFlowSuite()
 
 TEST(RV5SControlFlow, SingleCycle)
 {
-    runControlFlowSuite<Kites::RVSSProcessor>();
+    runControlFlowSuite<Atlas::RVSSProcessor>();
 }
 
 TEST(RV5SControlFlow, HazardForwarding)
 {
-    runControlFlowSuite<Kites::RV5StageProcessorHF>();
+    runControlFlowSuite<Atlas::RV5StageProcessorHF>();
 }
 
 TEST(RV5SControlFlow, HazardNoForwarding)
 {
-    runControlFlowSuite<Kites::RV5StageProcessorHNF>();
+    runControlFlowSuite<Atlas::RV5StageProcessorHNF>();
 }
 
 TEST(RV5SControlFlow, NoHazardForwarding)
 {
-    runControlFlowSuite<Kites::RV5StageProcessorNHF>();
+    runControlFlowSuite<Atlas::RV5StageProcessorNHF>();
 }
 
 TEST(RV5SControlFlow, NoHazardNoForwarding)
 {
-    runControlFlowSuite<Kites::RV5StageProcessorNHNF>();
+    runControlFlowSuite<Atlas::RV5StageProcessorNHNF>();
 }

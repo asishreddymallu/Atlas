@@ -9,7 +9,7 @@
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
 #undef private
 
-using namespace Kites;
+using namespace Atlas;
 
 class CustomPseudoManagerTest : public ::testing::Test {
 protected:

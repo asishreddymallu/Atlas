@@ -3,7 +3,7 @@
 #include <QString>
 #include <QStringList>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Finding and replacing, as functions of a string.
@@ -116,4 +116,4 @@ QList<ReplaceEdit> replaceAllEdits(const FindResult &result, const QString &repl
  */
 bool isWordCharacter(QChar c);
 } // namespace FindEngine
-} // namespace Kites
+} // namespace Atlas

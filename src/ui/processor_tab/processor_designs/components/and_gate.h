@@ -2,7 +2,7 @@
 #define AND_GATE_H
 #include "base_component.h"
 #include <QJsonObject>
-namespace Kites
+namespace Atlas
 {
 class AndGateItem : public BaseComponent
 {
@@ -47,5 +47,5 @@ class AndGateItem : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // AND_GATE_H

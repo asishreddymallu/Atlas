@@ -1,5 +1,5 @@
 #pragma once
-namespace Kites
+namespace Atlas
 {
 namespace debug_color
 {
@@ -14,4 +14,4 @@ inline constexpr const char *magenta = "\033[35m";
 inline constexpr const char *cyan = "\033[36m";
 inline constexpr const char *reset = "\033[0m";
 }
-}// namespace Kites
+}// namespace Atlas

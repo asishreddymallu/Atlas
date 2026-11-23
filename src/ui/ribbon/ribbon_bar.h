@@ -12,7 +12,7 @@ class QStackedWidget;
 class QToolButton;
 class QTabBar;
 
-namespace Kites
+namespace Atlas
 {
 class RibbonGroup;
 class RibbonPage;
@@ -130,4 +130,4 @@ class RibbonBar : public QWidget
     QList<Icon>          m_tabIcons;
     QList<RibbonGroup *> m_persistentGroups;
 };
-} // namespace Kites
+} // namespace Atlas

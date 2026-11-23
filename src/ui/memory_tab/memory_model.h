@@ -10,7 +10,7 @@
  * from here we will send data to the view to be displayed
  *
  */
-namespace Kites
+namespace Atlas
 {
 class MemoryModel : public QAbstractTableModel
 {
@@ -55,4 +55,4 @@ class MemoryModel : public QAbstractTableModel
     void memoryResetSlot();
     void updateMemory(uint64_t address);
 };
-} // namespace Kites
+} // namespace Atlas

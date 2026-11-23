@@ -1,4 +1,4 @@
-#include "kites_editor.h"
+#include "atlas_editor.h"
 
 #include "gutter_column.h"
 #include <QKeyEvent>
@@ -10,7 +10,7 @@
 #include <QTextBlock>
 #include <QTextDocument>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -18,12 +18,12 @@ namespace
 constexpr int editorDocumentMargin = 6;
 } // namespace
 
-KitesEditor::KitesEditor(QWidget *parent)
+AtlasEditor::AtlasEditor(QWidget *parent)
     : QPlainTextEdit(parent)
 {
-    connect(this, &KitesEditor::blockCountChanged, this, &KitesEditor::updateViewPortMargins);
-    connect(this, &KitesEditor::updateRequest, this, &KitesEditor::updateGutterColumns);
-    connect(this, &KitesEditor::cursorPositionChanged, this, &KitesEditor::highlightCurrentLine);
+    connect(this, &AtlasEditor::blockCountChanged, this, &AtlasEditor::updateViewPortMargins);
+    connect(this, &AtlasEditor::updateRequest, this, &AtlasEditor::updateGutterColumns);
+    connect(this, &AtlasEditor::cursorPositionChanged, this, &AtlasEditor::highlightCurrentLine);
     // Through applyZoomedFont(), not straight to setFont(): a font changed
     // in Settings has to come back through the same path so the session
     // zoom delta is re-applied on top of it and the gutters are re-measured.
@@ -37,7 +37,7 @@ KitesEditor::KitesEditor(QWidget *parent)
                 applyZoomedFont();
             });
     connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,
-            &KitesEditor::themeChangedSlot);
+            &AtlasEditor::themeChangedSlot);
 
     setFont(FontManager::getInstance().currentFont());
     applyEditorTheme();
@@ -54,11 +54,11 @@ KitesEditor::KitesEditor(QWidget *parent)
     highlightCurrentLine();
 }
 
-void KitesEditor::updateViewPortMargins()
+void AtlasEditor::updateViewPortMargins()
 {
     setViewportMargins(leftViewMargin(), 0, rightViewMargin(), 0);
 }
-void KitesEditor::updateGutterColumns(const QRect &rect, int dy)
+void AtlasEditor::updateGutterColumns(const QRect &rect, int dy)
 {
     if(dy)
     {
@@ -84,7 +84,7 @@ void KitesEditor::updateGutterColumns(const QRect &rect, int dy)
     }
 }
 
-void KitesEditor::highlightCurrentLine()
+void AtlasEditor::highlightCurrentLine()
 {
     m_currentLineSelections.clear();
 
@@ -107,25 +107,25 @@ void KitesEditor::highlightCurrentLine()
     refreshExtraSelections();
 }
 
-void KitesEditor::setDiagnosticSelections(const QList<QTextEdit::ExtraSelection> &selections)
+void AtlasEditor::setDiagnosticSelections(const QList<QTextEdit::ExtraSelection> &selections)
 {
     m_diagnosticSelections = selections;
     refreshExtraSelections();
 }
 
-void KitesEditor::clearDiagnosticSelections()
+void AtlasEditor::clearDiagnosticSelections()
 {
     m_diagnosticSelections.clear();
     refreshExtraSelections();
 }
 
-void KitesEditor::setFindSelections(const QList<QTextEdit::ExtraSelection> &selections)
+void AtlasEditor::setFindSelections(const QList<QTextEdit::ExtraSelection> &selections)
 {
     m_findSelections = selections;
     refreshExtraSelections();
 }
 
-void KitesEditor::setBracketSelections(const QList<QTextEdit::ExtraSelection> &selections)
+void AtlasEditor::setBracketSelections(const QList<QTextEdit::ExtraSelection> &selections)
 {
     if (m_bracketSelections.isEmpty() && selections.isEmpty())
         return; // the common case: no bracket before, none now
@@ -133,13 +133,13 @@ void KitesEditor::setBracketSelections(const QList<QTextEdit::ExtraSelection> &s
     refreshExtraSelections();
 }
 
-void KitesEditor::setLinkSelections(const QList<QTextEdit::ExtraSelection> &selections)
+void AtlasEditor::setLinkSelections(const QList<QTextEdit::ExtraSelection> &selections)
 {
     m_linkSelections = selections;
     refreshExtraSelections();
 }
 
-void KitesEditor::clearFindSelections()
+void AtlasEditor::clearFindSelections()
 {
     if (m_findSelections.isEmpty())
         return;
@@ -147,7 +147,7 @@ void KitesEditor::clearFindSelections()
     refreshExtraSelections();
 }
 
-void KitesEditor::refreshExtraSelections()
+void AtlasEditor::refreshExtraSelections()
 {
     // current line, find highlights, the bracket pair, the Ctrl-hover link,
     // then diagnostics:
@@ -164,7 +164,7 @@ void KitesEditor::refreshExtraSelections()
     setExtraSelections(merged);
 }
 
-void KitesEditor::resizeEvent(QResizeEvent *event)
+void AtlasEditor::resizeEvent(QResizeEvent *event)
 {
     QPlainTextEdit::resizeEvent(event);
 
@@ -185,18 +185,18 @@ void KitesEditor::resizeEvent(QResizeEvent *event)
     }
 }
 
-void KitesEditor::themeChangedSlot([[maybe_unused]] const QString &themeId)
+void AtlasEditor::themeChangedSlot([[maybe_unused]] const QString &themeId)
 {
     applyEditorTheme();
     highlightCurrentLine();
 }
 
-int KitesEditor::zoomDelta() const
+int AtlasEditor::zoomDelta() const
 {
     return m_zoomDelta;
 }
 
-int KitesEditor::clampZoomDelta(int delta) const
+int AtlasEditor::clampZoomDelta(int delta) const
 {
     const QFont configured = FontManager::getInstance().currentFont();
     const int   base = configured.pixelSize() > 0 ? configured.pixelSize()
@@ -207,7 +207,7 @@ int KitesEditor::clampZoomDelta(int delta) const
     return std::clamp(delta, floor, maxZoomDelta);
 }
 
-int KitesEditor::setZoomDelta(int delta)
+int AtlasEditor::setZoomDelta(int delta)
 {
     const int clamped = clampZoomDelta(delta);
     if (clamped != m_zoomDelta)
@@ -218,17 +218,17 @@ int KitesEditor::setZoomDelta(int delta)
     return m_zoomDelta;
 }
 
-int KitesEditor::zoomBy(int steps)
+int AtlasEditor::zoomBy(int steps)
 {
     return setZoomDelta(m_zoomDelta + steps);
 }
 
-int KitesEditor::resetZoom()
+int AtlasEditor::resetZoom()
 {
     return setZoomDelta(0);
 }
 
-void KitesEditor::applyZoomedFont()
+void AtlasEditor::applyZoomedFont()
 {
     // Always from the CONFIGURED font, so repeated zooms do not compound and
     // the setting itself is never written to.
@@ -256,7 +256,7 @@ void KitesEditor::applyZoomedFont()
     viewport()->update();
 }
 
-bool KitesEditor::handleZoomKey(QKeyEvent *event)
+bool AtlasEditor::handleZoomKey(QKeyEvent *event)
 {
     if (!zoomEnabled())
         return false;
@@ -285,7 +285,7 @@ bool KitesEditor::handleZoomKey(QKeyEvent *event)
     }
 }
 
-void KitesEditor::wheelEvent(QWheelEvent *event)
+void AtlasEditor::wheelEvent(QWheelEvent *event)
 {
     // Qt's own Ctrl+wheel zoom works on POINT size and this font is set in
     // pixels, so it does nothing here - measured on a bare editor. Handled
@@ -300,7 +300,7 @@ void KitesEditor::wheelEvent(QWheelEvent *event)
     QPlainTextEdit::wheelEvent(event);
 }
 
-void KitesEditor::applyEditorTheme()
+void AtlasEditor::applyEditorTheme()
 {
     // per-widget stylesheet so the editor can use a different theme than the
     // global UI (Zed-style editor/UI theme split); a per-widget palette is
@@ -341,7 +341,7 @@ void KitesEditor::applyEditorTheme()
     viewport()->update();
 }
 
-void KitesEditor::changeEvent(QEvent *event)
+void AtlasEditor::changeEvent(QEvent *event)
 {
     if (event->type() == QEvent::PaletteChange)
     {
@@ -351,7 +351,7 @@ void KitesEditor::changeEvent(QEvent *event)
     QPlainTextEdit::changeEvent(event);
 }
 
-void KitesEditor::addRightGutterColumn(GutterColumn* column)
+void AtlasEditor::addRightGutterColumn(GutterColumn* column)
 {
     // A gutter measures with the editor's font: its sizeHint() is read
     // by updateViewPortMargins(), and an inherited font is not
@@ -364,7 +364,7 @@ void KitesEditor::addRightGutterColumn(GutterColumn* column)
     }
 }
 
-void KitesEditor::addLeftGutterColumn(GutterColumn* column)
+void AtlasEditor::addLeftGutterColumn(GutterColumn* column)
 {
     // A gutter measures with the editor's font: its sizeHint() is read
     // by updateViewPortMargins(), and an inherited font is not
@@ -377,7 +377,7 @@ void KitesEditor::addLeftGutterColumn(GutterColumn* column)
     }
 }
 
-int KitesEditor::rightViewMargin() const
+int AtlasEditor::rightViewMargin() const
 {
     int margin = 0;
     for (const auto *column : m_rightGutterColumns)
@@ -387,7 +387,7 @@ int KitesEditor::rightViewMargin() const
     return margin;
 }
 
-int KitesEditor::leftViewMargin() const
+int AtlasEditor::leftViewMargin() const
 {
     int margin = 0;
     for (const auto *column : m_leftGutterColumns)
@@ -396,4 +396,4 @@ int KitesEditor::leftViewMargin() const
     }
     return margin;
 }
-} // namespace Kites
+} // namespace Atlas

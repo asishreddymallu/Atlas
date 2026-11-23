@@ -33,7 +33,7 @@
 #include <QMessageBox>
 #include <cassert>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -1256,4 +1256,4 @@ bool MainWindow::exportTrace(const QString &path)
     QMessageBox::warning(this, "Export trace", "Could not write the trace:\n" + error);
     return false;
 }
-} // namespace Kites
+} // namespace Atlas

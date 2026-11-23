@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Represents a memory management system with dynamic memory block allocation.
@@ -198,5 +198,5 @@ private:
 
     void printMemoryUsage() const;
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // MAIN_MEMORY_H

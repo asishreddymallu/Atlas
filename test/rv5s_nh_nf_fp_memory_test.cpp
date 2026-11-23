@@ -4,7 +4,7 @@
 #include "utils/utils.h"
 #include "processor/rv5s/rv5s_processor_nh_nf.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 static std::unique_ptr<RV5StageProcessorNHNF> runNhNfProgramMemory(const std::string& filename)
 {

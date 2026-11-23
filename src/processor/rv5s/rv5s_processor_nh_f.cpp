@@ -20,7 +20,7 @@
 #include <thread>
 #include <tuple>
 
-namespace Kites
+namespace Atlas
 {
 using namespace alu;
 
@@ -29,9 +29,9 @@ RV5StageProcessorNHF::RV5StageProcessorNHF() : RV5StageVM_Base()
 {
 // Reset components and history
 #ifndef DISABLE_GUI
-    circuit_scene_ = std::make_unique<Kites::RV5StageVM_NH_F_CircuitScene>();
+    circuit_scene_ = std::make_unique<Atlas::RV5StageVM_NH_F_CircuitScene>();
     connect(this, &ProcessorBase::circuitSnapshotSignal, circuit_scene_.get(),
-            &Kites::RV5StageVM_NH_F_CircuitScene::updateCircuitSnapshot);
+            &Atlas::RV5StageVM_NH_F_CircuitScene::updateCircuitSnapshot);
 #endif
     Reset();
 
@@ -669,4 +669,4 @@ uint64_t RV5StageProcessorNHF::pipeline_execute_double()
     return alu_result;
 }
 
-}//namespace Kites
+}//namespace Atlas

@@ -1,21 +1,21 @@
 #pragma once
-#include "ui/common/kites_editor.h"
+#include "ui/common/atlas_editor.h"
 #include "ui/common/line_number_gutter_column.h"
 #include "ui/theme/theme_manager.h"
 #include <set>
 #include <QKeyEvent>
 #include <QPainter>
-namespace Kites
+namespace Atlas
 {
-class DisassemblyEditor : public KitesEditor
+class DisassemblyEditor : public AtlasEditor
 {
 public:
     DisassemblyEditor(QWidget *parent = nullptr) 
-    : KitesEditor(parent)
+    : AtlasEditor(parent)
     {
         setReadOnly(true);
         addLeftGutterColumn(new LineNumberGutterColumn(this));
-        // KitesEditor's constructor sizes the viewport margins before this
+        // AtlasEditor's constructor sizes the viewport margins before this
         // gutter exists, so it has to be recomputed here or the gutter paints
         // over the first characters (same call Editor and ProfilerEditor make)
         updateViewPortMargins();
@@ -35,7 +35,7 @@ public:
     }
 protected:
     /// The Output pane zooms too: it shares the font, and the only cost is
-    /// routing the keys, since the mechanism lives in KitesEditor.
+    /// routing the keys, since the mechanism lives in AtlasEditor.
     bool zoomEnabled() const override { return true; }
     void keyPressEvent(QKeyEvent *event) override
     {
@@ -44,7 +44,7 @@ protected:
             event->accept();
             return;
         }
-        KitesEditor::keyPressEvent(event);
+        AtlasEditor::keyPressEvent(event);
     }
     void paintEvent(QPaintEvent *event) override
     {
@@ -86,4 +86,4 @@ protected:
 private:
     std::vector<std::pair<int, std::string>> m_LinesToHighlight;
 };
-}//namespace Kites
+}//namespace Atlas

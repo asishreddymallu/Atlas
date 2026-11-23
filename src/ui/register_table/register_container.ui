@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Kites::RegisterContainer</class>
- <widget class="QWidget" name="Kites::RegisterContainer">
+ <class>Atlas::RegisterContainer</class>
+ <widget class="QWidget" name="Atlas::RegisterContainer">
   <property name="geometry">
    <rect>
     <x>0</x>

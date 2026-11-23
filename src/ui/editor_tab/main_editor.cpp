@@ -26,7 +26,7 @@
 #include "ui/theme/font_manager.h"
 #include "ui/theme/theme_manager.h"
 #include "break_point_gutter_column.h"
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -56,7 +56,7 @@ QStringList scanLineLabels(const QString &line)
 } // namespace
 
 Editor::Editor(QWidget *parent )
-    : KitesEditor(parent)
+    : AtlasEditor(parent)
 {
     setMouseTracking(true);
     m_syntaxHighlighter = new SyntaxHighlighter(this->document());
@@ -938,7 +938,7 @@ void Editor::resizeEvent(QResizeEvent *event)
 {
     // K7: a resize re-lays the viewport out under the popup.
     closeCompletion();
-    KitesEditor::resizeEvent(event);
+    AtlasEditor::resizeEvent(event);
     repositionOverlays();
 }
 
@@ -1073,7 +1073,7 @@ bool Editor::handleEditingKey(QKeyEvent *event)
         return true;
     }
 
-    // ── Zoom. Shared with the Output pane through KitesEditor, and
+    // ── Zoom. Shared with the Output pane through AtlasEditor, and
     //    deliberately not a QAction or a QShortcut, like every other key
     //    here. Works in a read-only pane: it changes nothing in the
     //    document.
@@ -1089,7 +1089,7 @@ bool Editor::handleEditingKey(QKeyEvent *event)
     }
     if (key == Qt::Key_H && mods == Qt::ControlModifier)
     {
-        // Measured on a bare KitesEditor: Ctrl+H does nothing today. It is
+        // Measured on a bare AtlasEditor: Ctrl+H does nothing today. It is
         // NOT Backspace on this platform's key bindings, which is worth
         // saying because it is on some.
         openFind(true);
@@ -1331,7 +1331,7 @@ void Editor::keyPressEvent(QKeyEvent *event)
         typed.size() == 1 && Completion::isWordChar(typed.at(0)) &&
         (event->modifiers() == Qt::NoModifier || event->modifiers() == Qt::ShiftModifier);
 
-    KitesEditor::keyPressEvent(event);
+    AtlasEditor::keyPressEvent(event);
 
     if (wordCharacter)
     {
@@ -1582,7 +1582,7 @@ void Editor::focusOutEvent(QFocusEvent *event)
     // Clear path 3: focus loss. Without this the pointing hand survives a
     // window switch, which is the classic stuck-cursor bug.
     clearLinkHighlight();
-    KitesEditor::focusOutEvent(event);
+    AtlasEditor::focusOutEvent(event);
 }
 
 QStringList Editor::documentLabels() const
@@ -1784,7 +1784,7 @@ void Editor::updateLinkHighlight(const QPoint &position, Qt::KeyboardModifiers m
 void Editor::mouseMoveEvent(QMouseEvent *event)
 {
     updateLinkHighlight(event->pos(), event->modifiers());
-    KitesEditor::mouseMoveEvent(event);
+    AtlasEditor::mouseMoveEvent(event);
 }
 
 void Editor::mousePressEvent(QMouseEvent *event)
@@ -1801,7 +1801,7 @@ void Editor::mousePressEvent(QMouseEvent *event)
         event->accept();
         return;
     }
-    KitesEditor::mousePressEvent(event);
+    AtlasEditor::mousePressEvent(event);
 }
 
 void Editor::keyReleaseEvent(QKeyEvent *event)
@@ -1810,14 +1810,14 @@ void Editor::keyReleaseEvent(QKeyEvent *event)
     // release, so Control no longer being among them is the signal.
     if (event->key() == Qt::Key_Control || !(event->modifiers() & Qt::ControlModifier))
         clearLinkHighlight();
-    KitesEditor::keyReleaseEvent(event);
+    AtlasEditor::keyReleaseEvent(event);
 }
 
 void Editor::leaveEvent(QEvent *event)
 {
     // Clear path 2: the mouse left the viewport.
     clearLinkHighlight();
-    KitesEditor::leaveEvent(event);
+    AtlasEditor::leaveEvent(event);
 }
 
 
@@ -1989,4 +1989,4 @@ bool Editor::applyRename()
     return true;
 }
 
-} // namespace Kites
+} // namespace Atlas

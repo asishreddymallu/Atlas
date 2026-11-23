@@ -13,7 +13,7 @@
 #include "processor/rv5s/rv5s_processor_nh_nf.h"
 #include "processor/rvss/rvss_processor.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace {
 
@@ -41,7 +41,7 @@ const std::array<uint32_t, kMatrixWords> kExpectedC = {
     138, 114, 90
 };
 
-void writeMatrix(Kites::MemoryController& memory, uint64_t base, const std::array<uint32_t, kMatrixWords>& values)
+void writeMatrix(Atlas::MemoryController& memory, uint64_t base, const std::array<uint32_t, kMatrixWords>& values)
 {
     for (size_t i = 0; i < values.size(); ++i)
     {
@@ -49,7 +49,7 @@ void writeMatrix(Kites::MemoryController& memory, uint64_t base, const std::arra
     }
 }
 
-void warmL2(Kites::Cache& l2, uint64_t base, size_t words)
+void warmL2(Atlas::Cache& l2, uint64_t base, size_t words)
 {
     for (size_t i = 0; i < words; ++i)
     {
@@ -66,9 +66,9 @@ void runMatrixMultiplyCacheTest(const char* vm_label)
 
     auto vm = std::make_unique<VmType>();
 
-    Kites::Cache* l1_cache = vm->memory_controller_.getL1Cache();
-    Kites::Cache* l2_cache = vm->memory_controller_.getL2Cache();
-    Kites::Cache* instruction_cache = vm->memory_controller_.getInstructionCache();
+    Atlas::Cache* l1_cache = vm->memory_controller_.getL1Cache();
+    Atlas::Cache* l2_cache = vm->memory_controller_.getL2Cache();
+    Atlas::Cache* instruction_cache = vm->memory_controller_.getInstructionCache();
 
     // A, B and C are 0x100 apart, which is exactly one way of this L2 (64 sets x 4 bytes),
     // so all three map to the same sets. 4 ways lets the L2 hold all of them at once.
@@ -145,25 +145,25 @@ void runMatrixMultiplyCacheTest(const char* vm_label)
 
 TEST(CacheHierarchyTest, MatrixMultiplyUsesL2OnL1Misses_RVSS)
 {
-    runMatrixMultiplyCacheTest<Kites::RVSSProcessor>("RVSSVM");
+    runMatrixMultiplyCacheTest<Atlas::RVSSProcessor>("RVSSVM");
 }
 
 TEST(CacheHierarchyTest, MatrixMultiplyUsesL2OnL1Misses_RV5_NH_NF)
 {
-    runMatrixMultiplyCacheTest<Kites::RV5StageProcessorNHNF>("RV5StageProcessorNHNF");
+    runMatrixMultiplyCacheTest<Atlas::RV5StageProcessorNHNF>("RV5StageProcessorNHNF");
 }
 
 TEST(CacheHierarchyTest, MatrixMultiplyUsesL2OnL1Misses_RV5_NH_F)
 {
-    runMatrixMultiplyCacheTest<Kites::RV5StageProcessorNHF>("RV5StageProcessorNHF");
+    runMatrixMultiplyCacheTest<Atlas::RV5StageProcessorNHF>("RV5StageProcessorNHF");
 }
 
 TEST(CacheHierarchyTest, MatrixMultiplyUsesL2OnL1Misses_RV5_H_NF)
 {
-    runMatrixMultiplyCacheTest<Kites::RV5StageProcessorHNF>("RV5StageProcessorHNF");
+    runMatrixMultiplyCacheTest<Atlas::RV5StageProcessorHNF>("RV5StageProcessorHNF");
 }
 
 TEST(CacheHierarchyTest, MatrixMultiplyUsesL2OnL1Misses_RV5_H_F)
 {
-    runMatrixMultiplyCacheTest<Kites::RV5StageProcessorHF>("RV5StageProcessorHF");
+    runMatrixMultiplyCacheTest<Atlas::RV5StageProcessorHF>("RV5StageProcessorHF");
 }

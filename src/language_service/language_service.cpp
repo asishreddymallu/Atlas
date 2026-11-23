@@ -7,7 +7,7 @@
 #include <QtConcurrentRun>
 #include <sstream>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -125,4 +125,4 @@ QStringList LanguageService::completions(const QString &prefix, const QString &s
     return result;
 }
 
-} // namespace Kites
+} // namespace Atlas

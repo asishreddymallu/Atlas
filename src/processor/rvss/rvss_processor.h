@@ -17,7 +17,7 @@
 
 
 // TODO: use a circular buffer instead of a stack for undo/redo
-namespace Kites
+namespace Atlas
 {
 struct RVSingleStageStepDelta : public StepDelta
 {
@@ -96,5 +96,5 @@ class RVSSProcessor : public ProcessorBase
         std::cout << "rvssvm" << std::endl;
     }
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // RVSS_VM_H

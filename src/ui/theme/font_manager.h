@@ -3,7 +3,7 @@
 #include <QObject>
 #include <QString>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -37,4 +37,4 @@ private:
     QString resolveFamily() const;
 };
 
-} // namespace Kites
+} // namespace Atlas

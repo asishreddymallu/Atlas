@@ -13,7 +13,7 @@
 #include <memory>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @class Lexer
@@ -151,5 +151,5 @@ class Lexer
      */
     std::vector<Token> getTokenList();
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // LEXER_H

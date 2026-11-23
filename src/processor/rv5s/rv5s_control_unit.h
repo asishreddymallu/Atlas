@@ -9,7 +9,7 @@
 #include "processor/alu.h"
 #include "processor/control_unit_base.h"
 
-namespace Kites
+namespace Atlas
 {
 class RV5SControlUnit : public ControlUnit
 {
@@ -27,5 +27,5 @@ class RV5SControlUnit : public ControlUnit
      */
     alu::AluOp GetAluSignalFor(uint32_t instruction, uint8_t alu_op);
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // RV5S_CONTROL_UNIT_H

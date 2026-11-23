@@ -4,7 +4,7 @@
 #include <QAbstractTableModel>
 #include "common/instruction_types.h"
 #include "utils/to_index.h"
-namespace Kites
+namespace Atlas
 {
 
 
@@ -35,5 +35,5 @@ class InstructionTypeCountModel : public QAbstractTableModel
     // The model only displays the counts; it never keeps its own.
     std::function<InstructionTypeCounts()> m_source;
 };  
-} // namespace kites
+} // namespace Atlas
 

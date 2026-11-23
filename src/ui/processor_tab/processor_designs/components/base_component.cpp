@@ -8,7 +8,7 @@
 #include <QTextOption>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 BaseComponent::BaseComponent(const QPainterPath &path, const QString &name, QGraphicsItem *parent)
     : QGraphicsPathItem(path, parent)
@@ -101,4 +101,4 @@ QJsonObject BaseComponent::toJson()
 
     return obj;
 }
-} // namespace Kites
+} // namespace Atlas

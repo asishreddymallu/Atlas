@@ -3,7 +3,7 @@
 #include "base_component.h"
 #include <QJsonObject>
 
-namespace Kites
+namespace Atlas
 {
 class RectItem : public BaseComponent
 {
@@ -36,5 +36,5 @@ class RectItem : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // RECT_ITEM_H

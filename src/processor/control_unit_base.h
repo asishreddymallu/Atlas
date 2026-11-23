@@ -9,7 +9,7 @@
 #include "alu.h"
 #include "registers.h"
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The ControlUnit class is the base class for the control unit of the CPU.
@@ -52,5 +52,5 @@ class ControlUnit
 
     uint8_t alu_op_{};
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // CONTROL_UNIT_BASE_H

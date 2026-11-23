@@ -5,7 +5,7 @@
 #include "main_editor.h"
 #include <QPainter>
 #include <QMenu>
-namespace Kites
+namespace Atlas
 {
 class BreakPointGutterColumn : public GutterColumn
 {
@@ -164,4 +164,4 @@ private:
     Editor* m_mainEditor;
     int m_hoverLine = -1;
 };
-}//namespace Kites
+}//namespace Atlas

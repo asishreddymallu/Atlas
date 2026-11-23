@@ -15,7 +15,7 @@
 #include <QStringList>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace customPseudoManager
 {
@@ -65,4 +65,4 @@ namespace customPseudoManager
     std::string expandPseudoInstruction(const std::string &source,
                                          std::vector<int> &expandedLineToOriginalLine);
 }//namespace customPseudoManager
-}//namespace Kites
+}//namespace Atlas

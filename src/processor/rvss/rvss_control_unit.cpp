@@ -9,7 +9,7 @@
 
 #include <cstdint>
 
-namespace Kites
+namespace Atlas
 {
 void RVSSControlUnit::SetControlSignals(uint32_t instruction)
 {
@@ -938,4 +938,4 @@ alu::AluOp RVSSControlUnit::GetAluSignal(uint32_t instruction, bool ALUOp)
 
     return alu::AluOp::NONE;
 }
-}//namespace Kites
+}//namespace Atlas

@@ -10,7 +10,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace Kites
+namespace Atlas
 {
 enum class RoundingMode
 {
@@ -43,5 +43,5 @@ inline int getRoundingModeEncoding(const std::string &mode)
     }
     throw std::invalid_argument("Invalid rounding mode: " + mode);
 }
-}//namespace Kites
+}//namespace Atlas
 #endif // ROUNDING_MODES_H

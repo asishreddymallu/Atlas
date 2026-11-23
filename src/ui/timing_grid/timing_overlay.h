@@ -24,7 +24,7 @@
 class QLabel;
 class QToolButton;
 
-namespace Kites
+namespace Atlas
 {
 class TimingOverlay : public QWidget
 {
@@ -67,4 +67,4 @@ class TimingOverlay : public QWidget
     int               m_dragStartHeight = 0;
     bool              m_dragging = false;
 };
-} // namespace Kites
+} // namespace Atlas

@@ -6,7 +6,7 @@
 #include <span>
 #include <string_view>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief This scructure provides a read-only view of a cache line for replacement policies.
@@ -89,4 +89,4 @@ class CacheReplacementPolicy
 
     virtual ReplacementPolicy type() const = 0;
 };
-}//namespace Kites
+}//namespace Atlas

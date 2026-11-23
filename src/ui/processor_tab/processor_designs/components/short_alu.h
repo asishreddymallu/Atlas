@@ -2,7 +2,7 @@
 #define SHORT_ALU_H
 #include "base_component.h"
 #include <QJsonObject>
-namespace Kites
+namespace Atlas
 {
 class SALUItem : public BaseComponent
 {
@@ -35,5 +35,5 @@ class SALUItem : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // SHORT_ALU_H

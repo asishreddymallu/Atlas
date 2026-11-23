@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

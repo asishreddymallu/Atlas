@@ -6,7 +6,7 @@
 #include <QIcon>
 #include <QVector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Table model behind the Problems dock.
@@ -94,4 +94,4 @@ QColor severityColor(DiagnosticSeverity severity);
 /// Human-readable severity name shown in the Severity column, so the row does
 /// not rely on colour alone.
 QString severityText(DiagnosticSeverity severity);
-} // namespace Kites
+} // namespace Atlas

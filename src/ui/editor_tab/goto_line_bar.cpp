@@ -6,7 +6,7 @@
 #include <QStyle>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -141,4 +141,4 @@ void GotoLineBar::keyPressEvent(QKeyEvent *event)
     }
     QWidget::keyPressEvent(event);
 }
-} // namespace Kites
+} // namespace Atlas

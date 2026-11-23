@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 struct ExplainModel
 {
@@ -33,4 +33,4 @@ std::string modelPhrase(const ExplainModel &model);
 /// (consecutive cycles). `label` names an instruction by its PC.
 std::string explainTraceCell(const std::vector<TraceCycle> &records, size_t index, uint32_t id,
                              const ExplainModel &model, const std::function<std::string(uint64_t)> &label);
-} // namespace Kites
+} // namespace Atlas

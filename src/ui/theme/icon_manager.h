@@ -8,7 +8,7 @@
 
 class QAction;
 
-namespace Kites
+namespace Atlas
 {
 enum class Icon
 {
@@ -95,4 +95,4 @@ Icon themedIconOf(const QAction *action);
 // The size setThemedIcon() last rasterised this action's icon at, or the
 // 20 px default when the action carries no tag.
 QSize themedIconSizeOf(const QAction *action);
-}//namespace Kites
+}//namespace Atlas

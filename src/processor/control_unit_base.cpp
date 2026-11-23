@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-namespace Kites
+namespace Atlas
 {
 
 bool ControlUnit::GetAluSrc() const
@@ -45,4 +45,4 @@ bool ControlUnit::GetBranch() const
 {
     return branch_;
 }
-}//namespace Kites
+}//namespace Atlas

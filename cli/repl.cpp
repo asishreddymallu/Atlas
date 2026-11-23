@@ -16,7 +16,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -207,4 +207,4 @@ int RunRepl(ProcessorManager &manager, command_handler::ReplState &state)
 
     return 0;
 }
-} // namespace Kites
+} // namespace Atlas

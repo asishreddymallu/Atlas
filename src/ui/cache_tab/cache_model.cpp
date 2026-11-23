@@ -2,7 +2,7 @@
 #include "ui/common/table_font.h"
 #include "ui/theme/theme_manager.h"
 #include <QColor>
-namespace Kites
+namespace Atlas
 {
 
 CacheModel::CacheModel(QObject *parent, Cache *cache) : QAbstractTableModel(parent)
@@ -282,4 +282,4 @@ size_t CacheModel::rowToWayIndex(int row) const
 {
     return row % m_cache->getWayCount();
 }
-} // namespace Kites
+} // namespace Atlas

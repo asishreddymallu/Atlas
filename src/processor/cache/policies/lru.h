@@ -1,7 +1,7 @@
 #pragma once
 #include "cache_replacement_policy.h"
 
-namespace Kites
+namespace Atlas
 {
 class LRUReplacementPolicy : public CacheReplacementPolicy
 {
@@ -25,4 +25,4 @@ class LRUReplacementPolicy : public CacheReplacementPolicy
 
     ReplacementPolicy type() const override;
 };
-}//namespace Kites
+}//namespace Atlas

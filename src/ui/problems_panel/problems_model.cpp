@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <tuple>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -237,4 +237,4 @@ QVariant ProblemsModel::headerData(int section, Qt::Orientation orientation, int
     default:             return {};
     }
 }
-} // namespace Kites
+} // namespace Atlas

@@ -8,7 +8,7 @@
 
 #include <filesystem>
 
-namespace Kites
+namespace Atlas
 {
 namespace globals
 {
@@ -34,6 +34,6 @@ extern unsigned int data_section_start;
 
 void initGlobals();
 } // namespace globals
-} // namespace Kites
+} // namespace Atlas
 
 #endif // GLOBALS_H

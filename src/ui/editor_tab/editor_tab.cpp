@@ -8,11 +8,11 @@
 #include <QJsonObject>
 #include <QTextDocument>
 
-namespace Kites
+namespace Atlas
 {
 
 EditorTab::EditorTab(QWidget *parent, ProcessorManager *vmManager)
-    : KitesTab(parent), m_processorManager(vmManager), ui(new Ui::EditorTab)
+    : AtlasTab(parent), m_processorManager(vmManager), ui(new Ui::EditorTab)
 {
     ui->setupUi(this);
     ui->editorViewButton->setChecked(true); // default to editor view
@@ -488,4 +488,4 @@ int EditorTab::mappedOriginalLine(int expandedLine) const
         return expandedLine; // no mapping recorded: lines are 1:1
     return m_expandedToOriginalLine[index];
 }
-} // namespace Kites
+} // namespace Atlas

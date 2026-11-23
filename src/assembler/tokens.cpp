@@ -11,7 +11,7 @@
 #include <iostream>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 std::ostream &operator<<(std::ostream &os, const Token &token)
 {
@@ -64,4 +64,4 @@ std::string tokenTypeToString(TokenType type)
         return "UNKNOWN     ";
     }
 }
-}// namespace Kites
+}// namespace Atlas

@@ -1,6 +1,6 @@
 #include "processor/cache/policies/lru.h"
 
-namespace Kites
+namespace Atlas
 {
 std::string_view LRUReplacementPolicy::name() const
 {
@@ -62,4 +62,4 @@ void LRUReplacementPolicy::onEvict(const CacheLineView &line, const CacheRequest
     (void)request;
     (void)context;
 }
-}//namespace Kites
+}//namespace Atlas

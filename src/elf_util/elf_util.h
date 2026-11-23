@@ -8,7 +8,7 @@
 
 #include "common/assembled_program.h"
 
-namespace Kites
+namespace Atlas
 {
 struct ElfHeader
 {
@@ -43,5 +43,5 @@ struct ElfSectionHeader
 };
 
 void generateElfFile(const AssembledProgram &program, const std::string &output_filename);
-}//namespace Kites
+}//namespace Atlas
 #endif // ELF_UTIL_H

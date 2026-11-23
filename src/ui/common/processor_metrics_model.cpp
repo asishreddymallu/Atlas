@@ -1,7 +1,7 @@
 #include "processor_metrics_model.h"
 #include "ui/common/table_font.h"
 
-namespace Kites
+namespace Atlas
 {
 QString metricLabel(MetricRow row)
 {
@@ -225,4 +225,4 @@ void ProcessorMetricsModel::refresh()
     m_metrics = m_manager->metrics();
     endResetModel();
 }
-} // namespace Kites
+} // namespace Atlas

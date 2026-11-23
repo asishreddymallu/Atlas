@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace command_handler
 {
@@ -79,5 +79,5 @@ Command ParseCommand(const std::string &input);
 void ExecuteCommand(const Command &command, ProcessorManager &manager, ReplState &state);
 
 } // namespace command_handler
-}//namespace Kites
+}//namespace Atlas
 #endif // COMMAND_HANDLER_H

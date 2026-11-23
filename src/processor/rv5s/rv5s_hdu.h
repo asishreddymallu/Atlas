@@ -10,7 +10,7 @@
 // Assuming the path to pipeline_registers.h is correct relative to the HDU file
 #include "processor/pipeline_registers.h"
 
-namespace Kites
+namespace Atlas
 {
 // Define stall count constants (useful for client code)
 constexpr int STALL_NONE = 0;
@@ -30,4 +30,4 @@ constexpr int STALL_TWO_CYCLES = 2;
  */
 int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_ex_reg,
                       const EX_MEM_Register &ex_mem_reg, bool is_forwarding_enabled);
-}//namespace Kites
+}//namespace Atlas

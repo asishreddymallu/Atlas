@@ -20,8 +20,8 @@
  *   - Dependent instructions are separated by four `nop`s, because the
  *     nh_nf and nh_f variants have no hazard detection.
  */
-#ifndef KITES_TEST_FLOAT_TEST_SUPPORT_H
-#define KITES_TEST_FLOAT_TEST_SUPPORT_H
+#ifndef ATLAS_TEST_FLOAT_TEST_SUPPORT_H
+#define ATLAS_TEST_FLOAT_TEST_SUPPORT_H
 
 #include "assembler/assembler.h"
 #include "processor/processor_base.h"
@@ -42,7 +42,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites::test_support
+namespace Atlas::test_support
 {
 enum class Model
 {
@@ -197,6 +197,6 @@ inline constexpr uint64_t kSentinel = 0x40934800ABCDEF12ULL;
 inline constexpr uint64_t kCanonicalNaN32 = 0x7FC00000ULL;
 inline constexpr uint64_t kCanonicalNaN64 = 0x7FF8000000000000ULL;
 
-} // namespace Kites::test_support
+} // namespace Atlas::test_support
 
-#endif // KITES_TEST_FLOAT_TEST_SUPPORT_H
+#endif // ATLAS_TEST_FLOAT_TEST_SUPPORT_H

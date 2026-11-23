@@ -11,7 +11,7 @@
 
 
 #include <string>
-namespace Kites
+namespace Atlas
 {
 bool Parser::parse_O()
 {
@@ -557,4 +557,4 @@ bool Parser::parse_O_GPR_C_I_LP_GPR_RP()
     }
     return false;
 }
-}// namespace Kites
+}// namespace Atlas

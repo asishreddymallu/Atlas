@@ -5,7 +5,7 @@
 #include <QtEndian>
 #include <algorithm>
 #include <cstdint>
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -287,4 +287,4 @@ void MemoryModel::updateMemory(uint64_t address)
 
     emit dataChanged(topLeft, bottomRight, {Qt::DisplayRole, Qt::ToolTipRole});
 }
-} // namespace Kites
+} // namespace Atlas

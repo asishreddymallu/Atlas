@@ -10,10 +10,10 @@
 #include <sstream>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 namespace vm_config
 {
 VmConfig config;
 }
-}// namespace Kites
+}// namespace Atlas

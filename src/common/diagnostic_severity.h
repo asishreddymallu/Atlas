@@ -2,7 +2,7 @@
 #include <string>
 #include <string_view>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @file diagnostic_severity.h
@@ -91,4 +91,4 @@ constexpr DiagnosticCategory categoryFromString(std::string_view text,
     if (text == "Runtime")   return DiagnosticCategory::Runtime;
     return fallback;
 }
-} // namespace Kites
+} // namespace Atlas

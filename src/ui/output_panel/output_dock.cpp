@@ -6,7 +6,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-namespace Kites
+namespace Atlas
 {
 OutputDock::OutputDock(QWidget *parent) : QDockWidget("Output", parent)
 {
@@ -74,4 +74,4 @@ void OutputDock::endInput()
 {
     m_input->setEnabled(false);
 }
-} // namespace Kites
+} // namespace Atlas

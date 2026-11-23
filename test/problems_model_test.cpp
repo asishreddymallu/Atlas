@@ -11,7 +11,7 @@
 
 #include <QVector>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

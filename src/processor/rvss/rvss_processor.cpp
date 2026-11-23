@@ -24,16 +24,16 @@
 #include <thread>
 #include <tuple>
 
-namespace Kites
+namespace Atlas
 {
 RVSSProcessor::RVSSProcessor() : ProcessorBase()
 {
     DumpRegisters(globals::registers_dump_file_path, registers_);
     DumpState(globals::vm_state_dump_file_path);
 #ifndef DISABLE_GUI
-    circuit_scene_ = std::make_unique<Kites::RVSSCircuitScene>();
+    circuit_scene_ = std::make_unique<Atlas::RVSSCircuitScene>();
     connect(this, &ProcessorBase::circuitSnapshotSignal, circuit_scene_.get(),
-            &Kites::RVSSCircuitScene::updateCircuitSnapshot, Qt::QueuedConnection);
+            &Atlas::RVSSCircuitScene::updateCircuitSnapshot, Qt::QueuedConnection);
 #endif
 
     // IM_to_PC_pc and PC_to_IM_instruction used to head this list.
@@ -1224,4 +1224,4 @@ void RVSSProcessor::Reset()
     redo_stack_ = std::stack<StepDelta>();
     ResetTrace();
 }
-}//namespaace Kites
+}//namespace Atlas

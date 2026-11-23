@@ -2,7 +2,7 @@
 #include "processor/processor_choice.h"
 #include "ui_processor_dialog.h"
 
-namespace Kites
+namespace Atlas
 {
 ProcessorDialog::ProcessorDialog(QWidget *parent, const ProcessorType &currentVMType)
     : QDialog(parent), ui(new Ui::ProcessorDialog)
@@ -56,4 +56,4 @@ void ProcessorDialog::on_buttonBox_accepted()
     emit vmSelected(selectedType());
 }
 
-} // namespace Kites
+} // namespace Atlas

@@ -22,7 +22,7 @@
 #include <sstream>
 #include <thread>
 
-namespace Kites
+namespace Atlas
 {
 ProcessorBase::ProcessorBase()
 {
@@ -939,4 +939,4 @@ void ProcessorBase::lightWire(const QString &name, WireStage stage)
         active_wire_stages_[at] |= stageBit(stage);
     }
 }
-}//namespace Kites
+}//namespace Atlas

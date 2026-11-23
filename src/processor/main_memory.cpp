@@ -18,7 +18,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 uint8_t MainMemory::read(uint64_t address)
 {
@@ -389,4 +389,4 @@ void MainMemory::printMemoryUsage() const
         }
     }
 }
-}//namespace Kites
+}//namespace Atlas

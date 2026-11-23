@@ -7,7 +7,7 @@
 #include <QDebug>
 #include <QPalette>
 
-namespace Kites
+namespace Atlas
 {
 
 RegisterModel::RegisterModel(QObject *parent, RegisterFile *regfile) : QAbstractTableModel(parent)
@@ -237,4 +237,4 @@ void RegisterModel::updateFRegisterValue(size_t regIndex, [[maybe_unused]] uint6
     beginResetModel();
     endResetModel();
 }
-} // namespace Kites
+} // namespace Atlas

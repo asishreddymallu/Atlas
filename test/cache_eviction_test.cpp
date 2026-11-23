@@ -5,7 +5,7 @@
 #include "processor/cache/cache.h"
 #include "processor/main_memory.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

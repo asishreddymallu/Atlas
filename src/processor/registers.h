@@ -14,7 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Represents a register file containing integer, floating-point, and vector registers.
@@ -121,5 +121,5 @@ bool IsValidGeneralPurposeRegister(const std::string &reg);
 bool IsValidFloatingPointRegister(const std::string &reg);
 
 bool IsValidCsr(const std::string &reg);
-}//namespace Kites
+}//namespace Atlas
 #endif // REGISTERS_H

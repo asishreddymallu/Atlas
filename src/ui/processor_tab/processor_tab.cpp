@@ -6,10 +6,10 @@
 #include <QHBoxLayout>
 
 // #include "vsrtl/graphics/vsrtl_widget.h"
-namespace Kites
+namespace Atlas
 {
 ProcessorTab::ProcessorTab(QWidget *parent, ProcessorManager *vmManager)
-    : KitesTab(parent), ui(new Ui::ProcessorTab), m_vmManager(vmManager)
+    : AtlasTab(parent), ui(new Ui::ProcessorTab), m_vmManager(vmManager)
 {
     ui->setupUi(this);
     m_vmStateTableModel = new VMStateTableModel(this, m_vmManager);
@@ -47,4 +47,4 @@ ProcessorTab::~ProcessorTab()
 {
     delete ui;
 }
-} // namespace Kites
+} // namespace Atlas

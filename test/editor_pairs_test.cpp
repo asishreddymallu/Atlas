@@ -17,8 +17,8 @@
 #include <QList>
 #include <QString>
 
-using namespace Kites;
-using namespace Kites::EditorCommands;
+using namespace Atlas;
+using namespace Atlas::EditorCommands;
 
 namespace
 {

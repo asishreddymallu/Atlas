@@ -14,7 +14,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @namespace vm_config
@@ -167,5 +167,5 @@ struct VmConfig
 extern VmConfig config;
 
 } // namespace vm_config
-}// namespace Kites
+}// namespace Atlas
 #endif // CONFIG_H

@@ -15,7 +15,7 @@
 #include "common/assembled_program.h"
 #include <istream>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Assembles the intermediate code into machine code.
@@ -38,6 +38,6 @@ AssembledProgram assemble(const std::string &filename);
  */
 AssembledProgram assemble(std::istream &source);
 
-}  // namespace Kites
+}  // namespace Atlas
 
 #endif // ASSEMBLER_H

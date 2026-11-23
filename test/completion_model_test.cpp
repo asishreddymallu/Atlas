@@ -9,7 +9,7 @@
 
 #include <gtest/gtest.h>
 
-using namespace Kites::Completion;
+using namespace Atlas::Completion;
 
 namespace
 {

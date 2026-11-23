@@ -26,7 +26,7 @@
 #include <cmath>
 #include <map>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -874,4 +874,4 @@ void TimingGridPanel::explainSelection(int row, int column)
         [&program](uint64_t pc) { return traceDisassembly(program, pc).toStdString(); });
     m_explain->setPlainText(QString::fromStdString(text));
 }
-} // namespace Kites
+} // namespace Atlas

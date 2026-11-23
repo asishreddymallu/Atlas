@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -397,4 +397,4 @@ void CompletionPopup::wheelEvent(QWheelEvent *event)
     event->accept();
 }
 
-} // namespace Kites
+} // namespace Atlas

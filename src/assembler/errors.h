@@ -11,7 +11,7 @@
 #include <ostream>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 namespace errors
 {
@@ -255,5 +255,5 @@ struct InvalidRegisterError
 };
 
 } // namespace errors
-} // namespace Kites
+} // namespace Atlas
 #endif // ERRORS_H

@@ -7,7 +7,7 @@
 #include <QPen>
 #include <QPolygonF>
 
-namespace Kites
+namespace Atlas
 {
 
 class WireItem : public QGraphicsPathItem
@@ -52,4 +52,4 @@ class WireItem : public QGraphicsPathItem
     QPen m_dimmedPen;
     State m_state = State::Off;
 };
-} // namespace Kites
+} // namespace Atlas

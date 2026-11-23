@@ -17,11 +17,11 @@ namespace
 template <typename VmType>
 std::unique_ptr<VmType> runSource(const std::string &source)
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     auto vm = std::make_unique<VmType>();
     std::istringstream stream(source);
-    Kites::AssembledProgram program = Kites::assemble(stream);
+    Atlas::AssembledProgram program = Atlas::assemble(stream);
     vm->LoadProgram(program);
     vm->DebugRun();
     return vm;
@@ -73,20 +73,20 @@ void runWritebackSuite()
 
 TEST(RV5SWriteback, HazardForwarding)
 {
-    runWritebackSuite<Kites::RV5StageProcessorHF>();
+    runWritebackSuite<Atlas::RV5StageProcessorHF>();
 }
 
 TEST(RV5SWriteback, HazardNoForwarding)
 {
-    runWritebackSuite<Kites::RV5StageProcessorHNF>();
+    runWritebackSuite<Atlas::RV5StageProcessorHNF>();
 }
 
 TEST(RV5SWriteback, NoHazardForwarding)
 {
-    runWritebackSuite<Kites::RV5StageProcessorNHF>();
+    runWritebackSuite<Atlas::RV5StageProcessorNHF>();
 }
 
 TEST(RV5SWriteback, NoHazardNoForwarding)
 {
-    runWritebackSuite<Kites::RV5StageProcessorNHNF>();
+    runWritebackSuite<Atlas::RV5StageProcessorNHNF>();
 }

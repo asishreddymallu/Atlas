@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The MemoryController class is responsible for managing memory in the VM.
@@ -75,5 +75,5 @@ class MemoryController : public QObject
     void memoryUpdated(uint64_t address);
     void memoryResetSignal();
 };
-}// namespace Kites
+}// namespace Atlas
 #endif // MEMORY_CONTROLLER_H

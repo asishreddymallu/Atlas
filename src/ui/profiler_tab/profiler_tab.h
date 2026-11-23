@@ -1,7 +1,7 @@
 #ifndef PROFILERTAB_H
 #define PROFILERTAB_H
 
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include <QString>
 #include <QWidget>
 #include <map>
@@ -9,7 +9,7 @@
 
 
 
-namespace Kites
+namespace Atlas
 {
   
 class Profiler; // Forward declaration to avoid including profiler header
@@ -21,7 +21,7 @@ namespace Ui
 class ProfilerTab;
 }
 
-class ProfilerTab : public KitesTab
+class ProfilerTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -46,5 +46,5 @@ private:
     const Profiler *m_profiler = nullptr;
     ProcessorMetricsModel *m_metricsModel = nullptr;
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // PROFILERTAB_H

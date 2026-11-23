@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-namespace Kites
+namespace Atlas
 {
 // enum class PipelineStage
 // {
@@ -86,4 +86,4 @@ struct ProcessorState
     // tho beware if this struct is too big we lose on performance
 };
 
-} // namespace Kites
+} // namespace Atlas

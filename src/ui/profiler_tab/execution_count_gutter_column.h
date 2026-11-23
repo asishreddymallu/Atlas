@@ -4,7 +4,7 @@
 #include "profiler_editor.h"
 #include <QPainter>
 
-namespace Kites
+namespace Atlas
 {
 class ExecutionCountGutterColumn : public GutterColumn
 {
@@ -56,4 +56,4 @@ protected:
 private:
     ProfilerEditor *m_profilerEditor;
 };
-}//namespace Kites
+}//namespace Atlas

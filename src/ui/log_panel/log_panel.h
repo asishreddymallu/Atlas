@@ -1,7 +1,7 @@
 #pragma once
 #include <QPlainTextEdit>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -24,4 +24,4 @@ class LogPanel : public QPlainTextEdit
     static LogPanel *instance;
 };
 
-} // namespace Kites
+} // namespace Atlas

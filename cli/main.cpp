@@ -37,12 +37,12 @@ void printUsage(const char *programName)
         << "  (running with no assembly-file also enters the REPL)\n";
 }
 
-const std::unordered_map<std::string, Kites::ProcessorType> processorTypes = {
-    {"rvss", Kites::ProcessorType::RVSS},
-    {"rv5-nh-nf", Kites::ProcessorType::RV5Stage_NH_NF},
-    {"rv5-h-nf", Kites::ProcessorType::RV5Stage_H_NF},
-    {"rv5-nh-f", Kites::ProcessorType::RV5Stage_NH_F},
-    {"rv5-h-f", Kites::ProcessorType::RV5Stage_H_F},
+const std::unordered_map<std::string, Atlas::ProcessorType> processorTypes = {
+    {"rvss", Atlas::ProcessorType::RVSS},
+    {"rv5-nh-nf", Atlas::ProcessorType::RV5Stage_NH_NF},
+    {"rv5-h-nf", Atlas::ProcessorType::RV5Stage_H_NF},
+    {"rv5-nh-f", Atlas::ProcessorType::RV5Stage_NH_F},
+    {"rv5-h-f", Atlas::ProcessorType::RV5Stage_H_F},
 };
 } // namespace
 
@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
 
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     std::string assemblyFile;
     std::string processorTypeStr = "rvss";
@@ -113,15 +113,15 @@ int main(int argc, char *argv[])
 
     if (replRequested || assemblyFile.empty())
     {
-        Kites::ProcessorManager manager(nullptr, processorTypeIt->second);
+        Atlas::ProcessorManager manager(nullptr, processorTypeIt->second);
         manager.setStepDelay(0);
 
-        Kites::command_handler::ReplState state;
+        Atlas::command_handler::ReplState state;
         if (!assemblyFile.empty())
         {
             try
             {
-                Kites::AssembledProgram program = Kites::assemble(assemblyFile);
+                Atlas::AssembledProgram program = Atlas::assemble(assemblyFile);
                 manager.loadProgram(program);
                 state.currentProgram = program;
                 state.programLoaded = true;
@@ -135,13 +135,13 @@ int main(int argc, char *argv[])
             }
         }
 
-        return Kites::RunRepl(manager, state);
+        return Atlas::RunRepl(manager, state);
     }
 
-    Kites::AssembledProgram program;
+    Atlas::AssembledProgram program;
     try
     {
-        program = Kites::assemble(assemblyFile);
+        program = Atlas::assemble(assemblyFile);
     }
     catch (const std::exception &e)
     {
@@ -149,11 +149,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    Kites::ProcessorManager manager(nullptr, processorTypeIt->second);
+    Atlas::ProcessorManager manager(nullptr, processorTypeIt->second);
 
     bool runFailed = false;
     std::string runErrorMsg;
-    QObject::connect(&manager, &Kites::ProcessorManager::runErrorSignal, &manager,
+    QObject::connect(&manager, &Atlas::ProcessorManager::runErrorSignal, &manager,
                       [&](const QString &message, int /*sourceLine*/)
                       {
                           runFailed = true;
@@ -176,7 +176,7 @@ int main(int argc, char *argv[])
         std::cerr << "Run failed: " << runErrorMsg << std::endl;
     }
 
-    Kites::DumpRegisters(Kites::globals::registers_dump_file_path, *manager.getRegisterFile());
+    Atlas::DumpRegisters(Atlas::globals::registers_dump_file_path, *manager.getRegisterFile());
 
     if (!memDumpArgs.empty())
     {
@@ -194,12 +194,12 @@ int main(int argc, char *argv[])
     std::cout << "Assembled '" << assemblyFile << "': " << program.text_buffer.size()
                << " instruction word(s), " << program.data_buffer.size() << " data item(s).\n"
                << "Run " << (runFailed ? "failed" : "completed") << ".\n"
-               << "Registers   -> " << Kites::globals::registers_dump_file_path.string() << "\n"
-               << "Disassembly -> " << Kites::globals::disassembly_file_path.string() << "\n"
-               << "Errors      -> " << Kites::globals::errors_dump_file_path.string();
+               << "Registers   -> " << Atlas::globals::registers_dump_file_path.string() << "\n"
+               << "Disassembly -> " << Atlas::globals::disassembly_file_path.string() << "\n"
+               << "Errors      -> " << Atlas::globals::errors_dump_file_path.string();
     if (!memDumpArgs.empty())
     {
-        std::cout << "\nMemory      -> " << Kites::globals::memory_dump_file_path.string();
+        std::cout << "\nMemory      -> " << Atlas::globals::memory_dump_file_path.string();
     }
     std::cout << std::endl;
 

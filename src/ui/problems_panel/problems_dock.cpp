@@ -9,7 +9,7 @@
 #include <QTableView>
 #include <QVBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 ProblemsDock::ProblemsDock(QWidget *parent)
     : QDockWidget(parent)
@@ -88,4 +88,4 @@ void ProblemsDock::updateTitle()
     const int count = m_model->problemCount();
     setWindowTitle(count > 0 ? tr("Problems (%1)").arg(count) : tr("Problems"));
 }
-} // namespace Kites
+} // namespace Atlas

@@ -2,7 +2,7 @@
 #include "ui/theme/theme_manager.h"
 #include <QJsonArray>
 
-namespace Kites
+namespace Atlas
 {
 WireItem::WireItem(const QPainterPath &path, QGraphicsItem *parent)
     : QGraphicsPathItem(path, parent)
@@ -196,4 +196,4 @@ QJsonObject WireItem::toJson()
 
     return obj;
 }
-} // namespace Kites
+} // namespace Atlas

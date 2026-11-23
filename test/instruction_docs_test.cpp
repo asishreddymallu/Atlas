@@ -44,7 +44,7 @@
 #include <iostream>
 #include <set>
 
-using namespace Kites;
+using namespace Atlas;
 using instruction_set::SyntaxType;
 
 namespace
@@ -67,7 +67,7 @@ QString readFile(const char *path) { return readFile(QString::fromUtf8(path)); }
  * @brief Where instruction_docs.json is read from.
  *
  * The default is the repository's own file, so an ordinary run is
- * unaffected. `KITES_DOCS_JSON` overrides it, and exists for one reason:
+ * unaffected. `ATLAS_DOCS_JSON` overrides it, and exists for one reason:
  * the negative controls have to point this test at a MUTATED COPY, and
  * the repository's JSON must not be touched to do that. When the
  * override is set the path is printed by every test that reads it, so a
@@ -78,7 +78,7 @@ QString docsPath()
 {
     static const QString path = []
     {
-        const QByteArray fromEnv = qgetenv("KITES_DOCS_JSON");
+        const QByteArray fromEnv = qgetenv("ATLAS_DOCS_JSON");
         return fromEnv.isEmpty() ? QString::fromUtf8(kDocsPathDefault)
                                  : QString::fromUtf8(fromEnv);
     }();
@@ -89,7 +89,7 @@ QString docsPath()
 void announceDocsPathIfOverridden()
 {
     if (docsPath() != QString::fromUtf8(kDocsPathDefault))
-        std::cerr << "    [ info ] KITES_DOCS_JSON overrides the docs path: "
+        std::cerr << "    [ info ] ATLAS_DOCS_JSON overrides the docs path: "
                   << docsPath().toStdString() << "\n";
 }
 

@@ -14,7 +14,7 @@
 #include <vector>
 #include "instruction_types.h"
 
-namespace Kites
+namespace Atlas
 {
 namespace instruction_set
 {
@@ -567,5 +567,5 @@ InstructionType getInstructionType(const std::string &instruction);
 std::string disassemble(uint32_t instruction);
 
 } // namespace instruction_set
-} // namespace Kites
+} // namespace Atlas
 #endif // INSTRUCTIONS_H

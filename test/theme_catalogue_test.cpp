@@ -38,7 +38,7 @@
 #include <cmath>
 #include <set>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

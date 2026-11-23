@@ -7,7 +7,7 @@
 #define RVSS_CONTROL_UNIT_H
 
 #include "../control_unit_base.h"
-namespace Kites
+namespace Atlas
 {
 
 class RVSSControlUnit : public ControlUnit
@@ -17,5 +17,5 @@ class RVSSControlUnit : public ControlUnit
 
     alu::AluOp GetAluSignal(uint32_t instruction, bool ALUOp) override;
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // RVSS_CONTROL_UNIT_H

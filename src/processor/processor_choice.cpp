@@ -4,7 +4,7 @@
  */
 #include "processor/processor_choice.h"
 
-namespace Kites
+namespace Atlas
 {
 
 ProcessorType processorTypeFor(bool pipeline, bool hazard, bool forwarding)
@@ -98,4 +98,4 @@ const char *processorNote(bool pipeline, bool hazard, bool forwarding)
            "Large li and la give wrong results.";
 }
 
-} // namespace Kites
+} // namespace Atlas

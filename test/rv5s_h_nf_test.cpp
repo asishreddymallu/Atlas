@@ -3,7 +3,7 @@
 #include "assembler/assembler.h"
 #include "utils/utils.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 static std::unique_ptr<RV5StageProcessorHNF> runHazardProgram(const std::string& filename)
 {

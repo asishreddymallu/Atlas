@@ -1,6 +1,6 @@
 #pragma once
 #include "ui/common/syntax_highlighter.h"
-#include "ui/common/kites_editor.h"
+#include "ui/common/atlas_editor.h"
 #include "profiler/profiler.h"
 #include "common/instruction_types.h"
 #include <QColor>
@@ -10,11 +10,11 @@
 #include <map>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 class ExecutionCountGutterColumn; 
 class InstructionTypeGutterColumn; // forward declaration
-class ProfilerEditor : public KitesEditor
+class ProfilerEditor : public AtlasEditor
 {
     Q_OBJECT
     friend class ExecutionCountGutterColumn;
@@ -63,4 +63,4 @@ private:
     QColor heatBackgroundColor(
         int hitCount) const; // Helper function to determine background color based on hit count
 };
-}; // namespace Kites
+}; // namespace Atlas

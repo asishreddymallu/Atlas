@@ -11,10 +11,10 @@
 #include <QTableView>
 #include <QVBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
-    : KitesTab(parent), ui(new Ui::ProfilerTab), m_profiler(profiler)
+    : AtlasTab(parent), ui(new Ui::ProfilerTab), m_profiler(profiler)
 {
     ui->setupUi(this);
     ui->splitter->setStretchFactor(0, 1);
@@ -104,4 +104,4 @@ void ProfilerTab::resetProfilerView()
     ui->plainTextEdit->clearExecutionCount();
     ui->plainTextEdit->clearInstructionTypes();
 }
-} // namespace Kites
+} // namespace Atlas

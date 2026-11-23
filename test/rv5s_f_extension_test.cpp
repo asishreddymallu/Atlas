@@ -17,7 +17,7 @@
 #include "assembler/assembler.h"
 #include "utils/utils.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 // ─────────────────────────────────────────────────────────────
 // Helper launchers — one per VM type

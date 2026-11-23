@@ -20,7 +20,7 @@
 #include <filesystem>
 #include <vector>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
@@ -28,7 +28,7 @@ namespace
 void feedDiagnostic(EditorTab &tab, int line, int column, int endColumn,
                     const char *message = "Immediate value out of range")
 {
-    const auto path = std::filesystem::temp_directory_path() / "kites_map_errors.json";
+    const auto path = std::filesystem::temp_directory_path() / "atlas_map_errors.json";
     QFile file(QString::fromStdString(path.string()));
     EXPECT_TRUE(file.open(QIODevice::WriteOnly));
     file.write(QString(R"({"errorCode":1,"errors":[{"line":%1,"column":%2,"endColumn":%3,)"
@@ -54,7 +54,7 @@ int selectionLine(const QTextEdit::ExtraSelection &selection)
     return selection.cursor.blockNumber() + 1;
 }
 
-/// KitesEditor::extraSelections() is the merged list of the current-line
+/// AtlasEditor::extraSelections() is the merged list of the current-line
 /// highlight and the diagnostic squiggles. Keep only the squiggles, which are
 /// the ones carrying a wave underline.
 QList<QTextEdit::ExtraSelection> squiggles(QPlainTextEdit *pane)
@@ -191,7 +191,7 @@ TEST(EditorDiagnosticMapping, SeveralDiagnosticsCanMapOntoOneOriginalLine)
     expandedPane(tab)->setPlainText("main:\naddi sp, sp, -8\nsd t0, 0(sp)\n    ret\n");
     tab.setExpansionMapping({1, 2, 2, 3});
 
-    const auto path = std::filesystem::temp_directory_path() / "kites_map_multi.json";
+    const auto path = std::filesystem::temp_directory_path() / "atlas_map_multi.json";
     QFile file(QString::fromStdString(path.string()));
     EXPECT_TRUE(file.open(QIODevice::WriteOnly));
     file.write(R"({"errorCode":1,"errors":[

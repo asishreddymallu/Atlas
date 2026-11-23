@@ -3,7 +3,7 @@
 #include <QAbstractTableModel>
 
 
-namespace Kites
+namespace Atlas
 {
 class VMStateTableModel : public QAbstractTableModel
 {
@@ -27,5 +27,5 @@ class VMStateTableModel : public QAbstractTableModel
     /// connection, so the table only changed when something repainted it.
     void refresh();
 };
-} // namespace kites
+} // namespace Atlas
 

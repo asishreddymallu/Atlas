@@ -10,7 +10,7 @@
 #include "processor/registers.h"
 
 #include <string>
-namespace Kites
+namespace Atlas
 {
 bool Parser::parse_O_GPR_C_CSR_C_GPR()
 {
@@ -98,4 +98,4 @@ bool Parser::parse_O_GPR_C_CSR_C_I()
     }
     return false;
 }
-}// namespace Kites
+}// namespace Atlas

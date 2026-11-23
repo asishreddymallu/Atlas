@@ -2,7 +2,7 @@
 #include <QMetaType>
 #pragma once
 
-namespace Kites
+namespace Atlas
 {
 enum class WritePolicy
 {
@@ -43,9 +43,9 @@ struct CacheStats
     size_t cacheSizeInBytes = 0;
 };
 
-}//namespace Kites
+}//namespace Atlas
 
 //for making the enums usable in Qt's combo box
-Q_DECLARE_METATYPE(Kites::WritePolicy)
-Q_DECLARE_METATYPE(Kites::AllocationPolicy)
-Q_DECLARE_METATYPE(Kites::ReplacementPolicy)
+Q_DECLARE_METATYPE(Atlas::WritePolicy)
+Q_DECLARE_METATYPE(Atlas::AllocationPolicy)
+Q_DECLARE_METATYPE(Atlas::ReplacementPolicy)

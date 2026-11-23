@@ -1,6 +1,6 @@
 #include "processor/execution_trace.h"
 
-namespace Kites
+namespace Atlas
 {
 const char *traceStageName(TraceStage stage)
 {
@@ -160,4 +160,4 @@ TraceTotals traceTotals(const std::vector<TraceCycle> &records)
         addToTotals(t, r, +1);
     return t;
 }
-} // namespace Kites
+} // namespace Atlas

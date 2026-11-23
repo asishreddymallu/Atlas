@@ -3,7 +3,7 @@
 
 class QTableView;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Applies the shared data-table presentation: compact 24px rows, zebra
@@ -19,4 +19,4 @@ namespace Kites
  */
 void applyDataTableStyle(QTableView *view,
                          Qt::Alignment headerAlignment = Qt::AlignLeft | Qt::AlignVCenter);
-} // namespace Kites
+} // namespace Atlas

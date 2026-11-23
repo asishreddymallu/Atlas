@@ -2,7 +2,7 @@
 #include "ui/common/gutter_column.h"
 #include "profiler_editor.h"
 #include <QPainter>
-namespace Kites
+namespace Atlas
 {
 class InstructionTypeGutterColumn : public GutterColumn
 {

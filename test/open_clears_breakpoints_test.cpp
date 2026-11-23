@@ -33,7 +33,7 @@
 #include <QEvent>
 #include <QWidget>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

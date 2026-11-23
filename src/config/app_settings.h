@@ -3,7 +3,7 @@
 #include <QSettings>
 #include <QString>
 
-namespace Kites
+namespace Atlas
 {
 
 enum class BorderStyle
@@ -52,4 +52,4 @@ class AppSettings : public QObject
     QSettings m_settings;
 };
 
-} // namespace Kites
+} // namespace Atlas

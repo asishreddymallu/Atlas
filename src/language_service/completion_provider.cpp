@@ -7,7 +7,7 @@
 #include <QJsonObject>
 #include <QSet>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -99,4 +99,4 @@ const QStringList &CompletionProvider::staticSymbols() const
     return m_cachedAll;
 }
 
-} // namespace Kites
+} // namespace Atlas

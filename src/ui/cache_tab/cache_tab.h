@@ -2,19 +2,19 @@
 #include "cache_grid_delegate.h"
 #include "cache_config_widget.h"
 #include "cache_model.h"
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include "processor/memory_controller.h"
 #include <QWidget>
 
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
 class CacheTab;
 }
 
-class CacheTab : public KitesTab
+class CacheTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -61,4 +61,4 @@ private:
 signals:
     void cacheConfigChangedSignal(CacheLevel cacheLevel, CacheConfig newConfig);
 };
-} // namespace Kites
+} // namespace Atlas

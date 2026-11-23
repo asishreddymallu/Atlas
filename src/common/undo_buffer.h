@@ -5,7 +5,7 @@
 #include <optional>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * Circular undo/redo history holding at most `capacity` entries; pushing past that

@@ -15,7 +15,7 @@
 #include <filesystem>
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 void setupVmStateDirectory();
 
@@ -56,5 +56,5 @@ void DumpRegisters(const std::filesystem::path &filename, RegisterFile &register
 void DumpDisasssembly(const std::filesystem::path &filename, AssembledProgram &program);
 
 void SetupConfigFile();
-}//namespace Kites
+}//namespace Atlas
 #endif // UTILS_H

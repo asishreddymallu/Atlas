@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace Kites
+namespace Atlas
 {
 class MMIODevice
 {
@@ -93,4 +93,4 @@ class NullMMIODevice : public MMIODevice
         return "NullMMIODevice";
     }
 }; // class NullMMIODevice
-}// namespace Kites
+}// namespace Atlas

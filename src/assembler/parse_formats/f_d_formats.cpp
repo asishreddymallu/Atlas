@@ -12,7 +12,7 @@
 
 
 #include <string>
-namespace Kites
+namespace Atlas
 {
 bool Parser::parse_O_FPR_C_FPR_C_FPR_C_FPR()
 {
@@ -501,4 +501,4 @@ bool Parser::parse_O_FPR_C_I_LP_GPR_RP()
     }
     return false;
 }
-}//namespace Kites
+}//namespace Atlas

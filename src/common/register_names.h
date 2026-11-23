@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
 
-namespace Kites
+namespace Atlas
 {
 namespace register_names
 {
@@ -31,4 +31,4 @@ inline constexpr std::array<const char *, 32> kFprAliases = {
     "fs8", "fs9", "fs10", "fs11", "ft8", "ft9", "ft10", "ft11"};
 
 } // namespace register_names
-} // namespace Kites
+} // namespace Atlas

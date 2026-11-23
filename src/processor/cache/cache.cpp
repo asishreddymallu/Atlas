@@ -7,7 +7,7 @@
 #include <bit>
 #include <span>
 
-namespace Kites
+namespace Atlas
 {
 /**TODO
  * Look if we can make this a factory class for better testability?
@@ -806,5 +806,5 @@ CacheConfig Cache::getConfig() const
         .replacementPolicy = m_ReplacementPolicy->type()
     };
 }
-}//namespace Kites
+}//namespace Atlas
 

@@ -6,7 +6,7 @@
 
 #include <string>
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
@@ -48,5 +48,5 @@ signals:
     void configChangedSignal();
     void customPolicyScriptSelectedSignal(const std::string &scriptPath);
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // CACHECONFIGWIDGET_H

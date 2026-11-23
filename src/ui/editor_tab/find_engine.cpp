@@ -4,7 +4,7 @@
 #include <QRegularExpressionMatch>
 #include <QRegularExpressionMatchIterator>
 
-namespace Kites
+namespace Atlas
 {
 namespace FindEngine
 {
@@ -159,4 +159,4 @@ QList<ReplaceEdit> replaceAllEdits(const FindResult &result, const QString &repl
     return edits;
 }
 } // namespace FindEngine
-} // namespace Kites
+} // namespace Atlas

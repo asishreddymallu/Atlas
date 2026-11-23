@@ -1,6 +1,6 @@
 #include "memory_table_view.h"
 
-namespace Kites
+namespace Atlas
 {
 MemoryTableView::MemoryTableView(QWidget *parent) : QTableView(parent)
 {
@@ -23,4 +23,4 @@ void MemoryTableView::resizeEvent(QResizeEvent *event)
     QTableView::resizeEvent(event);
     emit resized();
 }
-} // namespace Kites
+} // namespace Atlas

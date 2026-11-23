@@ -28,15 +28,15 @@
  * is architectural, and nh_nf has no hazard handling at all by
  * contract.
  */
-#ifndef KITES_RV5S_FORWARDING_H
-#define KITES_RV5S_FORWARDING_H
+#ifndef ATLAS_RV5S_FORWARDING_H
+#define ATLAS_RV5S_FORWARDING_H
 
 #include "common/instructions.h"
 #include "processor/pipeline_registers.h"
 
 #include <cstdint>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -134,6 +134,6 @@ inline uint64_t forwardedIntegerSource(uint8_t rs1, const EX_MEM_Register &ex_me
     return fallback;
 }
 
-} // namespace Kites
+} // namespace Atlas
 
-#endif // KITES_RV5S_FORWARDING_H
+#endif // ATLAS_RV5S_FORWARDING_H

@@ -2,7 +2,7 @@
 #include "config/config.h"
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Represents a memory block containing 1 KB of memory.
@@ -21,4 +21,4 @@ struct MemoryBlock
         data.resize(block_size, 0);
     }
 };
-}//namespace Kites
+}//namespace Atlas

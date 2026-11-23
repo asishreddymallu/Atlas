@@ -11,7 +11,7 @@ class QVBoxLayout;
 class QLabel;
 class QToolButton;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief One labelled block of commands on a ribbon page.
@@ -158,4 +158,4 @@ class RibbonGroup : public QWidget
     int  m_fullWidth    {-1};
     int  m_compactWidth {-1};
 };
-} // namespace Kites
+} // namespace Atlas

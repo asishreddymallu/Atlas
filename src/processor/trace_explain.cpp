@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -164,4 +164,4 @@ std::string explainTraceCell(const std::vector<TraceCycle> &records, size_t inde
 
     return at + self + " " + stageDoes(static_cast<TraceStage>(stage)) + ".";
 }
-} // namespace Kites
+} // namespace Atlas

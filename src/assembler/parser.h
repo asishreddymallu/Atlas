@@ -19,7 +19,7 @@
 #include <variant>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief Represents a parse error with a specific line number and error message.
@@ -300,5 +300,5 @@ class Parser
      */
     void printIntermediateCode() const;
 };
-}//namespace Kites
+}//namespace Atlas
 #endif // PARSER_H

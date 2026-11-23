@@ -4,7 +4,7 @@
 #include "base_component.h"
 #include <QJsonObject>
 
-namespace Kites
+namespace Atlas
 {
 class HoriRect : public BaseComponent
 {
@@ -37,6 +37,6 @@ class HoriRect : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 
 #endif // HORI_RECT_H

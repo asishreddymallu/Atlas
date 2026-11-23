@@ -6,7 +6,7 @@
 
 class QTextDocument;
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The completion list's data and its matching rule, as pure functions.
@@ -114,4 +114,4 @@ WordRange wordAt(const QString &text, int offset);
 using Source = std::function<QList<Item>(const QString &prefix)>;
 
 } // namespace Completion
-} // namespace Kites
+} // namespace Atlas

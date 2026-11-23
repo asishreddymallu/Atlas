@@ -15,10 +15,10 @@
 #include <QTemporaryFile>
 #include <QTextStream>
 
-namespace Kites
+namespace Atlas
 {
 
-CompilerTab::CompilerTab(QWidget *parent) : KitesTab(parent), ui(new Ui::CompilerTab)
+CompilerTab::CompilerTab(QWidget *parent) : AtlasTab(parent), ui(new Ui::CompilerTab)
 {
     ui->setupUi(this);
     connect(ui->convertToAssemblyButton, &QPushButton::clicked, this,
@@ -48,7 +48,7 @@ bool CompilerTab::eventFilter(QObject *watched, QEvent *event)
     // button is the right thing to ask.
     if (watched == ui->convertToAssemblyButton && event->type() == QEvent::EnabledChange)
         emit compileEnabledChangedSignal(ui->convertToAssemblyButton->isEnabled());
-    return KitesTab::eventFilter(watched, event);
+    return AtlasTab::eventFilter(watched, event);
 }
 
 bool CompilerTab::isCompileEnabled() const
@@ -316,4 +316,4 @@ CompilerTab::~CompilerTab()
 {
     delete ui;
 }
-} // namespace Kites
+} // namespace Atlas

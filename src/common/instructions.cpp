@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 namespace instruction_set
 {
@@ -1920,4 +1920,4 @@ std::string disassemble(uint32_t instruction)
 }
 
 } // namespace instruction_set
-}// namespace Kites
+}// namespace Atlas

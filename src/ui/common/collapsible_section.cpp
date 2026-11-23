@@ -4,7 +4,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -103,4 +103,4 @@ bool CollapsibleSection::isExpanded() const
     return m_headerButton->isChecked();
 }
 
-} // namespace Kites
+} // namespace Atlas

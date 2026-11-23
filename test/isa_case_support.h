@@ -10,8 +10,8 @@
  * spec - and pasted into each test with a comment naming the script.
  * Nothing in them is read back from rvss.
  */
-#ifndef KITES_TEST_ISA_CASE_SUPPORT_H
-#define KITES_TEST_ISA_CASE_SUPPORT_H
+#ifndef ATLAS_TEST_ISA_CASE_SUPPORT_H
+#define ATLAS_TEST_ISA_CASE_SUPPORT_H
 
 #include "float_test_support.h"
 
@@ -25,7 +25,7 @@
 #include <utility>
 #include <vector>
 
-namespace Kites::test_support
+namespace Atlas::test_support
 {
 void PrintTo(Model model, std::ostream *os); // defined in ecall_syscall_test.cpp
 
@@ -129,6 +129,6 @@ std::vector<IsaParam> isaParams(const IsaCase (&cases)[N], const std::vector<Mod
             out.push_back({i, model, cases[i].name});
     return out;
 }
-} // namespace Kites::test_support
+} // namespace Atlas::test_support
 
-#endif // KITES_TEST_ISA_CASE_SUPPORT_H
+#endif // ATLAS_TEST_ISA_CASE_SUPPORT_H

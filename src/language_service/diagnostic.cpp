@@ -3,7 +3,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-namespace Kites
+namespace Atlas
 {
 QVector<Diagnostic> parseDiagnosticsJson(const QByteArray &json)
 {
@@ -36,4 +36,4 @@ QVector<Diagnostic> parseDiagnosticsJson(const QByteArray &json)
     }
     return diagnostics;
 }
-} // namespace Kites
+} // namespace Atlas

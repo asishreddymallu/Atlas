@@ -1,7 +1,7 @@
 #pragma once
 #include <QTableView>
 #include <QWheelEvent>
-namespace Kites
+namespace Atlas
 {
 class MemoryTableView : public QTableView
 {
@@ -16,4 +16,4 @@ class MemoryTableView : public QTableView
     void scrolled(bool dir);
     void resized();
 };
-} // namespace Kites
+} // namespace Atlas

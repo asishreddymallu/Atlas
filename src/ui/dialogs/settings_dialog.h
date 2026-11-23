@@ -3,7 +3,7 @@
 
 #include <QDialog>
 #include <QString>
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
@@ -29,5 +29,5 @@ class SettingsDialog : public QDialog
 
     std::vector<std::pair<QString, int>> m_pages;
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // SETTINGS_DIALOG_H

@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-namespace Kites
+namespace Atlas
 {
     template <typename T>
     [[nodiscard]] constexpr std::size_t toIndex(T enumValue) noexcept

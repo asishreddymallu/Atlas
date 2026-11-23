@@ -51,7 +51,7 @@
 
 #include <cstdlib>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

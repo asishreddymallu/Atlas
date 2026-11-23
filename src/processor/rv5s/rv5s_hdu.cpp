@@ -15,7 +15,7 @@
 #include "processor/pipeline_registers.h"
 #include "processor/rv5s/rv5s_forwarding.h"
 
-namespace Kites
+namespace Atlas
 {
 // Define stall count constants
 constexpr int STALL_NONE = 0;
@@ -111,4 +111,4 @@ int check_data_hazard(const IF_ID_Register &if_id_reg, const ID_EX_Register &id_
 
     return STALL_NONE;
 }
-}//namespace Kites
+}//namespace Atlas

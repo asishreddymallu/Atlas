@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace Kites
+namespace Atlas
 {
 namespace alu
 {
@@ -1201,4 +1201,4 @@ void Alu::setFlags(bool carry, bool zero, bool negative, bool overflow)
 }
 
 } // namespace alu
-}//namespace Kites
+}//namespace Atlas

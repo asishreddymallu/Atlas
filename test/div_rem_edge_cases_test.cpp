@@ -17,11 +17,11 @@ namespace
 template <typename VmType>
 std::unique_ptr<VmType> runSource(const std::string &source)
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
     auto vm = std::make_unique<VmType>();
     std::istringstream stream(source);
-    Kites::AssembledProgram program = Kites::assemble(stream);
+    Atlas::AssembledProgram program = Atlas::assemble(stream);
     vm->LoadProgram(program);
     vm->DebugRun();
     return vm;
@@ -160,10 +160,10 @@ void runDivRemMatrix()
 
 TEST(DivRemEdgeCases, SingleCycle)
 {
-    runDivRemMatrix<Kites::RVSSProcessor>();
+    runDivRemMatrix<Atlas::RVSSProcessor>();
 }
 
 TEST(DivRemEdgeCases, FiveStageHazardForwarding)
 {
-    runDivRemMatrix<Kites::RV5StageProcessorHF>();
+    runDivRemMatrix<Atlas::RV5StageProcessorHF>();
 }

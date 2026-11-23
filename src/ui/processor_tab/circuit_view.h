@@ -5,7 +5,7 @@
 #include <QGraphicsView>
 
 
-namespace Kites
+namespace Atlas
 {
 
 class CircuitView : public QGraphicsView
@@ -25,4 +25,4 @@ class CircuitView : public QGraphicsView
     void showEvent(QShowEvent *event) override;
 };
 
-} // namespace Kites
+} // namespace Atlas

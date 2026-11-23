@@ -2,7 +2,7 @@
 #include "cache_replacement_policy.h"
 #include <queue>
 
-namespace Kites
+namespace Atlas
 {
 class FIFOReplacementPolicy : public CacheReplacementPolicy
 {
@@ -30,4 +30,4 @@ class FIFOReplacementPolicy : public CacheReplacementPolicy
     // std::vector<std::queue<size_t>> fifo_queues; // Queue to maintain the order of lines for FIFO
     // eviction
 };
-}//namespace Kites
+}//namespace Atlas

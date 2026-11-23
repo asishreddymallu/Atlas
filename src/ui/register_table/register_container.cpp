@@ -9,7 +9,7 @@
 #include <QVBoxLayout>
 #include <array>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -142,4 +142,4 @@ RegisterContainer::~RegisterContainer()
     delete ui;
 }
 
-} // namespace Kites
+} // namespace Atlas

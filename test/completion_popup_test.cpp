@@ -25,7 +25,7 @@
 #include <QTextBlock>
 #include <QTextDocument>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

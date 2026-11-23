@@ -17,7 +17,7 @@
 #include <QVariant>
 #include <algorithm>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -530,4 +530,4 @@ void RibbonGroup::changeEvent(QEvent *event)
     }
     QWidget::changeEvent(event);
 }
-} // namespace Kites
+} // namespace Atlas

@@ -4,7 +4,7 @@
 class QToolButton;
 class QParallelAnimationGroup;
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -29,4 +29,4 @@ class CollapsibleSection : public QWidget
     QParallelAnimationGroup *m_animation;
 };
 
-} // namespace Kites
+} // namespace Atlas

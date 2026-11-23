@@ -7,7 +7,7 @@
 
 class QSortFilterProxyModel;
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
@@ -47,5 +47,5 @@ class RegisterContainer : public QWidget
     Ui::RegisterContainer *ui;
     RegisterModel *m_registerModel;
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // REGISTERCONTAINER_H

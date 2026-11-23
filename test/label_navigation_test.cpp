@@ -24,7 +24,7 @@
 #include <iostream>
 #include <QTextDocument>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {

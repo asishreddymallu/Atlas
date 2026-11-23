@@ -4,7 +4,7 @@
 #include <QAbstractTableModel>
 #include <memory>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -36,4 +36,4 @@ class RegisterModel : public QAbstractTableModel
     void updateFRegisterValue(size_t regIndex, uint64_t value);
 };
 
-} // namespace Kites
+} // namespace Atlas

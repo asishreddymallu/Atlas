@@ -21,7 +21,7 @@
 
 #include <QRegularExpression>
 
-using namespace Kites;
+using namespace Atlas;
 using EditorCommands::contextAt;
 using EditorCommands::LineContext;
 

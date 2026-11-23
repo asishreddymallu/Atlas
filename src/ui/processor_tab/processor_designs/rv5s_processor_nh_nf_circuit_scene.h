@@ -1,6 +1,6 @@
 #pragma once
 #include "../circuit_scene.h"
-namespace Kites
+namespace Atlas
 {
 class RV5StageVM_NH_NF_CircuitScene : public CircuitScene
 {
@@ -11,4 +11,4 @@ class RV5StageVM_NH_NF_CircuitScene : public CircuitScene
         loadScene(":/circuit_designs/NH_NF_Processor.json");
     }
 };
-} // namespace Kites
+} // namespace Atlas

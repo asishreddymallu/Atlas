@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 RegisterFile::RegisterFile(QObject *parent) : QObject(parent)
 {
@@ -224,4 +224,4 @@ bool IsValidCsr(const std::string &reg)
 {
     return valid_csr_registers.find(reg) != valid_csr_registers.end();
 }
-}//namespace Kites
+}//namespace Atlas

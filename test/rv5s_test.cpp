@@ -6,7 +6,7 @@
 #include "assembler/assembler.h"
 #include "utils/utils.h"
 
-using namespace Kites;
+using namespace Atlas;
 
 // pipeline_test_code.s (restored from 58f9c8d) is addi x1,x1,1 ... addi x1,x1,8.
 // nh-nf has no hazard unit and no forwarding: each addi reads x1 in ID while the two

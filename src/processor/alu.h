@@ -18,7 +18,7 @@
 
 #pragma GCC optimize("no-fast-math")
 
-namespace Kites
+namespace Atlas
 {
 // RISC-V fflags = fcsr[4:0]: NX bit 0, UF 1, OF 2, DZ 3, NV 4. This was the
 // reverse order (known_issues 72).
@@ -381,5 +381,5 @@ class Alu
     void setFlags(bool carry, bool zero, bool negative, bool overflow);
 };
 } // namespace alu
-}//namespace Kites
+}//namespace Atlas
 #endif // ALU_H

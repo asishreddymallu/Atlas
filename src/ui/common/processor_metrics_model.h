@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVariant>
 
-namespace Kites
+namespace Atlas
 {
 /// The run counters, one row each, in the order both tables show them.
 enum class MetricRow
@@ -85,4 +85,4 @@ class ProcessorMetricsModel : public QAbstractTableModel
     ProcessorManager *m_manager{nullptr};
     ProcessorMetrics  m_metrics{};
 };
-} // namespace Kites
+} // namespace Atlas

@@ -5,15 +5,15 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QVariant>
-namespace Kites
+namespace Atlas
 {
 namespace
 {
 // dynamic property carrying the Icon enum value an action was tagged with
-constexpr const char *themedIconProperty = "kitesIconId";
+constexpr const char *themedIconProperty = "atlasIconId";
 // and the logical size its pixmap was rasterised at, so a re-tint can rebuild
 // it at that size instead of silently dropping back to the default
-constexpr const char *themedIconSizeProperty = "kitesIconSize";
+constexpr const char *themedIconSizeProperty = "atlasIconSize";
 constexpr int defaultThemedIconExtent = 20;
 } // namespace
 
@@ -145,4 +145,4 @@ void IconManager::setUpIconPaths()
     m_iconPaths[toIndex(Icon::Copy)]      = ":/icons/copy.svg";
     m_iconPaths[toIndex(Icon::Wires)]     = ":/icons/wires.svg";
 }
-}//namespace Kites
+}//namespace Atlas

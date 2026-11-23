@@ -56,10 +56,10 @@
 #include <thread>
 #include <vector>
 
-using namespace Kites;
-using namespace Kites::test_support;
+using namespace Atlas;
+using namespace Atlas::test_support;
 
-namespace Kites::test_support
+namespace Atlas::test_support
 {
 /// The model's name in test output and in the ctest names gtest_discover_tests
 /// builds, instead of "4-byte object <...>".
@@ -67,7 +67,7 @@ void PrintTo(Model model, std::ostream *os)
 {
     *os << name(model);
 }
-} // namespace Kites::test_support
+} // namespace Atlas::test_support
 
 namespace
 {

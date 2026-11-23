@@ -64,7 +64,7 @@
 #include <QTabBar>
 #include <QToolButton>
 
-using namespace Kites;
+using namespace Atlas;
 
 namespace
 {
@@ -594,7 +594,7 @@ struct PageGroups
     QStringList          captions;
 };
 /// The ribbon actions that deliberately carry no icon, by label. Everything
-/// else on the ribbon must be tagged with kitesIconId so the theme re-tint
+/// else on the ribbon must be tagged with atlasIconId so the theme re-tint
 /// pass reaches it; see EveryRibbonActionWithAnIconCarriesItsThemeTag.
 /// Since Stage 6 the only ribbon actions without an icon are the exclusive
 /// segmented choices. Problems, Search, Copy to Clipboard and Wires Stay
@@ -846,7 +846,7 @@ TEST(RibbonStage2, EveryRibbonButtonStaysOutOfTheTabChain)
 TEST(RibbonStage2, EveryRibbonActionWithAnIconCarriesItsThemeTag)
 {
     // The window-wide re-tint pass walks findChildren<QAction*>() and keys off
-    // kitesIconId, so an icon set any other way would freeze at the theme it
+    // atlasIconId, so an icon set any other way would freeze at the theme it
     // was built under. This also pins the two deliberately icon-less View
     // actions: give either one an icon without tagging it and this fails.
     MainWindow window;

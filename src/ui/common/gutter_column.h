@@ -1,14 +1,14 @@
 #pragma once
 #include <QWidget>
 #include <QTextBlock>
-#include "kites_editor.h"
-namespace Kites
+#include "atlas_editor.h"
+namespace Atlas
 {
 class GutterColumn : public QWidget
 {
     Q_OBJECT
 public:
-    explicit GutterColumn(KitesEditor* editor = nullptr)
+    explicit GutterColumn(AtlasEditor* editor = nullptr)
         : QWidget(editor), m_editor(editor) {};
     virtual QSize sizeHint() const = 0;
 protected:
@@ -26,6 +26,6 @@ protected:
     {
         return static_cast<int>(m_editor->blockBoundingRect(block).height());
     }
-    KitesEditor* m_editor;
+    AtlasEditor* m_editor;
 };
-}// namespace Kites
+}// namespace Atlas

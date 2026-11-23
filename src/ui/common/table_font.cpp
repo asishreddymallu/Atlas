@@ -3,7 +3,7 @@
 #include "ui/theme/type_scale.h"
 #include <QObject>
 
-namespace Kites
+namespace Atlas
 {
 namespace
 {
@@ -33,4 +33,4 @@ const QFont &tableNumericFont()
     static TableFontCache cache;
     return cache.font;
 }
-} // namespace Kites
+} // namespace Atlas

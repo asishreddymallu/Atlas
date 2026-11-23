@@ -1,15 +1,15 @@
 #include "line_number_gutter_column.h"
-#include "kites_editor.h"
+#include "atlas_editor.h"
 #include "ui/theme/theme_manager.h"
 #include <QPainter>
-namespace Kites
+namespace Atlas
 {
-LineNumberGutterColumn::LineNumberGutterColumn(KitesEditor* editor)
+LineNumberGutterColumn::LineNumberGutterColumn(AtlasEditor* editor)
     : GutterColumn(editor)
 {
     connect(&ThemeManager::getInstance(), &ThemeManager::editorThemeChangedSignal, this,
             [this](const QString &) { update(); });
-    connect(editor, &KitesEditor::cursorPositionChanged, this,
+    connect(editor, &AtlasEditor::cursorPositionChanged, this,
             [this]() { update(); });
 }
 
@@ -52,4 +52,4 @@ void LineNumberGutterColumn::paintEvent(QPaintEvent *event)
         ++blockNumber;
     }
 }
-}//namespace Kites
+}//namespace Atlas

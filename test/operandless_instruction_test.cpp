@@ -11,13 +11,13 @@
 namespace
 {
 
-std::unique_ptr<Kites::RVSSProcessor> runSource(const std::string &source)
+std::unique_ptr<Atlas::RVSSProcessor> runSource(const std::string &source)
 {
-    Kites::setupVmStateDirectory();
+    Atlas::setupVmStateDirectory();
 
-    auto vm = std::make_unique<Kites::RVSSProcessor>();
+    auto vm = std::make_unique<Atlas::RVSSProcessor>();
     std::istringstream stream(source);
-    Kites::AssembledProgram program = Kites::assemble(stream);
+    Atlas::AssembledProgram program = Atlas::assemble(stream);
     vm->LoadProgram(program);
     vm->DebugRun();
     return vm;

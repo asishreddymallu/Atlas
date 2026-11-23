@@ -1,9 +1,9 @@
 #ifndef MEMORYTAB_H
 #define MEMORYTAB_H
 
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include "memory_model.h"
-namespace Kites
+namespace Atlas
 {
 
 namespace Ui
@@ -11,7 +11,7 @@ namespace Ui
 class MemoryTab;
 }
 
-class MemoryTab : public KitesTab
+class MemoryTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -55,5 +55,5 @@ class MemoryTab : public KitesTab
     Ui::MemoryTab *ui;
     MemoryModel *m_memoryModel = nullptr;
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // MEMORYTAB_H

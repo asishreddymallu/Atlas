@@ -5,7 +5,7 @@
 
 #include "cache_replacement_policy.h"
 
-namespace Kites
+namespace Atlas
 {
 class CustomPolicyEngine;
 
@@ -43,4 +43,4 @@ class CustomReplacementPolicy : public CacheReplacementPolicy
     std::unique_ptr<CustomPolicyEngine> m_engine_;
     std::string custom_policy_script_path_;
 };
-}//namespace Kites
+}//namespace Atlas

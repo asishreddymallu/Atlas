@@ -4,7 +4,7 @@
 #include <QStyledItemDelegate>
 
 
-namespace Kites
+namespace Atlas
 {
 
 class CacheGridDelegate : public QStyledItemDelegate
@@ -43,4 +43,4 @@ class CacheGridDelegate : public QStyledItemDelegate
     }
 
 };
-} // namespace Kites
+} // namespace Atlas

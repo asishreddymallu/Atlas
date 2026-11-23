@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>Kites::AddPseudoDialog</class>
- <widget class="QDialog" name="Kites::AddPseudoDialog">
+ <class>Atlas::AddPseudoDialog</class>
+ <widget class="QDialog" name="Atlas::AddPseudoDialog">
   <property name="geometry">
    <rect>
     <x>0</x>

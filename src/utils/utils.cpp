@@ -17,7 +17,7 @@
 #include <vector>
 #include <stdexcept>
 
-namespace Kites
+namespace Atlas
 {
 void setupVmStateDirectory()
 {
@@ -523,4 +523,4 @@ void SetupConfigFile()
     config_file << "branch_prediction_table_associativity=0\n";
     config_file.close();
 }
-}//namespace Kites
+}//namespace Atlas

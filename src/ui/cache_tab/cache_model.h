@@ -4,7 +4,7 @@
 #include <cstdint>
 
 
-namespace Kites
+namespace Atlas
 {
 
 class CacheModel : public QAbstractTableModel
@@ -46,4 +46,4 @@ private:
     int m_last_hit_row = -1;
     // bool m_hit_highlight_pending = false;
 };
-} // namespace Kites
+} // namespace Atlas

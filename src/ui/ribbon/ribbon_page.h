@@ -5,7 +5,7 @@
 
 class QHBoxLayout;
 
-namespace Kites
+namespace Atlas
 {
 class RibbonGroup;
 
@@ -54,4 +54,4 @@ class RibbonPage : public QWidget
     QList<RibbonGroup *> m_groups;
     bool                 m_compact {false};
 };
-} // namespace Kites
+} // namespace Atlas

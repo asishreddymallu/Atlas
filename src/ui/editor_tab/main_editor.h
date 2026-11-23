@@ -1,6 +1,6 @@
 #pragma once
 #include "ui/common/syntax_highlighter.h"
-#include "ui/common/kites_editor.h"
+#include "ui/common/atlas_editor.h"
 #include "ui/editor_tab/editor_commands.h"
 #include "ui/editor_tab/completion_model.h"
 #include "ui/editor_tab/label_index.h"
@@ -13,7 +13,7 @@
 #include <QVariantMap>
 #include <map>
 
-namespace Kites
+namespace Atlas
 {
 class CompletionPopup;
 class FindBar;
@@ -21,7 +21,7 @@ class ReferencesBar;
 class RenameBar;
 class GotoLineBar;
 
-class Editor : public KitesEditor
+class Editor : public AtlasEditor
 {
     friend class BreakPointGutterColumn;
 public:
@@ -182,7 +182,7 @@ protected:
     void leaveEvent(QEvent *event) override;
     /// K7: focus loss closes the suggestion list.
     void focusOutEvent(QFocusEvent *event) override;
-    /// The Input and Expanded panes zoom; see KitesEditor::zoomEnabled().
+    /// The Input and Expanded panes zoom; see AtlasEditor::zoomEnabled().
     bool zoomEnabled() const override { return true; }
 
 private slots:
@@ -406,4 +406,4 @@ private:
     bool m_isTextEditor; // to differentiate between text editor and disassembly viewer
     bool m_breakpointInteractionEnabled = true;
 };
-} // namespace Kites
+} // namespace Atlas

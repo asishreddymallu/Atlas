@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
     
 
@@ -319,5 +319,5 @@ uint32_t generateFDSTypeMachineCode(const ICUnit &block);
  */
 std::vector<uint32_t>
 generateMachineCode(const std::vector<std::pair<ICUnit, bool>> &IntermediateCode);
-} // namespace Kites
+} // namespace Atlas
 #endif // CODE_GENERATOR_H

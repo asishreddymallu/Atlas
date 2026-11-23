@@ -3,7 +3,7 @@
 #include <QPainterPath>
 #include "ui/theme/theme_manager.h"
 
-namespace Kites
+namespace Atlas
 {
 class BaseComponent : public QGraphicsPathItem
 {
@@ -26,4 +26,4 @@ class BaseComponent : public QGraphicsPathItem
     QGraphicsTextItem *m_label = nullptr;
     QString m_name;
 };
-} // namespace Kites
+} // namespace Atlas

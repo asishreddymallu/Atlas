@@ -6,7 +6,7 @@
 #include <QColor>
 #include <QWidget>
 
-namespace Kites
+namespace Atlas
 {
 
 /**
@@ -106,4 +106,4 @@ class CompletionPopup : public QWidget
     bool       m_detailDropped{false};
 };
 
-} // namespace Kites
+} // namespace Atlas

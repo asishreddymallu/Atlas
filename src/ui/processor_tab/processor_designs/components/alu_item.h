@@ -2,7 +2,7 @@
 #define ALU_H
 #include "base_component.h"
 #include <QJsonObject>
-namespace Kites
+namespace Atlas
 {
 class ALUItem : public BaseComponent
 {
@@ -35,5 +35,5 @@ class ALUItem : public BaseComponent
         return obj;
     }
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // ALU_H

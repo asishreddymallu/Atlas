@@ -1,18 +1,18 @@
 #ifndef COMPILERTAB_H
 #define COMPILERTAB_H
 
-#include "ui/common/kites_tab.h"
+#include "ui/common/atlas_tab.h"
 #include <QWidget>
 
 
-namespace Kites
+namespace Atlas
 {
 namespace Ui
 {
 class CompilerTab;
 }
 
-class CompilerTab : public KitesTab
+class CompilerTab : public AtlasTab
 {
     Q_OBJECT
 
@@ -45,5 +45,5 @@ class CompilerTab : public KitesTab
     Ui::CompilerTab *ui;
     QString cleanAssembly(const QString &rawAssembly);
 };
-} // namespace Kites
+} // namespace Atlas
 #endif // COMPILERTAB_H

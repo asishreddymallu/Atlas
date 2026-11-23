@@ -31,7 +31,7 @@
 #include <mutex>
 #include <vector>
 
-namespace Kites
+namespace Atlas
 {
 enum class TraceStage : uint8_t
 {
@@ -203,4 +203,4 @@ struct TraceTotals
 TraceTotals traceTotals(const std::vector<TraceCycle> &records);
 /// Adds (sign +1) or removes (sign -1) one record's share of the totals.
 void addToTotals(TraceTotals &totals, const TraceCycle &record, int sign);
-} // namespace Kites
+} // namespace Atlas

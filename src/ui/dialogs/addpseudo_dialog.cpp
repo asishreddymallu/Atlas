@@ -4,7 +4,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 
-namespace Kites
+namespace Atlas
 {
 AddPseudoDialog::AddPseudoDialog(QWidget *parent, bool isUpdate)
     : QDialog(parent), ui(new Ui::AddPseudoDialog), m_isUpdate(isUpdate)
@@ -63,4 +63,4 @@ void AddPseudoDialog::parsePseudoInstruction()
 
     accept();
 }
-} // namespace Kites
+} // namespace Atlas

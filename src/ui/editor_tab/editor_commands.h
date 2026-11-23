@@ -2,7 +2,7 @@
 #include <QList>
 #include <QString>
 
-namespace Kites
+namespace Atlas
 {
 /**
  * @brief The text transformations behind the editor's line commands.
@@ -102,7 +102,7 @@ struct LineRange
  * ordinary text/plain, so pasting into any other application is unaffected
  * and pasting text copied from anywhere else behaves normally.
  */
-inline constexpr auto lineCopyMimeType = "application/x-kites-line-copy";
+inline constexpr auto lineCopyMimeType = "application/x-atlas-line-copy";
 
 /// One level of indentation, as the editor writes it: a tab character.
 /// Plain Tab has always inserted one and this does not change that.
@@ -110,7 +110,7 @@ extern const QString indentUnit;
 
 /// How many columns a tab stands for, and therefore how many leading spaces
 /// one outdent removes when a line is indented with spaces instead. The same
-/// 4 that KitesEditor turns into a tab stop distance, named once.
+/// 4 that AtlasEditor turns into a tab stop distance, named once.
 int indentWidth();
 
 LineRange linesTouched(const QString &text, int anchor, int position);
@@ -267,4 +267,4 @@ BracketPair bracketAt(const QString &text, int position);
  */
 Edit toggleComment(const QString &text, int anchor, int position);
 } // namespace EditorCommands
-} // namespace Kites
+} // namespace Atlas

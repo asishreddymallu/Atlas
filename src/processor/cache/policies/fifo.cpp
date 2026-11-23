@@ -1,6 +1,6 @@
 #include "processor/cache/policies/fifo.h"
 
-namespace Kites
+namespace Atlas
 {
 std::string_view FIFOReplacementPolicy::name() const
 {
@@ -73,4 +73,4 @@ void FIFOReplacementPolicy::onEvict(const CacheLineView &line, const CacheReques
     (void)request;
     (void)context;
 }
-}// namespace Kites
+}// namespace Atlas

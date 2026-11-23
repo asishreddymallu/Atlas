@@ -42,7 +42,7 @@
 #include <functional>
 #include <string>
 
-using namespace Kites;
+using namespace Atlas;
 
 // QString compared as std::string, so a failure prints the text.
 #define EXPECT_EQ_Q(a, b) EXPECT_EQ((a).toStdString(), std::string(b))

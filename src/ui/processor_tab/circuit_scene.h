@@ -12,7 +12,7 @@
 #include <filesystem>
 
 
-namespace Kites
+namespace Atlas
 {
 class CircuitScene : public QGraphicsScene
 {
@@ -119,7 +119,7 @@ class CircuitScene : public QGraphicsScene
   public slots:
     void updateCircuitState(const QList<QString> &wireList);
     /// The same, with each wire's stage and the stage table's cells.
-    void updateCircuitSnapshot(const Kites::CircuitSnapshot &snapshot);
+    void updateCircuitSnapshot(const Atlas::CircuitSnapshot &snapshot);
     // maybe later we merge this two functions but for now this will have to do
 };
-} // namespace Kites
+} // namespace Atlas
