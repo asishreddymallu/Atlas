@@ -9,7 +9,10 @@
 #include "processor/processor_manager.h"
 #include "ui/cache_tab/cache_tab.h"
 #include "ui/compiler_tab/compiler_tab.h"
+#include "scheduler_gate/reorder_gate.h"
+#include "ui/dialogs/about_dialog.h"
 #include "ui/dialogs/processor_dialog.h"
+#include "ui/dialogs/reorder_dialog.h"
 #include "ui/dialogs/settings_dialog.h"
 #include "ui/editor_tab/editor_tab.h"
 #include "ui/memory_tab/memory_tab.h"
@@ -22,6 +25,7 @@
 #include "ui_main_window.h"
 #include "utils/utils.h"
 #include <QActionGroup>
+#include <QApplication>
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -662,6 +666,45 @@ void MainWindow::setUpEditorPage()
     // Start in step with whatever the tab already shows.
     (editorTab->isExpandedView() ? m_expandedViewAction : m_editorViewAction)->setChecked(true);
     m_editorViewAction->setEnabled(!editorTab->isExpandedLocked());
+
+    // The File menu's own action, created in setUpMenubar().
+    RibbonGroup *schedule = page->addGroup("Schedule");
+    schedule->addLarge(m_suggestReorderAction);
+}
+
+void MainWindow::showReorderSuggestion()
+{
+    auto *editorTab = dynamic_cast<EditorTab *>(m_tabs[TabIndex::EditorTabIndex]);
+    if (!editorTab)
+        return;
+
+    const std::string   source = editorTab->getRawText();
+    const ProcessorType type   = m_processorManager->getProcessorType();
+
+    // Runs the original and the suggestion headless on a processor of its
+    // own, capped at kReorderCycleCap cycles each; the loaded one is untouched.
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const ReorderSuggestion suggestion = Atlas::suggestReordering(source, type);
+    QApplication::restoreOverrideCursor();
+
+    if (!suggestion.offered())
+    {
+        QMessageBox box(this);
+        box.setWindowTitle("Suggest reordering");
+        box.setIcon(QMessageBox::Information);
+        box.setText("No safe improvement found");
+        box.setInformativeText(QString::fromStdString(reorderStatusReason(suggestion.status)));
+        box.exec();
+        return;
+    }
+
+    ReorderDialog dialog(QString::fromStdString(source),
+                         QString::fromStdString(suggestion.suggestedSource),
+                         QString::fromLatin1(processorDescription(type)),
+                         suggestion.originalCycles, suggestion.suggestedCycles,
+                         editorTab->isWritable(), this);
+    if (dialog.exec() == QDialog::Accepted)
+        editorTab->replaceRawTextAsOneEdit(dialog.suggestedSource());
 }
 
 void MainWindow::setUpMemoryPage()
@@ -880,6 +923,16 @@ void MainWindow::setUpMenubar()
                     exportTrace(path);
             });
     fileMenu->addAction(exportTraceAction);
+    // The reordering scheduler (by Nandan Nihal, CS25BTECH11014) behind its
+    // measured safety gate. Also on the Editor page's Schedule group.
+    m_suggestReorderAction = new QAction("Suggest reordering", this);
+    m_suggestReorderAction->setObjectName("suggestReorderAction");
+    setThemedIcon(m_suggestReorderAction, Icon::Reorder, largeIconSize);
+    setActionHint(m_suggestReorderAction,
+                  "Suggest a faster, equivalent order for this program's instructions");
+    connect(m_suggestReorderAction, &QAction::triggered, this,
+            &MainWindow::showReorderSuggestion);
+    fileMenu->addAction(m_suggestReorderAction);
     fileMenu->addSeparator();
     fileMenu->addAction(exitAction);
     ////////////Setting Menu////////////////
@@ -935,6 +988,12 @@ void MainWindow::setUpMenubar()
     settingsMenu->addAction(advancedSettingsAction);
     ///////////Help Menu///////////////////
     helpMenu->addAction(aboutAction);
+    connect(aboutAction, &QAction::triggered, this,
+            [this]()
+            {
+                AboutDialog dialog(this);
+                dialog.exec();
+            });
 
     connect(openAction, &QAction::triggered, this,
             [this]()

@@ -96,6 +96,9 @@ private:
     bool tryParseAndLoadProgram();
     void run(bool startPaused = false);
     void processorChangeDialog();
+    /// Runs the reordering safety gate on the editor's program for the
+    /// selected processor, and shows the suggestion or why there is none.
+    void showReorderSuggestion();
     Ui::MainWindow *ui;
 
     // held so Save can be disabled while the editor is read-only (i.e. while a
@@ -113,6 +116,8 @@ private:
     // can show the menu's own action rather than a second checkbox for the
     // same setting. Created where it always was, in setUpMenubar().
     QAction           *m_wiresStayActiveAction {nullptr};
+    // File > Suggest reordering, also on the Editor page's Schedule group.
+    QAction           *m_suggestReorderAction {nullptr};
     // The execution controls. They used to be locals in setUpToolBar(), and
     // runFinishedSlot() recovered them by walking findChildren<QToolBar*>()[0]
     // and comparing action->text() - text those same handlers rewrite at

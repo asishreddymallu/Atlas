@@ -144,5 +144,6 @@ void IconManager::setUpIconPaths()
     m_iconPaths[toIndex(Icon::Problems)]  = ":/icons/problems.svg";
     m_iconPaths[toIndex(Icon::Copy)]      = ":/icons/copy.svg";
     m_iconPaths[toIndex(Icon::Wires)]     = ":/icons/wires.svg";
+    m_iconPaths[toIndex(Icon::Reorder)]   = ":/icons/reorder.svg";
 }
 }//namespace Atlas

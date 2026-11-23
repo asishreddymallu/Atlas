@@ -78,6 +78,12 @@ public:
     int sourceLineCount() const;
     std::string getRawText();
     void setRawText(const QString &text);
+    /// Replaces the whole source as ONE undoable edit, so a single Undo
+    /// brings the previous text back (setRawText() clears the history).
+    /// Returns false, changing nothing, while the editor is read-only.
+    bool replaceRawTextAsOneEdit(const QString &text);
+    /// False while a run holds the editor read-only.
+    bool isWritable() const;
     void resetErrorLines();
     void highlightLines(const std::vector<std::pair<int,std::string>> &editorLines, 
       const std::vector<std::pair<int,std::string>> &disassemblyLines);

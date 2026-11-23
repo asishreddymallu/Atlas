@@ -34,6 +34,7 @@ enum class Icon
     Problems,
     Copy,
     Wires,
+    Reorder,
     IconCount
 };
 

@@ -1,5 +1,6 @@
 #include "editor_tab.h"
 #include "custom_pseudo_manager/custom_pseudo_manager.h"
+#include "ui/dialogs/reorder_dialog.h"
 #include "ui/theme/theme_manager.h"
 #include "ui_editor_tab.h"
 #include <QFile>
@@ -170,6 +171,19 @@ std::vector<uint64_t> EditorTab::getBreakpoints() const
 void EditorTab::setRawText(const QString &text)
 {
     m_editor->setPlainText(text);
+}
+
+bool EditorTab::replaceRawTextAsOneEdit(const QString &text)
+{
+    if (m_editor->isReadOnly())
+        return false;
+    replaceDocumentAsOneEdit(*m_editor, text);
+    return true;
+}
+
+bool EditorTab::isWritable() const
+{
+    return !m_editor->isReadOnly();
 }
 
 void EditorTab::resetErrorLines()

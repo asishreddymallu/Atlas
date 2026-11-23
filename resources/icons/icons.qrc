@@ -23,5 +23,6 @@
         <file>problems.svg</file>
         <file>copy.svg</file>
         <file>wires.svg</file>
+        <file>reorder.svg</file>
     </qresource>
 </RCC>

@@ -610,7 +610,7 @@ const QStringList kIconlessRibbonActions = {
 };
 
 const QList<PageGroups> kPageGroups = {
-    {MainWindow::EditorTabIndex, {"View"}},
+    {MainWindow::EditorTabIndex, {"View", "Schedule"}},
     {MainWindow::MemoryTabIndex, {"Find", "Display"}},
     {MainWindow::ProcessorTabIndex, {"Datapath", "Registers"}},
     {MainWindow::CacheTabIndex, {"Level"}},
@@ -1417,6 +1417,7 @@ const QList<ButtonSpec> kPersistentButtons = {
 
 const QList<ButtonSpec> kPageButtons = {
     {"View", "Editor", kSmall},           {"View", "Expanded", kSmall},
+    {"Schedule", "Suggest reordering", kLarge},
     {"Find", "Search", kSmall},           {"Display", "Hex", kSmall},
     {"Display", "Binary", kSmall},        {"Display", "Decimal", kSmall},
     {"Datapath", "Wires Stay Active", kSmall},
