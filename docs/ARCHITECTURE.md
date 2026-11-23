@@ -84,6 +84,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/processor/rv5s/` | Five-stage pipelined model, in four variants by hazard-detection and forwarding (`h_f`, `h_nf`, `nh_f`, `nh_nf`), plus the hazard detection unit. |
 | `src/processor/cache/` | Cache hierarchy, configuration, and replacement policies (`fifo`, `lru`, and the Lua-backed `custom_policy` engine). |
 | `src/scheduler/` | The reordering scheduler (original author: Nandan Nihal, CS25BTECH11014): `basic_block_scheduler.*` (basic blocks, dependency edges, list scheduling) and `reorder_apply.*` (moves source lines). Its own Qt-free static library, `atlas_scheduler`, kept out of `atlas_core`'s globs. See `docs/scheduler.md`. |
+| `src/cache_lab/` | Cache lab: `lab_presets.*` (the lab setups, shared by the Cache tab and the tests), `lab_record.*` (the Qt-free `atlas.lab-record/1` JSON builder) and `lab_record_capture.*` (fills it from live caches). See `docs/cache_lab.md`. |
 | `src/scheduler_gate/` | `reorder_gate.*`: the measured safety gate in front of Suggest reordering. It runs the original and the suggestion headless and offers the suggestion only if both are equivalent and measured faster. |
 | `src/common/` | Shared value types: `assembled_program.h`, `instructions.*`, `register_names.h`, `diagnostic_severity.h`, `undo_buffer.h`, and `globals.*` (runtime file paths). |
 | `src/language_service/` | Editor-facing language support: the `Diagnostic` model (`diagnostic.h/.cpp`), `LanguageService`, and `CompletionProvider` (static RV32/64 autocomplete data). |
@@ -92,7 +93,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/profiler/` | `Profiler`: maps instructions to source lines and accumulates per-line execution counts and instruction types as the processor is clocked. |
 | `src/command_handler/` | `Command`/`ReplState` types and `ExecuteCommand`, driving the CLI REPL against a `ProcessorManager`. |
 | `src/elf_util/` | ELF header/section structs and `generateElfFile()` for writing an assembled program out as ELF. |
-| `src/utils/` | File I/O and string helpers; `to_index.h`. |
+| `src/utils/` | File I/O and string helpers; `to_index.h`; `json_escape.*` (the Qt-free JSON string escaping the vm_state dumps and the lab record share). |
 | `src/ui/` | All Qt widgets. One subdirectory per tab, plus shared pieces. |
 
 ### `src/ui/` subtrees
@@ -104,7 +105,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/ui/editor_tab/` | Source editor tab: `main_editor.*` (the editor widget), `disassembly_editor.h`, `break_point_gutter_column.h`, and `editor_tab.*` which owns the Input/Expanded panes and the diagnostic squiggles. |
 | `src/ui/memory_tab/` | Memory view: `memory_model.*`, `memory_table_view.*`, `memory_tab.*`. |
 | `src/ui/register_table/` | Register panel: `register_model.*` and `register_container.*`. |
-| `src/ui/cache_tab/` | Cache view: `cache_model.*`, `cache_grid_delegate.h`, `cache_config_widget.*` (one per cache level) and `cache_tab.*`. |
+| `src/ui/cache_tab/` | Cache view: `cache_model.*`, `cache_grid_delegate.h`, `cache_config_widget.*` (one per cache level) and `cache_tab.*` (with the Lab setup bar and Export lab record). The live cache-line view: `cache_live_observer.*` (follows every access on the accessing thread; never reads the cache from the GUI during a run), `cache_set_model.*` (set x way table) and `cache_live_view.*`. See `docs/cache_lab.md`. |
 | `src/ui/processor_tab/` | Datapath view: `circuit_scene.*`, `circuit_view.*`, `vm_state_table_model.*`, and `processor_designs/` holding the per-model scene definitions and the drawable components (`alu_item.h`, `mux_item.h`, `wire_item.*`, …). |
 | `src/ui/profiler_tab/` | Profiler view: `profiler_editor.*`, `instruction_type_count_model.*`, and the execution-count / instruction-type gutter columns. |
 | `src/ui/compiler_tab/` | C-to-assembly compiler front end (`compiler_tab.*`) and its read-only `compiler_editor.h`. |
