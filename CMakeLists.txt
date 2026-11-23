@@ -54,6 +54,13 @@ file(GLOB_RECURSE UI_FILES CONFIGURE_DEPENDS "${SRC_DIR}/*.ui")
 file(GLOB_RECURSE HEADER_FILES CONFIGURE_DEPENDS
     "${SRC_DIR}/*.h")
 
+# src/scheduler/ is its own Qt-free library (atlas_scheduler, below), so it
+# is kept out of atlas_core's globs.
+list(FILTER SRC_FILES EXCLUDE REGEX ".*/src/scheduler/.*")
+list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/scheduler/.*")
+file(GLOB SCHEDULER_SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.cpp")
+file(GLOB SCHEDULER_HEADER_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.h")
+
 list(APPEND SRC_FILES ${LUA_SRC_FILES})
 
 ##############resourecs setup#################
@@ -72,6 +79,21 @@ if(WIN32)
     set(APP_RESOURCES ${APP_RESOURCES} resources/icons/app_icon.rc)
 endif()
 
+# The code-reordering scheduler (original author: Nandan Nihal,
+# CS25BTECH11014). Qt-free on purpose: it links no Qt and gets no Qt include
+# paths, so a Qt include in it fails to compile. It reads the assembler's
+# Qt-free headers and calls instruction_set::isValid*() from atlas_core's
+# common/instructions.cpp, which every consumer of this library also links.
+add_library(atlas_scheduler STATIC
+    ${SCHEDULER_HEADER_FILES}
+    ${SCHEDULER_SRC_FILES}
+)
+set_target_properties(atlas_scheduler PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(atlas_scheduler PUBLIC ${SRC_DIR})
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(atlas_scheduler PRIVATE -Wall -Wextra -pedantic)
+endif()
+
 add_library(atlas_core STATIC
     ${HEADER_FILES}
     ${SRC_FILES}
@@ -85,6 +107,7 @@ target_include_directories(atlas_core PUBLIC
 )
 
 target_link_libraries(atlas_core
+    atlas_scheduler
     Qt::Core
     Qt::Widgets
     Qt::Network
