@@ -73,7 +73,7 @@ void ProcessorManager::changeProcessor(ProcessorType vmType)
     // been seen; it is one line to make it safe regardless.
     if (m_currentProcessor && !m_currentProcessor->StopAndReset())
     {
-        qWarning("Kites: processor did not stop; not switching processor");
+        qWarning("Atlas: processor did not stop; not switching processor");
         return;
     }
     m_currentProcessorType = vmType;
@@ -467,7 +467,7 @@ bool ProcessorManager::reset()
     // onto a processor that is still running - the original race.
     if (!m_currentProcessor->StopAndReset())
     {
-        qWarning("Kites: the processor did not stop within the timeout; "
+        qWarning("Atlas: the processor did not stop within the timeout; "
                  "nothing was reset and nothing should be loaded");
         return false;
     }

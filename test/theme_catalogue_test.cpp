@@ -46,7 +46,7 @@ const QString kDir = QStringLiteral("../resources/themes");
 
 const QStringList kNewThemes = {"cobalt2-theme-official", "night-owl", "monokai-dark-soda",
                                 "remedy", "zed-theme", "cpp-light-theme"};
-const QStringList kHouseThemes = {"kites-dark", "kites-light", "tokyo-night", "tokyo-night-storm"};
+const QStringList kHouseThemes = {"atlas-dark", "atlas-light", "tokyo-night", "tokyo-night-storm"};
 
 struct Theme
 {
@@ -269,7 +269,7 @@ TEST(ThemeCatalogue, TimingGridCellsAreDistinctAndTheirMarksVisible)
             {
                 // Known (T8): three house themes give ID and MEM the same
                 // colour (success == cacheHit); the cell labels tell them apart.
-                const bool knownSame = !t.isNew() && a == 1 && b == 3 && t.id != "kites-dark";
+                const bool knownSame = !t.isNew() && a == 1 && b == 3 && t.id != "atlas-dark";
                 if (knownSame)
                     EXPECT_EQ(accents[a], accents[b]) << n << " (the known exception no longer holds: update it)";
                 else
@@ -338,8 +338,8 @@ TEST(ThemeCatalogue, PreferencesAppliesSavesAndRestores)
         global->setCurrentIndex(index);
         QApplication::processEvents();
         EXPECT_EQ(ThemeManager::getInstance().currentThemeId(), id);
-        // Saved in Kites.conf, as a restart reads it.
-        QSettings saved("Kites", "Kites");
+        // Saved in Atlas.conf, as a restart reads it.
+        QSettings saved("Atlas", "Atlas");
         saved.sync();
         EXPECT_EQ(saved.value("theme/id").toString(), id);
         // ... and a restart restores it.

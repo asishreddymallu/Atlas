@@ -93,7 +93,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 // ui(new Ui::MainWindow)
 {
     // ui->setuoUi(this);
-    setWindowTitle("Kites RISC-V Simulator");
+    setWindowTitle("Atlas RISC-V Simulator");
     setWindowIcon(QIcon(":/icons/atlas.png"));
     ThemeManager::getInstance(); // applies the persisted (or default) theme before any UI is built
     setupVmStateDirectory();
@@ -1239,7 +1239,7 @@ MainWindow::~MainWindow()
     // to do but warn - StopAndReset has already declined to clear state
     // under a live worker, which is the safe half.
     if (!m_processorManager->stop())
-        qWarning("Kites: processor did not stop during shutdown");
+        qWarning("Atlas: processor did not stop during shutdown");
     if(m_processorThread->isRunning())
     {
         m_processorThread->quit();

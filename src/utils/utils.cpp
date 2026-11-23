@@ -27,7 +27,7 @@ void setupVmStateDirectory()
     if (ec)
     {
         throw std::runtime_error(
-            "Unable to create Kites VM state directory: " +
+            "Unable to create Atlas VM state directory: " +
             globals::vm_state_directory.string() +
             " (" + ec.message() + ")");
     }

@@ -1,8 +1,8 @@
 <RCC>
     <qresource prefix="/themes">
         <file>template.qss</file>
-        <file>kites_dark.json</file>
-        <file>kites_light.json</file>
+        <file>atlas_dark.json</file>
+        <file>atlas_light.json</file>
         <file>tokyo_night.json</file>
         <file>tokyo_night_storm.json</file>
         <file>cobalt2_theme_official.json</file>

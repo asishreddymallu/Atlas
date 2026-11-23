@@ -15,7 +15,7 @@ constexpr const char *kTimingOverlayHeightKey = "timingOverlay/height";
 constexpr int kDefaultEditorFontSize = 11;
 } // namespace
 
-AppSettings::AppSettings() : m_settings("Kites", "Kites")
+AppSettings::AppSettings() : m_settings("Atlas", "Atlas")
 {
 }
 

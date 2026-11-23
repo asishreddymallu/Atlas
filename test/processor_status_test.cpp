@@ -3,7 +3,7 @@
  * @brief The status bar says which processor is loaded.
  *
  * Before this stage nothing in the window chrome did: the title is the
- * fixed "Kites RISC-V Simulator" (`main_window.cpp:91`) and the status
+ * fixed "Atlas RISC-V Simulator" (`main_window.cpp:91`) and the status
  * bar held one permanent QLabel reading "Ready". The only way to find out
  * which of the five models was loaded was to reopen the chooser.
  *

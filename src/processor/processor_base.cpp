@@ -226,7 +226,7 @@ void ProcessorBase::RequestStop()
     // the obvious fix deadlock.
     if (!StopAndReset())
     {
-        qWarning("Kites: the processor did not stop within the timeout; "
+        qWarning("Atlas: the processor did not stop within the timeout; "
                  "state left untouched rather than cleared under a running worker");
     }
 }

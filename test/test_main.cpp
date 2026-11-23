@@ -16,8 +16,8 @@ namespace
 /**
  * @brief Points this process's settings at a throwaway directory.
  *
- * The product reads and writes QSettings("Kites", "Kites"), which on Linux
- * is ~/.config/Kites/Kites.conf - the developer's REAL file. Several tests
+ * The product reads and writes QSettings("Atlas", "Atlas"), which on Linux
+ * is ~/.config/Atlas/Atlas.conf - the developer's REAL file. Several tests
  * call FontManager::setSize() and ThemeManager::setTheme(), and those write
  * straight through. That is not hypothetical: a harness sweep once left
  * editor/fontSize=3 behind, and the next run of atlas_test read it and
@@ -46,13 +46,13 @@ namespace
  */
 bool seedSandboxConfig(const QString &configHome)
 {
-    const QString appDir = configHome + "/Kites";
+    const QString appDir = configHome + "/Atlas";
     if (!QDir().mkpath(appDir))
         return false;
 
     // The known starting point. Every test that depends on the configured
     // font size or theme starts from exactly this, on every machine.
-    QFile file(appDir + "/Kites.conf");
+    QFile file(appDir + "/Atlas.conf");
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text))
         return false;
     QTextStream out(&file);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[])
 
     // ── Settings sandbox. Before QApplication, and before anything can
     //    construct the AppSettings singleton.
-    QTemporaryDir sandbox(QDir::tempPath() + "/kites-test-config-XXXXXX");
+    QTemporaryDir sandbox(QDir::tempPath() + "/atlas-test-config-XXXXXX");
     if (!sandbox.isValid())
     {
         QTextStream(stderr) << "could not create a settings sandbox; refusing to "

@@ -12,7 +12,7 @@ namespace Atlas
  * @brief In-process "language service" for the assembly editor: live diagnostics
  * (real assembler errors, not regex) and autocomplete candidates. No external
  * process, no JSON-RPC - see docs/plan for why (no reliable RISC-V LSP server
- * to depend on, and Kites already owns a real assembler).
+ * to depend on, and Atlas already owns a real assembler).
  */
 class LanguageService : public QObject
 {

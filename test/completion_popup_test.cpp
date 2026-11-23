@@ -573,7 +573,7 @@ TEST(CompletionContrast, EveryColourClearsFourAndAHalfOnEveryTheme)
     };
 
     int failures = 0;
-    for (const QString &theme : {"kites-dark", "kites-light", "tokyo-night",
+    for (const QString &theme : {"atlas-dark", "atlas-light", "tokyo-night",
                                  "tokyo-night-storm"})
     {
         ThemeManager::getInstance().setTheme(theme);

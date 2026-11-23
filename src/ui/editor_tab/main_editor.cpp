@@ -653,7 +653,7 @@ void Editor::openFind(bool withReplace)
         // while the bar is open has to rebuild them AND repaint the
         // highlights - an extra selection keeps the format it was given, so
         // without this the matches keep the old theme's colour. Measured:
-        // after switching kites-dark to kites-light the wash was still the
+        // after switching atlas-dark to atlas-light the wash was still the
         // dark one, 0 pixels of the new colour on a match.
         //
         // Both signals: the wash is mixed from the EDITOR background and the

@@ -32,7 +32,7 @@ namespace
  *   * it is locale-INDEPENDENT by specification. std::stod, std::stof,
  *     std::to_string, scanf and friends all follow the C locale, and
  *     QApplication's constructor calls setlocale(LC_ALL, ""), so in a
- *     running Kites the C locale is the user's. Under a comma-decimal
+ *     running Atlas the C locale is the user's. Under a comma-decimal
  *     locale the old code read `0.1` as 0.
  *   * it is correctly rounded, from the decimal digits.
  *   * it reports an out-of-range literal instead of THROWING, which is

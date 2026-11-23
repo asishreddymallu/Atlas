@@ -14,7 +14,7 @@
  * "now supported, update the JSON" rather than passing quietly.
  *
  * The file is read from the FILESYSTEM, not from `:/instructions/...`.
- * `qt6_add_resources()` gives the compiled resources to the `Kites`
+ * `qt6_add_resources()` gives the compiled resources to the `Atlas`
  * executable; `atlas_core` does not get them and `atlas_test` links
  * `atlas_core`, so no `:/` path resolves here.
  * `ResourcePathIsNotReachableFromTests` pins that.

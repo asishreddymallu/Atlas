@@ -6,7 +6,7 @@ class QWheelEvent;
 #include <QTextEdit>
 namespace Atlas
 {
-/// How many columns a tab stands for in every Kites editor. It sets the tab
+/// How many columns a tab stands for in every Atlas editor. It sets the tab
 /// stop distance here, and it is what one outdent removes from a line that
 /// is indented with spaces instead - the same number, named once rather than
 /// typed in two places.

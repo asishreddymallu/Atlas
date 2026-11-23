@@ -552,7 +552,7 @@ TEST(EditorPairsBlockOffset, TypingOnTheLastLineEditsTheLastLine)
  * This one does not, on purpose: it is the canary for the sandbox in
  * test_main.cpp. If the redirect is ever removed or stops working, this
  * test writes editor/fontSize=3 into the developer's real
- * ~/.config/Kites/Kites.conf - which is exactly what happened once, and
+ * ~/.config/Atlas/Atlas.conf - which is exactly what happened once, and
  * what made EditorZoom.ItClampsAtBothEnds fail on the next run.
  *
  * It is safe to leave 3 behind inside the sandbox because every

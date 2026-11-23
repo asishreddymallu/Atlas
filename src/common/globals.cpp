@@ -16,7 +16,7 @@ std::filesystem::path getWritableDataDirectory()
         return std::filesystem::path(home) /
                "Library" /
                "Application Support" /
-               "Kites";
+               "Atlas";
     }
 #endif
 

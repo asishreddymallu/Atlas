@@ -279,7 +279,7 @@ TEST(FloatLiteral, RoundingToFloatComesFromTheDecimalNotFromADouble)
 TEST(FloatLiteral, ParsingDoesNotDependOnTheCLocale)
 {
     // QApplication's constructor calls setlocale(LC_ALL, ""), so the C
-    // locale in a running Kites is the USER's, not "C". Under a
+    // locale in a running Atlas is the USER's, not "C". Under a
     // comma-decimal locale a printf/scanf-based conversion reads 0.1 as 0.
     const ScopedNumericLocale locale("de_DE.utf8");
     if (locale.applied() == nullptr)

@@ -92,8 +92,8 @@ Palette paletteNow()
     p.selected = blend(p.page, theme.getInfoColor(), 0.25);
     p.detail   = legible(theme.getEditorMutedForegroundColor(), p.text, p.page, p.selected);
     // The accent is lifted the same way. Measured on the four real themes,
-    // info on the selected row came to 4.18 on kites-dark and 4.19 on
-    // kites-light - the in-tree test could not see it, because setTheme()
+    // info on the selected row came to 4.18 on atlas-dark and 4.19 on
+    // atlas-light - the in-tree test could not see it, because setTheme()
     // does nothing without theme resources and it measured one theme four
     // times. The harness is what found this.
     p.matched  = legible(theme.getInfoColor(), p.text, p.page, p.selected);

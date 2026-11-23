@@ -202,7 +202,7 @@ TEST(TimingOverlay, OpeningAndClosingMovesNoOtherWidget)
 
 TEST(TimingOverlay, IsAnchoredToTheBottomAtFullWidthAndFollowsResizes)
 {
-    QSettings("Kites", "Kites").remove(kHeightKey);
+    QSettings("Atlas", "Atlas").remove(kHeightKey);
     OverlayWindow w;
     ASSERT_TRUE(w.ready());
     w.toggle->trigger();
@@ -260,7 +260,7 @@ TEST(TimingOverlay, MenuItemAndCloseButtonStayInStep)
 
 TEST(TimingOverlay, DraggingTheTopEdgeResizesWithinTheLimits)
 {
-    QSettings("Kites", "Kites").remove(kHeightKey);
+    QSettings("Atlas", "Atlas").remove(kHeightKey);
     OverlayWindow w;
     ASSERT_TRUE(w.ready());
     w.toggle->trigger();
@@ -284,7 +284,7 @@ TEST(TimingOverlay, DraggingTheTopEdgeResizesWithinTheLimits)
 
 TEST(TimingOverlay, HeightIsRememberedBetweenRuns)
 {
-    QSettings("Kites", "Kites").remove(kHeightKey);
+    QSettings("Atlas", "Atlas").remove(kHeightKey);
     int dragged = 0;
     {
         OverlayWindow w;
@@ -294,7 +294,7 @@ TEST(TimingOverlay, HeightIsRememberedBetweenRuns)
         ASSERT_NE(w.grip(), nullptr);
         w.drag(-37);
         dragged = w.overlay->height();
-        EXPECT_EQ(QSettings("Kites", "Kites").value(kHeightKey).toInt(), dragged);
+        EXPECT_EQ(QSettings("Atlas", "Atlas").value(kHeightKey).toInt(), dragged);
     }
     {
         OverlayWindow w;
@@ -303,7 +303,7 @@ TEST(TimingOverlay, HeightIsRememberedBetweenRuns)
         settle();
         EXPECT_EQ(w.overlay->height(), dragged);
     }
-    QSettings("Kites", "Kites").remove(kHeightKey);
+    QSettings("Atlas", "Atlas").remove(kHeightKey);
 }
 
 // What is inside still works from the overlay: the panel is the same one.

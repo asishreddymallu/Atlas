@@ -135,12 +135,12 @@ int RunRepl(ProcessorManager &manager, command_handler::ReplState &state)
                                     << manager.getProgramCounter() << std::dec << std::endl;
                       });
 
-    std::cout << "Kites CLI REPL. Type 'help' for commands, 'exit' to quit.\n";
+    std::cout << "Atlas CLI REPL. Type 'help' for commands, 'exit' to quit.\n";
 
     std::string line;
     while (true)
     {
-        std::cout << "kites> " << std::flush;
+        std::cout << "atlas> " << std::flush;
         if (!std::getline(std::cin, line))
         {
             std::cout << std::endl;

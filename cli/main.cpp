@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief Entry point for the Kites command-line interface.
+ * @brief Entry point for the Atlas command-line interface.
  */
 #include "assembler/assembler.h"
 #include "command_handler/command_handler.h"

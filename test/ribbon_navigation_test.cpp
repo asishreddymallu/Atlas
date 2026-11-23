@@ -453,7 +453,7 @@ TEST(MainWindowRibbon, ThemeChangeLeavesTheStripIntact)
     ASSERT_NE(bar, nullptr);
     window.setCurrentTab(MainWindow::MemoryTabIndex);
 
-    window.themeChangedSlot(QStringLiteral("kites-dark"));
+    window.themeChangedSlot(QStringLiteral("atlas-dark"));
 
     EXPECT_EQ(bar->count(), 6);
     EXPECT_EQ(bar->currentIndex(), static_cast<int>(MainWindow::MemoryTabIndex));
@@ -1526,7 +1526,7 @@ TEST(RibbonStage4, ExecutionActionsOutliveTheToolbar)
     }
 
     // The pass itself runs clean and leaves the tags in place.
-    window.themeChangedSlot(QStringLiteral("kites-dark"));
+    window.themeChangedSlot(QStringLiteral("atlas-dark"));
     for (int i = 0; i < guards.size(); ++i)
         if (!guards.at(i).isNull() && labels.at(i) != QStringLiteral("Problems"))
             EXPECT_NE(themedIconOf(guards.at(i).data()), Icon::IconCount)
