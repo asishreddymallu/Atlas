@@ -3,7 +3,7 @@
  * @brief T9: every component of the five processor diagrams is named, the
  *        names and the legend do not overlap, and they are readable.
  *
- * kites_test links no Qt resources, so the circuits are loaded from the
+ * atlas_test links no Qt resources, so the circuits are loaded from the
  * source tree (ctest runs in test/), the same files the app compiles in.
  */
 #include "processor/processor_manager.h"

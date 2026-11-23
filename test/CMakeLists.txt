@@ -6,44 +6,44 @@ option(ENABLE_COVERAGE "Enable coverage instrumentation for tests" OFF)
 
 file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "*.cpp")
 
-add_executable(kites_test
+add_executable(atlas_test
     ${TEST_FILES}
 )
 
-target_link_libraries(kites_test PRIVATE
-    kites_core
+target_link_libraries(atlas_test PRIVATE
+    atlas_core
     GTest::gtest
     GTest::gmock_main
     Threads::Threads
 )
 
 if(DISABLE_GUI)
-    target_compile_definitions(kites_test PRIVATE DISABLE_GUI)
+    target_compile_definitions(atlas_test PRIVATE DISABLE_GUI)
 endif()
 
 if(VM_DEBUG_PRINTS)
-    target_compile_definitions(kites_test PRIVATE VM_DEBUG_PRINTS)
+    target_compile_definitions(atlas_test PRIVATE VM_DEBUG_PRINTS)
 endif()
 
 # A settings sandbox for the whole suite. test_main.cpp makes its own
 # per-process temporary directory and overrides these on the way in - that
-# is what actually protects, and it protects kites_test however it is
+# is what actually protects, and it protects atlas_test however it is
 # launched. These are belt-and-braces for the discovery pass, which runs
 # the binary to list tests before any of that code is reached.
-set(KITES_TEST_SANDBOX ${CMAKE_BINARY_DIR}/test-sandbox)
-file(MAKE_DIRECTORY ${KITES_TEST_SANDBOX}/config ${KITES_TEST_SANDBOX}/data
-                    ${KITES_TEST_SANDBOX}/cache)
+set(ATLAS_TEST_SANDBOX ${CMAKE_BINARY_DIR}/test-sandbox)
+file(MAKE_DIRECTORY ${ATLAS_TEST_SANDBOX}/config ${ATLAS_TEST_SANDBOX}/data
+                    ${ATLAS_TEST_SANDBOX}/cache)
 
-gtest_discover_tests(kites_test
+gtest_discover_tests(atlas_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
     DISCOVERY_MODE PRE_TEST
     PROPERTIES
         FAIL_REGULAR_EXPRESSION ".*FAILED.*"
-        ENVIRONMENT "XDG_CONFIG_HOME=${KITES_TEST_SANDBOX}/config;XDG_DATA_HOME=${KITES_TEST_SANDBOX}/data;XDG_CACHE_HOME=${KITES_TEST_SANDBOX}/cache"
+        ENVIRONMENT "XDG_CONFIG_HOME=${ATLAS_TEST_SANDBOX}/config;XDG_DATA_HOME=${ATLAS_TEST_SANDBOX}/data;XDG_CACHE_HOME=${ATLAS_TEST_SANDBOX}/cache"
 )
 
 # ---------------------------------------------------------------------------
-# kites_test_cov — same suite, built with coverage instrumentation.
+# atlas_test_cov — same suite, built with coverage instrumentation.
 # ---------------------------------------------------------------------------
 if(ENABLE_COVERAGE)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -52,26 +52,26 @@ if(ENABLE_COVERAGE)
 
     find_program(GCOVR_EXECUTABLE gcovr REQUIRED)
 
-    add_executable(kites_test_cov
+    add_executable(atlas_test_cov
     ${TEST_FILES}
     )
 
-    target_link_libraries(kites_test_cov PRIVATE
-    kites_core
+    target_link_libraries(atlas_test_cov PRIVATE
+    atlas_core
     GTest::gtest
     GTest::gmock_main
     Threads::Threads
     )
 
     if(DISABLE_GUI)
-        target_compile_definitions(kites_test_cov PRIVATE DISABLE_GUI)
+        target_compile_definitions(atlas_test_cov PRIVATE DISABLE_GUI)
     endif()
 
     if(VM_DEBUG_PRINTS)
-        target_compile_definitions(kites_test_cov PRIVATE VM_DEBUG_PRINTS)
+        target_compile_definitions(atlas_test_cov PRIVATE VM_DEBUG_PRINTS)
     endif()
 
-    gtest_discover_tests(kites_test_cov
+    gtest_discover_tests(atlas_test_cov
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test
         DISCOVERY_MODE PRE_TEST
         TEST_PREFIX "cov_"
@@ -79,21 +79,21 @@ if(ENABLE_COVERAGE)
             FAIL_REGULAR_EXPRESSION ".*FAILED.*"
     )
 
-    target_compile_options(kites_test_cov PRIVATE -O0 --coverage)
-    target_compile_options(kites_core PRIVATE -O0 --coverage)
+    target_compile_options(atlas_test_cov PRIVATE -O0 --coverage)
+    target_compile_options(atlas_core PRIVATE -O0 --coverage)
 
-    # kites_core is instrumented above, so every target that links it needs gcov,
+    # atlas_core is instrumented above, so every target that links it needs gcov,
     # not just the coverage test binary.
-    target_link_libraries(kites_core gcov)
+    target_link_libraries(atlas_core gcov)
 
-    target_link_libraries(kites_test_cov PRIVATE gcov)
+    target_link_libraries(atlas_test_cov PRIVATE gcov)
 
     set(COVERAGE_DIR ${CMAKE_BINARY_DIR}/coverage)
-    get_filename_component(KITES_COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    get_filename_component(ATLAS_COMPILER_BIN_DIR "${CMAKE_CXX_COMPILER}" DIRECTORY)
     add_custom_target(coverage
         COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_DIR}
         COMMAND ${CMAKE_COMMAND} -E env
-            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;${KITES_COMPILER_BIN_DIR};$ENV{PATH}"
+            "PATH=$<TARGET_FILE_DIR:Qt6::Core>;${ATLAS_COMPILER_BIN_DIR};$ENV{PATH}"
             ${CMAKE_CTEST_COMMAND} --output-on-failure --test-dir ${CMAKE_BINARY_DIR} -R "^cov_"
         COMMAND ${GCOVR_EXECUTABLE}
             --root ${CMAKE_SOURCE_DIR}
@@ -104,7 +104,7 @@ if(ENABLE_COVERAGE)
             --exclude "external/*"
             --exclude "_deps/*"
             --exclude "${PROJECT_NAME}_autogen/*"
-        DEPENDS kites_test_cov
+        DEPENDS atlas_test_cov
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Running tests and generating coverage report"
     )

@@ -94,7 +94,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     // ui->setuoUi(this);
     setWindowTitle("Kites RISC-V Simulator");
-    setWindowIcon(QIcon(":/icons/kite.png"));
+    setWindowIcon(QIcon(":/icons/atlas.png"));
     ThemeManager::getInstance(); // applies the persisted (or default) theme before any UI is built
     setupVmStateDirectory();
 

@@ -135,7 +135,7 @@ void CompletionPopup::setEditorFont(const QFont &font)
     // setFont() alone is not enough: the application stylesheet carries
     // QWidget { font-size: ... }, and a stylesheet rule beats setFont(). The
     // list rendered at the chrome's size at every zoom level until the size
-    // went into its OWN sheet - the same trap the editor hit, and kites_test
+    // went into its OWN sheet - the same trap the editor hit, and atlas_test
     // cannot see it because it has no application stylesheet. The harness
     // screenshots are what showed it.
     const bool    inPixels = font.pixelSize() > 0;

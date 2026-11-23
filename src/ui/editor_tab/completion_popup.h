@@ -13,7 +13,7 @@ namespace Atlas
  * @brief The suggestion list, as a child of the editor's viewport.
  *
  * Deliberately NOT QCompleter's popup. That popup is a top-level QListView:
- * it cannot be driven in kites_test without a platform that can raise a
+ * it cannot be driven in atlas_test without a platform that can raise a
  * window, it is outside the application stylesheet so it has no theme at all,
  * it takes the keyboard through an event filter installed on the editor, and
  * it gives no way to draw the matched characters, a kind badge or an elided

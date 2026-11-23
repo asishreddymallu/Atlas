@@ -82,7 +82,7 @@ int stackedItemHeight()
 // action tagged by setThemedIcon() is meant to have an icon whether or not
 // the resource resolved, which keeps this independent of whether the .qrc
 // objects are linked - they are in the application and are not in
-// kites_test. A directly-set QIcon counts too.
+// atlas_test. A directly-set QIcon counts too.
 Qt::ToolButtonStyle compactStyleFor(const QToolButton *button)
 {
     const QAction *action = button->defaultAction();

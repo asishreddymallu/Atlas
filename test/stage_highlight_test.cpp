@@ -14,7 +14,7 @@
  * be Active, Dimmed or Off. The window's table is checked against it too,
  * so the two machines are known to be in the same cycle.
  *
- * kites_test does not link the compiled .qrc, so the window's scene is
+ * atlas_test does not link the compiled .qrc, so the window's scene is
  * empty until the test loads the h_f drawing into it from disk.
  *
  * Wires Stay Active is switched ON for the tests that look at wire states,

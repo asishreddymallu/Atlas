@@ -248,7 +248,7 @@ TEST(EditorZoom, TheGutterFollowsTheFont)
     bench.place("one\ntwo\nthree", 0, 0);
     // The baseline is taken at delta 0 rather than before any zoom at all.
     // Until the first applyZoomedFont() the gutter columns use whatever font
-    // they INHERITED, which in kites_test is not the editor's - there are no
+    // they INHERITED, which in atlas_test is not the editor's - there are no
     // font resources here, so FontManager falls back and the two differ by
     // two pixels of gutter. In the application they are the same font and
     // this makes no difference; measuring both ends the same way is what
@@ -380,13 +380,13 @@ TEST(EditorZoomFontChange, ASettingsFontChangeKeepsTheDeltaAndRemeasures)
  * fixed-size dot got out of its line in the first place.
  *
  * KNOWN LIMIT, measured rather than assumed: this test does not catch a
- * dot put back to a fixed 9 px. kites_test has no font resources, so
+ * dot put back to a fixed 9 px. atlas_test has no font resources, so
  * FontManager falls back to a family whose line height never drops below
  * 9 px at any size this asks for, and the overflow cannot be reached
  * here. The out-of-tree harness does reach it - at a configured 4 pt the
  * line is 7 px and a fixed dot reports NO - and that is where the control
  * for the scaling lives. What this test is worth is the invariant: if the
- * metrics ever do shrink in kites_test, it fails rather than drifting.
+ * metrics ever do shrink in atlas_test, it fails rather than drifting.
  */
 TEST(EditorZoomDot, TheDotStaysInsideItsLineAtEverySize)
 {

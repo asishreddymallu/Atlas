@@ -830,7 +830,7 @@ TEST(FindStaleMatches, NextUsesTheCurrentTextNotTheLastSearch)
 /**
  * @brief No child of the find bar may sit on top of the input.
  *
- * kites_test CAN lay the bar out: it is a plain widget in a real layout
+ * atlas_test CAN lay the bar out: it is a plain widget in a real layout
  * and openFind() builds it, so the geometry below is the geometry the
  * application gets. What it cannot do is prove the bar is OPAQUE - that
  * needs pixels, and it is checked in the out-of-tree harness instead.

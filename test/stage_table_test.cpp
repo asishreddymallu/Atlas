@@ -10,7 +10,7 @@
  * by instruction_set::disassemble, with the PC in the tooltip; a NOP or
  * bubble reads "bubble" in grey.
  *
- * kites_test does not link the compiled .qrc, so a processor's own
+ * atlas_test does not link the compiled .qrc, so a processor's own
  * loadScene(":/circuit_designs/...") finds nothing there; each test loads
  * the same drawing from disk (ctest runs in test/) through the public
  * loadScene, which is the path the app takes with the resource.

@@ -15,8 +15,8 @@
  *
  * The file is read from the FILESYSTEM, not from `:/instructions/...`.
  * `qt6_add_resources()` gives the compiled resources to the `Kites`
- * executable; `kites_core` does not get them and `kites_test` links
- * `kites_core`, so no `:/` path resolves here.
+ * executable; `atlas_core` does not get them and `atlas_test` links
+ * `atlas_core`, so no `:/` path resolves here.
  * `ResourcePathIsNotReachableFromTests` pins that.
  */
 #include "assembler/code_generator.h"
@@ -341,7 +341,7 @@ TEST(InstructionDocs, ResourcePathIsNotReachableFromTests)
 {
     QFile viaResource(QStringLiteral(":/instructions/instruction_docs.json"));
     EXPECT_FALSE(viaResource.open(QIODevice::ReadOnly))
-        << "the resource system now reaches kites_test; update the file comment";
+        << "the resource system now reaches atlas_test; update the file comment";
 }
 
 // ═══════════ (a) the universe is covered, in both directions ════════════

@@ -647,7 +647,7 @@ TEST(EditorKeysWiring, AnOpenCompletionPopupDoesNotSwallowTheModifiedKeys)
     // completion is showing.
     //
     // This used to SKIP. It opened the list by typing and gave up when none
-    // appeared, because kites_test links kites_core without the compiled
+    // appeared, because atlas_test links atlas_core without the compiled
     // .qrc objects and the old list came from the instruction resource. The
     // list now takes an injected source, so the case can open one here and
     // actually assert something.

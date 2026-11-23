@@ -169,7 +169,7 @@ TEST(CommentSyntaxToggle, ItStillInsertsAHash)
 
 // ═══════════════════════ the syntax highlighter ═════════════════════════
 
-// The highlighter cannot be checked by RENDERING here: kites_test loads
+// The highlighter cannot be checked by RENDERING here: atlas_test loads
 // no theme resources, so ThemeManager::getSyntaxFormat() returns an empty
 // QTextCharFormat, setFormat() with an empty format adds no range, and
 // block.layout()->formats() comes back empty for every line. A colour

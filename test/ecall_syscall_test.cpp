@@ -79,7 +79,7 @@ constexpr uint64_t kDataBase = 0x10000000ULL;
 constexpr int kWatchdogMs = 10000;
 
 /// Set while a test program is running. rvss's exit service used to call
-/// exit(0) (known_issues 101): that ends kites_test with status 0 halfway
+/// exit(0) (known_issues 101): that ends atlas_test with status 0 halfway
 /// through a test, and ctest then reports the test as PASSED. This turns
 /// any exit() during a run into exit status 1, which ctest does see (the
 /// message itself may land in a stdout capture and never be shown).

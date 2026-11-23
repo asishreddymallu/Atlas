@@ -1,6 +1,6 @@
 /**
  * @file repl.h
- * @brief Interactive REPL loop for kites-cli.
+ * @brief Interactive REPL loop for atlas-cli.
  */
 #pragma once
 

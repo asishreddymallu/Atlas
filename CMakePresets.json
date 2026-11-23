@@ -80,18 +80,18 @@
             "name": "cli",
             "displayName": "Build CLI",
             "configurePreset": "cli",
-            "targets": ["kites_cli"]
+            "targets": ["atlas_cli"]
         },
         {
             "name": "test",
             "configurePreset": "test",
-            "targets": ["kites_test"]
+            "targets": ["atlas_test"]
         },
          {
             "name": "test-only",
             "displayName": "Build tests (no coverage)",
             "configurePreset": "test",
-            "targets": ["kites_test"]
+            "targets": ["atlas_test"]
         },
         {
             "name": "test-coverage",
@@ -100,7 +100,7 @@
             "environment": {
                 "PATH": "D:/Qt/Tools/mingw1310_64/bin;D:/Qt/6.9.2/mingw_64/bin;$penv{PATH}"
             },
-            "targets": ["kites_test_cov"]
+            "targets": ["atlas_test_cov"]
         }
     ],
 

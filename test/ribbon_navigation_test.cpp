@@ -12,7 +12,7 @@
  * switch came from the strip or from code. Before this stage the window
  * exposed no way to read or drive the current tab at all.
  *
- * Note on icons: kites_test links kites_core but not the compiled .qrc
+ * Note on icons: atlas_test links atlas_core but not the compiled .qrc
  * objects, so ":/icons/*.svg" does not resolve and every QIcon here is null
  * (ThemeManager likewise reports zero available themes). Icon *tinting* is
  * therefore not assertable at this level and is covered by the out-of-tree
@@ -1675,7 +1675,7 @@ TEST(RibbonStage4B1, StackingAddsNoHeightToThePanel)
     // and the margins. If a column ever overflowed, a real group would come
     // out taller than this and the panel would grow with it.
     //
-    // The reference button is given an explicit 32 px icon. kites_test does
+    // The reference button is given an explicit 32 px icon. atlas_test does
     // not link the .qrc objects, so the window's real large buttons have
     // null icons and are shorter here than in the application - but the band
     // RibbonGroup derives its capacity from is measured with a synthetic
@@ -1842,7 +1842,7 @@ TEST(RibbonStage4B2, WidthsAreCachedAndDroppedOnAStyleChange)
     EXPECT_EQ(group->fullWidth(), first) << "a second ask gave a different answer";
 
     // The events a theme change and a font change arrive as. Delivered
-    // directly, because kites_test has no themes to switch between.
+    // directly, because atlas_test has no themes to switch between.
     QEvent styleChange(QEvent::StyleChange);
     QApplication::sendEvent(group, &styleChange);
     EXPECT_EQ(group->fullWidth(), first) << "re-measuring after a style change disagreed";
@@ -1933,7 +1933,7 @@ QList<QAction *> allPageActions(RibbonBar *bar, int page)
 /// Puts the window at its narrowest and makes sure something really has
 /// overflowed on `page`.
 ///
-/// The width alone cannot be relied on: kites_test links no stylesheet and
+/// The width alone cannot be relied on: atlas_test links no stylesheet and
 /// no icons, so every group is far narrower here than in the application and
 /// a width that crowds the real ribbon leaves this one roomy. If the floor
 /// is not enough, a group is widened until it is - which is deterministic in
@@ -2654,7 +2654,7 @@ TEST(RibbonStage8, TheCachePaneKeepsTheOtherTabsLeftEdge)
 //
 // The rules are two 1 px QFrames the panel holds outside its layout. What is
 // assertable here is the part that broke three times before it worked: their
-// geometry and their place in the stacking order. kites_test links no
+// geometry and their place in the stacking order. atlas_test links no
 // stylesheet, so they have no colour at this level - the colour, and the fact
 // that the pixels really change, are checked by the out-of-tree chromelines
 // harness, which reads the rendered rows in all four themes.

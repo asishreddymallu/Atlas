@@ -13,7 +13,7 @@ class SyntaxHighlighter : public QSyntaxHighlighter
      * @brief The pattern the comment rule uses.
      *
      * Public and static so a test can ask what the rule covers without a
-     * theme: kites_test loads no theme resources, getSyntaxFormat()
+     * theme: atlas_test loads no theme resources, getSyntaxFormat()
      * returns an empty QTextCharFormat, and Qt adds no format range for
      * one - so the rendering cannot be checked there at all.
      *

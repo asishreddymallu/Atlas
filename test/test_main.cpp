@@ -20,7 +20,7 @@ namespace
  * is ~/.config/Kites/Kites.conf - the developer's REAL file. Several tests
  * call FontManager::setSize() and ThemeManager::setTheme(), and those write
  * straight through. That is not hypothetical: a harness sweep once left
- * editor/fontSize=3 behind, and the next run of kites_test read it and
+ * editor/fontSize=3 behind, and the next run of atlas_test read it and
  * EditorZoom.ItClampsAtBothEnds failed, because at 3 pt the zoom floor
  * really is 0. The suite was reading the developer's configuration.
  *

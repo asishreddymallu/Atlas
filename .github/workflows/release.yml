@@ -20,21 +20,21 @@ jobs:
             qt_version: '6.9.2'
             qt_arch: linux_gcc_64
             qt_tools: ''
-            executable_path: build/Kites
+            executable_path: build/Atlas
 
           # ---------------- WINDOWS ----------------
           - os: windows-latest
             qt_version: '6.9.2'
             qt_arch: win64_mingw
             qt_tools: 'tools_mingw1310'
-            executable_path: build/Kites.exe
+            executable_path: build/Atlas.exe
 
           # ---------------- MACOS ----------------
           - os: macos-latest
             qt_version: '6.9.2'
             qt_arch: clang_64
             qt_tools: ''
-            executable_path: build/Kites.app
+            executable_path: build/Atlas.app
 
     runs-on: ${{ matrix.os }}
 
@@ -90,26 +90,26 @@ jobs:
           QMAKE : ${{ env.QT_DIR }}/bin/qmake
         run: |
           mkdir -p AppDir/usr/bin
-          cp build/Kites AppDir/usr/bin/
-          cp resources/icons/kite.png AppDir/Kites.png
+          cp build/Atlas AppDir/usr/bin/
+          cp resources/icons/atlas.png AppDir/Atlas.png
 
-          cat > AppDir/Kites.desktop <<EOF
+          cat > AppDir/Atlas.desktop <<EOF
           [Desktop Entry]
           Type=Application
-          Name=Kites
-          Exec=Kites
-          Icon=Kites
+          Name=Atlas
+          Exec=Atlas
+          Icon=Atlas
           Categories=Utility;
           EOF
 
           ./linuxdeployqt-continuous-x86_64.AppImage \
-            AppDir/Kites.desktop \
+            AppDir/Atlas.desktop \
             -appimage
 
       - name: Zip Linux AppImage
         if: runner.os == 'Linux'
         run: |
-          archive_name="kites-linux-${GITHUB_REF_NAME}.zip"
+          archive_name="atlas-linux-${GITHUB_REF_NAME}.zip"
           echo "ARCHIVE_NAME=$archive_name" >> "$GITHUB_ENV"
           zip "$archive_name" *.AppImage
 
@@ -120,15 +120,15 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $packageDir = "Kites-$env:GITHUB_REF_NAME-windows"
+          $packageDir = "Atlas-$env:GITHUB_REF_NAME-windows"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
-          Copy-Item "build\Kites.exe" $packageDir
+          Copy-Item "build\Atlas.exe" $packageDir
 
       - name: Run windeployqt
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          windeployqt Kites-%GITHUB_REF_NAME%-windows\Kites.exe
+          windeployqt Atlas-%GITHUB_REF_NAME%-windows\Atlas.exe
 
 
       # --------------------------------------------------------
@@ -140,7 +140,7 @@ jobs:
         shell: pwsh
         run: |
           $gccPath = Split-Path (Get-Command g++.exe).Source
-          $packageDir = "Kites-$env:GITHUB_REF_NAME-windows"
+          $packageDir = "Atlas-$env:GITHUB_REF_NAME-windows"
 
           Copy-Item "$gccPath\libgcc_s_seh-1.dll" $packageDir
           Copy-Item "$gccPath\libstdc++-6.dll" $packageDir
@@ -150,8 +150,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $packageDir = "Kites-$env:GITHUB_REF_NAME-windows"
-          $archiveName = "kites-windows-$env:GITHUB_REF_NAME.zip"
+          $packageDir = "Atlas-$env:GITHUB_REF_NAME-windows"
+          $archiveName = "atlas-windows-$env:GITHUB_REF_NAME.zip"
           "ARCHIVE_NAME=$archiveName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Compress-Archive `
             -Path "$packageDir\*" `
@@ -163,15 +163,15 @@ jobs:
       - name: Run macdeployqt
         if: runner.os == 'macOS'
         run: |
-          macdeployqt build/Kites.app
+          macdeployqt build/Atlas.app
 
       - name: Zip macOS App
         if: runner.os == 'macOS'
         run: |
-          archive_name="kites-macos-${GITHUB_REF_NAME}.zip"
+          archive_name="atlas-macos-${GITHUB_REF_NAME}.zip"
           echo "ARCHIVE_NAME=$archive_name" >> "$GITHUB_ENV"
           ditto -c -k --sequesterRsrc --keepParent \
-            build/Kites.app \
+            build/Atlas.app \
             "$archive_name"
 
       # ============================================

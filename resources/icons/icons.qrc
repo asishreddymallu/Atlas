@@ -1,6 +1,6 @@
 <RCC>
     <qresource prefix="/icons">
-        <file>kite.png</file>
+        <file>atlas.png</file>
         <file>pause.svg</file>
         <file>redo-dot.svg</file>
         <file>play.svg</file>

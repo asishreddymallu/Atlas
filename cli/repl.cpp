@@ -1,6 +1,6 @@
 /**
  * @file repl.cpp
- * @brief Interactive REPL loop for kites-cli.
+ * @brief Interactive REPL loop for atlas-cli.
  */
 #include "repl.h"
 

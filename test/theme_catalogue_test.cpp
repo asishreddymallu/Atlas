@@ -2,7 +2,7 @@
  * @file theme_catalogue_test.cpp
  * @brief T8: the ten built-in themes (four house themes, six VS Code ones).
  *
- * kites_test links no Qt resources, so the themes are read from the source
+ * atlas_test links no Qt resources, so the themes are read from the source
  * tree (ctest runs in test/) and, where ThemeManager itself is under test,
  * installed into this test's own settings sandbox (test_main.cpp; ctest
  * runs every test in a fresh process).

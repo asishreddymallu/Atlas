@@ -69,7 +69,7 @@ Editor::Editor(QWidget *parent )
     updateViewPortMargins();
 
     // ── the suggestion list. A child of the viewport, like the find bar, so
-    //    it is clipped to the editor and can be driven in kites_test.
+    //    it is clipped to the editor and can be driven in atlas_test.
     m_completionPopup = new CompletionPopup(viewport());
     m_references      = new ReferencesBar(viewport());
     m_rename          = new RenameBar(viewport());

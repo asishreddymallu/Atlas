@@ -651,7 +651,7 @@ bool ProcessorBase::ServeSyscall(StepDelta &delta)
         }
         output_status_ = "VM_EXIT";
         std::cout << "Exited with exit code: " << registers_.ReadGpr(10) << std::endl;
-        // Was exit(0), which ended the whole process - the GUI, kites-cli
+        // Was exit(0), which ended the whole process - the GUI, atlas-cli
         // before it dumped its registers, and the test binary - instead
         // of the simulated program (known_issues 101). Stop the program
         // and keep its state, the behaviour known_issues 67 settled on.
@@ -827,7 +827,7 @@ std::string ProcessorBase::PrintString(uint64_t address)
 
 void ProcessorBase::EmitProgramOutput(const std::string &text)
 {
-    // std::cout above stays as it was: kites-cli and the tests read it.
+    // std::cout above stays as it was: atlas-cli and the tests read it.
     // This is the window's copy (known_issues 140).
     if (!text.empty())
         emit programOutputSignal(QString::fromStdString(text));

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(Kites LANGUAGES CXX C)
+project(Atlas LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -72,19 +72,19 @@ if(WIN32)
     set(APP_RESOURCES ${APP_RESOURCES} resources/icons/app_icon.rc)
 endif()
 
-add_library(kites_core STATIC
+add_library(atlas_core STATIC
     ${HEADER_FILES}
     ${SRC_FILES}
     ${UI_FILES}
 )
 
-target_include_directories(kites_core PUBLIC
+target_include_directories(atlas_core PUBLIC
     "${PROJECT_BINARY_DIR}/${PROJECT_NAME}_autogen/include"
     ${SRC_DIR}
     ${EXTERNAL_DIR}/lua-5.5.0/src
 )
 
-target_link_libraries(kites_core
+target_link_libraries(atlas_core
     Qt::Core
     Qt::Widgets
     Qt::Network
@@ -92,7 +92,7 @@ target_link_libraries(kites_core
 )
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(kites_core PRIVATE 
+    target_compile_options(atlas_core PRIVATE 
         -Wall 
         -Wextra 
         -pedantic 
@@ -102,14 +102,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 if(LOG_PANEL)
-    target_compile_definitions(kites_core PRIVATE LOG_PANEL)
+    target_compile_definitions(atlas_core PRIVATE LOG_PANEL)
 endif()
 
 if(DISABLE_GUI)
-    target_compile_definitions(kites_core PRIVATE DISABLE_GUI)
+    target_compile_definitions(atlas_core PRIVATE DISABLE_GUI)
 endif()
 
-target_precompile_headers(kites_core PRIVATE
+target_precompile_headers(atlas_core PRIVATE
     # <cstdint>
     # <string>
     # <array>
@@ -122,8 +122,8 @@ qt_add_executable(${PROJECT_NAME}
     main.cpp
     ${APP_RESOURCES}
 )
-set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Kites")
-target_link_libraries(${PROJECT_NAME} PRIVATE kites_core)
+set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "Atlas")
+target_link_libraries(${PROJECT_NAME} PRIVATE atlas_core)
 
 include(GNUInstallDirs)
 
@@ -134,12 +134,12 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 # Command-line executable (no GUI/QApplication dependency at runtime).
-add_executable(kites_cli cli/main.cpp cli/repl.cpp)
-set_target_properties(kites_cli PROPERTIES OUTPUT_NAME "kites-cli")
-target_link_libraries(kites_cli PRIVATE kites_core)
-target_compile_definitions(kites_cli PRIVATE DISABLE_GUI)
+add_executable(atlas_cli cli/main.cpp cli/repl.cpp)
+set_target_properties(atlas_cli PROPERTIES OUTPUT_NAME "atlas-cli")
+target_link_libraries(atlas_cli PRIVATE atlas_core)
+target_compile_definitions(atlas_cli PRIVATE DISABLE_GUI)
 
-install(TARGETS kites_cli
+install(TARGETS atlas_cli
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
