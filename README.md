@@ -1,45 +1,41 @@
-# KITES : RISC - V SIMULATOR
+# Atlas RISC-V Simulator
 
-Atlas is built on Kites by hghit-harshit
+Atlas is a RISC-V computer architecture teaching platform: an assembly editor,
+assembler and simulator with a single-cycle model and four five-stage pipeline
+variants (with and without hazard detection and forwarding), a live processor
+diagram, a pipeline timing grid, configurable caches, memory and register
+views, and a profiler. It supports the RV64 I, M, F and D extensions.
 
-Kites a is RISC V simulator and assembly code editor built for RISC V ISA.
-Kites support I,M,D and F extenstion in single cyle mod and I,M extension in 5 Stage pipelining mode.(D,F will be added in future releases).
+## Build
 
-## Downloading and Installation
-
-Prebuilt libraries are available for Linux,Windows on [Release Page](https://github.com/hghit-harshit/Kites/releases)
-
-### Ubuntu(for only ubuntu-22.04 and above)
-- Run chmod +x for the Kites AppImage.
-- Run the file.
-
-### Windows
-- All the required files are inside the zip file, so you can just run the file.
-- In case you get popup regarding some missing dll please contact us.
-
-## MacOS
-- Put Kites in the application 
-
-RUN
+Requirements: CMake 3.19+, Ninja, a C++20 compiler and Qt 6.9 or newer
+(Core, Widgets, Network, Concurrent).
 
 ```bash
-sudo xattr -rd com.apple.quarantine sudo xattr -rd com.apple.quarantine /path/to/application.app
-
+cmake -S . -B build -G Ninja && cmake --build build
+# or
+./scripts/build.sh
 ```
 
-## Building
+This produces `build/Atlas` (GUI) and `build/atlas-cli` (command line).
 
-To build Kites you will first neet to install Qt(version above 6.9)
-Then simply build using
+## Run
 
 ```bash
-cmake -DCMAKE_PREFIX_PATH="path/to/Qt/6.x.x/<compiler>" ..
+./build/Atlas                         # GUI
+./build/atlas-cli program.s --vm rv5-h-f   # headless batch run; see docs/CLI.md
 ```
 
-## Testing
+## Test
 
-See [docs/TESTING.md](TESTING) for how to build and run tests, including coverage reports.
+```bash
+cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-tests
+ctest --test-dir build-tests --output-on-failure   # serially; see docs/TESTING.md
+# or
+./scripts/test.sh
+```
 
-## CLI
+## Licence and attribution
 
-See [docs/CLI.md](docs/CLI.md) for how to build and use the headless command-line executable.
+MIT; see [LICENSE.md](LICENSE.md). Atlas is a fork of an earlier project; see
+[NOTICE.md](NOTICE.md).

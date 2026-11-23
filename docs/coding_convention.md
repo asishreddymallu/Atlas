@@ -14,14 +14,14 @@
 | Namespaces        | `snake_case`  | `namespace instruction_set`   |
 | Enums             | `PascalCase`  | `enum class InstructionTypes` |
 | Enum Values       | `PascalCase`  | `PipelineState::RType`        |
-| Macros            | `ALL_CAPS`    | `KITES_VERSION`               |
+| Macros            | `ALL_CAPS`    | `ATLAS_VERSION`               |
 
 * When naming variables that store count of something prefer nameCount 
   eg. prefer m_wayCount instead of m_numWays
 
 ## Exceptions
 * Hardware/ISA Configurations: Enum values that map directly to hardware structures, ISA documentation, or processor configurations (e.g., AluOP, PipelineStage, VMType) may use ALL_CAPS to maintain alignment with architectural nomenclature.
-* Namespace enveloping the whole codebase is Kites, but all other namespaces
+* Namespace enveloping the whole codebase is Atlas, but all other namespaces
   should follow the coding convention.
 
 ## Directory Structure

@@ -20,7 +20,7 @@ guard, not two: every text-changing command checks `isReadOnly()` first
 | The transformations | `src/ui/editor_tab/editor_commands.h` / `.cpp` — pure functions of document text and a selection, returning one `Edit` (range to replace, replacement, new anchor, new position). No widget, no cursor, no clipboard |
 | The keys | `Editor::handleEditingKey()` in `src/ui/editor_tab/main_editor.cpp` |
 | Applying an `Edit` | `Editor::applyEdit()` — one `beginEditBlock`/`endEditBlock`, replacing only the named range, so one Ctrl+Z undoes one command |
-| The indent unit | `Kites::editorTabWidth` in `src/ui/common/kites_editor.h` — the 4 that sets the tab stop distance and that one outdent removes from a space-indented line |
+| The indent unit | `Atlas::editorTabWidth` in `src/ui/common/atlas_editor.h` — the 4 that sets the tab stop distance and that one outdent removes from a space-indented line |
 
 **No QAction and no QShortcut was added.** The window owns exactly seven key
 sequences and `EditorShortcutSet.NothingNewBecameAnApplicationShortcut`
@@ -74,7 +74,7 @@ The completion popup guard in `Editor::keyPressEvent` ignored Enter, Escape,
 Tab and Backtab by key, whatever the modifiers were, so `Ctrl+Enter` and
 `Ctrl+Shift+Enter` went nowhere whenever a completion happened to be
 showing. It now guards only the unmodified keys, which are the ones the
-popup uses. `kites_test` links no instruction resources and so cannot open a
+popup uses. `atlas_test` links no instruction resources and so cannot open a
 popup — the in-tree case skips and says so, and the check runs in the
 out-of-tree `editorrecon` harness, which links them: with a popup open,
 Ctrl+Enter inserts a line and a bare Enter still goes to the completer.
@@ -169,7 +169,7 @@ asserts it.
 
 `Alt+C`, `Alt+W` and `Alt+R` are handled **in the bar**, not in the editor,
 because in the editor `Alt`+letter types that letter — measured on a bare
-`KitesEditor` — and that behaviour is not this feature's to change.
+`AtlasEditor` — and that behaviour is not this feature's to change.
 
 ### Behaviours worth stating
 
@@ -182,7 +182,7 @@ because in the editor `Alt`+letter types that letter — measured on a bare
   not from the previous match, so the selection does not crawl forward as
   the pattern grows (`FindIncremental.TypingSelectsTheFirstMatchFromWhereTheBarWasOpened`).
 - **Highlights compose, they do not replace.** They are a third list in
-  `KitesEditor::refreshExtraSelections()`, under the diagnostics, so a
+  `AtlasEditor::refreshExtraSelections()`, under the diagnostics, so a
   squiggle is never masked and survives the bar closing
   (`FindHighlights.DiagnosticsSurviveDuringAndAfterASearch`). The execution
   highlight is painted in `Editor::paintEvent`, not an extra selection, so
@@ -204,7 +204,7 @@ because in the editor `Alt`+letter types that letter — measured on a bare
   from the anchors, not a `LineMap` — Replace All is not an
   `EditorCommands` edit (`ReplaceBreakpoints.TheRuleWhenAReplacementChangesTheNumberOfLines`).
 - **Esc with the completion popup open** goes to the popup, not the bar.
-  `kites_test` links no `.qrc` and cannot open a popup, so that one is
+  `atlas_test` links no `.qrc` and cannot open a popup, so that one is
   measured in the out-of-tree `findshots` harness.
 - **Replace, Replace All and Next act on the current text**, not on the last
   search. The highlights are recomputed on a 150 ms debounce, which is right
@@ -218,7 +218,7 @@ because in the editor `Alt`+letter types that letter — measured on a bare
 - **The match colours follow a theme change** while the bar is open. An
   extra selection keeps the format it was given, so the colours are rebuilt
   and the highlights repainted on both `themeChangedSignal` and
-  `editorThemeChangedSignal`. **There is no in-tree test**: `kites_test`
+  `editorThemeChangedSignal`. **There is no in-tree test**: `atlas_test`
   links no `.qrc` and so has no themes to switch between. It is a harness
   check — `findshots` reports the pixels of the new theme's wash on a
   non-current match before and after the switch.
@@ -234,7 +234,7 @@ rule above (25).
 
 The pair rules are pure functions beside the other commands in
 `src/ui/editor_tab/editor_commands.h`; bracket matching is `bracketAt()` in
-the same place; zoom lives in `src/ui/common/kites_editor.h` because the
+the same place; zoom lives in `src/ui/common/atlas_editor.h` because the
 **gutters** are there and a font change has to re-measure them.
 
 Still no `QAction` and no `QShortcut`.
@@ -336,7 +336,7 @@ after (`FindBarGeometry.NothingSitsOnTopOfTheInputAtAnyWidth`,
 
 The suite needs nothing special — `test_main.cpp` sandboxes its own
 settings, so `ctest --test-dir build-tests` cannot touch
-the Kites settings file under ~/.config however it is launched.
+the Atlas settings file under ~/.config however it is launched.
 
 The out-of-tree harnesses do need a wrapper, because they drive the real
 `MainWindow` and it writes the theme and font size through to that file.
@@ -506,7 +506,7 @@ counts them.
 
 The list is an own widget (`CompletionPopup`), a child of the viewport,
 **not** `QCompleter`'s popup. That popup is a top-level `QListView`: it
-cannot be driven in `kites_test`, it sits outside the application
+cannot be driven in `atlas_test`, it sits outside the application
 stylesheet so it has no theme, it takes keys through an event filter on the
 editor, and it offers no way to draw matched characters, a badge or an
 elided detail.

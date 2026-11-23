@@ -1,9 +1,9 @@
 # Running Tests
 
-Kites uses [GoogleTest](https://github.com/google/googletest) for unit testing, integrated with CMake/CTest. Two test targets are available:
+Atlas uses [GoogleTest](https://github.com/google/googletest) for unit testing, integrated with CMake/CTest. Two test targets are available:
 
-- **`kites_test`** — plain test build, no instrumentation. Use this for everyday local testing.
-- **`kites_test_cov`** — same test suite, built with coverage instrumentation (`--coverage`), plus a `coverage` target that generates an HTML report via [`gcovr`](https://gcovr.com/).
+- **`atlas_test`** — plain test build, no instrumentation. Use this for everyday local testing.
+- **`atlas_test_cov`** — same test suite, built with coverage instrumentation (`--coverage`), plus a `coverage` target that generates an HTML report via [`gcovr`](https://gcovr.com/).
 
 Both targets are produced from a single configure step; you choose which one to build/run afterward.
 
@@ -29,7 +29,7 @@ cmake --build --preset test-only
 ctest --preset test-only
 ```
 
-This builds and runs `kites_test` only — the fast path for everyday local test runs.
+This builds and runs `atlas_test` only — the fast path for everyday local test runs.
 
 ## Run ctest serially
 
@@ -48,7 +48,7 @@ cmake --build --preset test-coverage
 ctest --preset test-coverage
 ```
 
-This builds and runs `kites_test_cov`, whose CTest test names are prefixed with `cov_` so they don't collide with the plain suite's test names.
+This builds and runs `atlas_test_cov`, whose CTest test names are prefixed with `cov_` so they don't collide with the plain suite's test names.
 
 ### Generating the HTML coverage report
 
@@ -68,7 +68,7 @@ Set via `-D<OPTION>=ON|OFF` at configure time, or in `CMakePresets.json`:
 |---------------------|---------|---------------------------------------------------|
 | `DISABLE_GUI`        | `ON`    | Disable GUI components during tests               |
 | `VM_DEBUG_PRINTS`     | `OFF`   | Enable debug prints in the VM during tests        |
-| `ENABLE_COVERAGE`     | `OFF`   | Build the `kites_test_cov` target and `coverage` target |
+| `ENABLE_COVERAGE`     | `OFF`   | Build the `atlas_test_cov` target and `coverage` target |
 
 ## Notes
 

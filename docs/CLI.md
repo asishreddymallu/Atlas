@@ -1,9 +1,9 @@
-# Using the Kites CLI
+# Using the Atlas CLI
 
-`kites-cli` is a headless build of the Kites simulator: it assembles a RISC-V
+`atlas-cli` is a headless build of the Atlas simulator: it assembles a RISC-V
 `.s` file, runs it on the chosen VM, and writes the results (registers,
 disassembly, and optionally a memory dump) to disk. It needs no display and no
-`QApplication` — it links the same `kites_core` the GUI uses, built with
+`QApplication` — it links the same `atlas_core` the GUI uses, built with
 `DISABLE_GUI` defined.
 
 > **Status:** the CLI assembles and runs a program end-to-end and dumps
@@ -18,16 +18,16 @@ option is required.
 
 ```bash
 cmake -B build -DCMAKE_PREFIX_PATH="path/to/Qt/6.x.x/<compiler>" .
-cmake --build build --target kites_cli
+cmake --build build --target atlas_cli
 ```
 
-The resulting binary is `kites-cli` (`build/kites-cli`, or
-`build/<config>/kites-cli.exe` on multi-config generators like Visual Studio).
+The resulting binary is `atlas-cli` (`build/atlas-cli`, or
+`build/<config>/atlas-cli.exe` on multi-config generators like Visual Studio).
 
 ## Usage
 
 ```
-kites-cli <assembly-file> [--vm <name>] [--mem-dump <hex_addr> <row_count>]...
+atlas-cli <assembly-file> [--vm <name>] [--mem-dump <hex_addr> <row_count>]...
 ```
 
 | Argument       | Description                                                                          |
@@ -62,7 +62,7 @@ li   a7, 10       # SYSCALL_EXIT
 ecall
 EOF
 
-./build/kites-cli /tmp/hello.s --vm rv5-h-f
+./build/atlas-cli /tmp/hello.s --vm rv5-h-f
 ```
 
 Sample output:
@@ -80,7 +80,7 @@ Errors      -> /tmp/vm_state/errors_dump.json
 Dumping a region of memory in the same run:
 
 ```bash
-./build/kites-cli /tmp/hello.s --mem-dump 0 4 --mem-dump 100 2
+./build/atlas-cli /tmp/hello.s --mem-dump 0 4 --mem-dump 100 2
 ```
 
 adds a `Memory -> .../vm_state/memory_dump.json` line and writes both
@@ -111,7 +111,7 @@ it can be consumed by scripts or other tooling. The directory location
 depends on platform:
 
 - **Windows / Linux:** `<current working directory>/vm_state/`
-- **macOS:** `~/Library/Application Support/Kites/vm_state/`
+- **macOS:** `~/Library/Application Support/Atlas/vm_state/`
 
 | File                    | Written                        | Contents                                                     |
 |-------------------------|---------------------------------|----------------------------------------------------------------|

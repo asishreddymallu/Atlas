@@ -3,8 +3,8 @@
 The living description of where things are and why. Generated from the tracked
 tree (`git ls-files`); every path below was checked against it.
 
-Atlas is a RISC-V teaching platform built on the Kites simulator (upstream
-`7ddb6f3`, v1.1.8). C++20, Qt 6, CMake + Ninja.
+Atlas is a RISC-V teaching platform forked from an upstream simulator
+(v1.1.8, commit `7ddb6f3`; see [NOTICE.md](../NOTICE.md)). C++20, Qt 6, CMake + Ninja.
 
 For paths as they were before the `refactor/repo-layout` work, see
 [docs/audit/path_mapping.md](audit/path_mapping.md).
@@ -33,7 +33,7 @@ A `.ui` rename also changes the AUTOUIC-generated header, from `ui_<old>.h` to
 
 ### Why `src/` is the include root
 
-`CMakeLists.txt` adds `${SRC_DIR}` to `target_include_directories(kites_core
+`CMakeLists.txt` adds `${SRC_DIR}` to `target_include_directories(atlas_core
 PUBLIC ...)`, so every header is included by its path **relative to `src/`**:
 
 ```cpp
@@ -57,8 +57,8 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 
 | Path | Purpose |
 |---|---|
-| `main.cpp` | GUI entry point; constructs `Kites::MainWindow`. |
-| `CMakeLists.txt`, `CMakePresets.json` | Build definition for `Kites` (GUI), `kites-cli`, and `kites_core` (static library both link). |
+| `main.cpp` | GUI entry point; constructs `Atlas::MainWindow`. |
+| `CMakeLists.txt`, `CMakePresets.json` | Build definition for `Atlas` (GUI), `atlas-cli`, and `atlas_core` (static library both link). |
 | `src/` | All application code. Also the include root. |
 | `cli/` | Command-line front end: `main.cpp`, `repl.cpp`, `repl.h`. |
 | `test/` | GoogleTest suite (28 `.cpp` files + `test/CMakeLists.txt`). |
@@ -110,7 +110,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/ui/log_panel/` | A plain text edit used for debug logging. |
 | `src/ui/dialogs/` | `settings_dialog.*`, `processor_dialog.*`, `addpseudo_dialog.*` (each with a `.ui`). |
 | `src/ui/theme/` | `ThemeManager` (loads the theme JSON and renders `template.qss`), `FontManager`, `IconManager`, and `app_style.h` (a `QProxyStyle`). |
-| `src/ui/common/` | Shared UI pieces: `kites_tab.*` (tab base class), `kites_editor.*`, `syntax_highlighter.*`, `line_number_gutter_column.*`, `gutter_column.h`, `collapsible_section.*`, `data_table_style.*`, `table_font.*`, `display_base_types.h`. |
+| `src/ui/common/` | Shared UI pieces: `atlas_tab.*` (tab base class), `atlas_editor.*`, `syntax_highlighter.*`, `line_number_gutter_column.*`, `gutter_column.h`, `collapsible_section.*`, `data_table_style.*`, `table_font.*`, `display_base_types.h`. |
 
 ---
 
@@ -130,17 +130,17 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | What the ribbon shows when the window is narrow | `computeRibbonLayout()` in `src/ui/ribbon/ribbon_layout.cpp` — a pure function of the available width and each group's measured widths. Degrades: everything full → everything compact → page groups into the overflow menu, rightmost first. Run and File never overflow. |
 | Why the ribbon cannot oscillate while resizing | the same function: it reads no widget, no current geometry and no previous result, so hiding a group cannot change the answer. Tested over a 0–2000 px sweep in `test/ribbon_layout_test.cpp` |
 | What each editing key does in the Input pane | `Editor::handleEditingKey()` in `src/ui/editor_tab/main_editor.cpp`, over the pure transformations in `src/ui/editor_tab/editor_commands.h` / `.cpp`. Those take document text and a selection and return one `Edit` — the narrow range to replace, the replacement, and where the cursor lands — with no widget, cursor or clipboard in them, so the rules are a table of strings in `test/editor_shortcuts_test.cpp`. `Editor::applyEdit()` applies one inside a single `beginEditBlock`, so one Ctrl+Z undoes one command. No `QAction` and no `QShortcut`: the application-level set stays at seven. See `docs/design/editor_shortcuts.md` |
-| The suggestion list | `src/ui/editor_tab/completion_popup.h` / `.cpp` — an own widget, a child of the editor's viewport, drawn and keyed by hand. Not `QCompleter`: that popup is a top-level `QListView`, untestable in `kites_test`, outside the application stylesheet, and with no way to draw matched characters or a badge |
+| The suggestion list | `src/ui/editor_tab/completion_popup.h` / `.cpp` — an own widget, a child of the editor's viewport, drawn and keyed by hand. Not `QCompleter`: that popup is a top-level `QListView`, untestable in `atlas_test`, outside the application stylesheet, and with no way to draw matched characters or a badge |
 | What the suggestion list offers, and in what order | `src/ui/editor_tab/completion_model.h` / `.cpp` — `score()`, `filter()` and `wordAt()`, pure. `wordAt()` keeps the word's start, the caret and the end apart, which is what stops the text AFTER the caret leaking into the filter |
 | Auto-closing pairs and bracket matching | `src/ui/editor_tab/editor_commands.h` / `.cpp` — `autoPair()`, `pairBackspace()` and `bracketAt()`, pure like the rest of that file. They share a one-line `contextAt()` scanner for "is this offset in a comment or a string", because the syntax highlighter cannot answer it: it has no per-block state and no string rule, only `#[^\n]*` |
 | Where the labels are | `src/ui/editor_tab/label_index.h` / `.cpp` — `findLabels()`, `nameAt()`, `definitionsOnLine()` and `isLabelChar()`, pure functions over text with no widget, cursor or document, the same shape as `editor_commands` and `completion_model`. The character set and the definition rule are read from the assembler and never modified: a name is `[A-Za-z0-9_]+`, a `.` in it is rejected as a label, and an identifier in operand position is a reference even when its text is a mnemonic. `labeldiff` in the out-of-tree harness checks the index against `Parser::getSymbolTable()` over the corpus — 0 disagreements |
 | Renaming a label | `Editor::openRenameAtCaret()` / `applyRename()` in `main_editor.cpp`, over `checkRename()` for the rules and the index for the sites. The edits go last-to-first inside one edit block, so one Ctrl+Z undoes the whole rename. `test/rename_assembler_test.cpp` reads the result back with the real lexer and parser rather than trusting the editor's own account of what it did |
 | Jumping to a label, and back | `Editor::goToDefinitionAtCaret()`, `goBack()` and `showReferencesAtCaret()` in `main_editor.cpp`, over `Editor::labelIndex()` — a cache keyed on the document's revision, not on a timer, because a timer would let a jump be computed from a document that has already changed under it. The back stack holds `QTextCursor`s rather than offsets, so an edit above a remembered position moves it with the text. Still no `QAction` and no `QShortcut` |
 | The references and rename overlays | `src/ui/editor_tab/label_overlays.h` / `.cpp` — `ReferencesBar`, wired to `Shift+F12`; `RenameBar` and the pure `checkRename()`, wired to `F2`. Children of the viewport and hand-painted, like every other overlay here: a plain `QWidget` paints neither background nor border from a stylesheet, which is how the find bar once shipped see-through |
-| Editor zoom | `KitesEditor::setZoomDelta()` / `applyZoomedFont()` in `src/ui/common/kites_editor.cpp` — a session delta on the configured font. It is here because the **gutters** are: a font change re-measures the line-number column and re-centres the breakpoint dot. The size is written into the editor's per-widget stylesheet, because the application sheet's `QWidget { font-size }` beats `setFont()`; the gutters get the same, and the size is computed from the configured font rather than read back from `font()` |
+| Editor zoom | `AtlasEditor::setZoomDelta()` / `applyZoomedFont()` in `src/ui/common/atlas_editor.cpp` — a session delta on the configured font. It is here because the **gutters** are: a font change re-measures the line-number column and re-centres the breakpoint dot. The size is written into the editor's per-widget stylesheet, because the application sheet's `QWidget { font-size }` beats `setFont()`; the gutters get the same, and the size is computed from the configured font rather than read back from `font()` |
 | How a search finds things | `src/ui/editor_tab/find_engine.h` / `.cpp` — pure functions of a string: `findAll`, `nextIndex`, `expandReplacement`, `replaceAllEdits`. Offsets are `QTextDocument` positions, asserted rather than assumed. Plain and regex both go through `QRegularExpression` with `MultilineOption`; the walk uses `globalMatch()`, because `match(subject, offset)` is O(subject) per call — 1410 ms against under 1 ms on an 877,000 character document |
 | The find and go-to-line overlays | `src/ui/editor_tab/find_bar.{h,cpp}` and `goto_line_bar.{h,cpp}`, both children of the editor's **viewport** and in no layout, so the viewport is the same size open or closed. They share one `repositionOverlay()` so they cannot drift apart. Keys are handled in `Editor::handleEditingKey` and in the bar itself; no `QAction`, no `QShortcut` |
-| How highlights compose instead of replacing each other | `KitesEditor::refreshExtraSelections()` is the only caller of `setExtraSelections()`. It merges three lists in order — current line, find matches, diagnostics — so a later entry wins on conflicting format properties and a squiggle is never masked. The execution highlight is painted in `Editor::paintEvent`, not an extra selection, so it composes without taking part |
+| How highlights compose instead of replacing each other | `AtlasEditor::refreshExtraSelections()` is the only caller of `setExtraSelections()`. It merges three lists in order — current line, find matches, diagnostics — so a later entry wins on conflicting format properties and a squiggle is never masked. The execution highlight is painted in `Editor::paintEvent`, not an extra selection, so it composes without taking part |
 | Where a breakpoint lives, and how it follows its line | `Editor` in `src/ui/editor_tab/main_editor.cpp` holds the 1-based lines plus one `QTextCursor` per breakpoint, selecting that whole line and its newline. Qt maintains the selection through ordinary edits, and the selection going empty is how a deleted line is told from a moved one. The editor's own commands apply as one replacement, inside which anchors collapse, so `applyEdit()` remaps through the `EditorCommands::LineMap` the command returns. `getBreakpoints()` still hands `MainWindow` the same `std::vector<uint64_t>` of 1-based lines for `ProcessorManager::setBreakpoints()` |
 | The two hairlines bounding the ribbon panel | `RibbonPanel` in `src/ui/ribbon/ribbon_bar.cpp` — two 1 px `QFrame`s named `ribbonRule`, held outside the layout and raised above the panel's other children, positioned on its first and last rows. They take `{{border}}` from `resources/themes/template.qss`, the same token as the group dividers. A stylesheet `border` on `#ribbonPanel` cannot do this job: Qt's stylesheet style fills a plain `QWidget`'s background but does not draw its border, and a real border would push the chrome from 158 px to 160 because neither the bar nor the panel has any slack |
 | The overflow chevron and its menu | `RibbonBar::applyOverflowLayout()` and `rebuildOverflowMenu()` in `src/ui/ribbon/ribbon_bar.cpp`. The menu is built when it opens, one submenu per overflowed group, from the groups' own `QAction`s |
@@ -153,10 +153,10 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | The execution actions (Run, Debug Run, Pause, Step, Undo, Redo, Processor) and the speed control | `MainWindow::setUpExecutionActions()` in `src/ui/main_window/main_window.cpp` — the old main toolbar's, which the ribbon now shows |
 | Tagging an icon so a theme change re-tints it | `setThemedIcon()` in `src/ui/theme/icon_manager.h`; the pass is `MainWindow::themeChangedSlot()` |
 | Adding an icon | the SVG in `resources/icons/`, a line in `resources/icons/icons.qrc`, an entry on the `Icon` enum in `src/ui/theme/icon_manager.h`, and a line in `IconManager::setUpIconPaths()`. Then `setThemedIcon()` at `tabStripIconSize`, `smallRibbonIconSize` or `largeRibbonIconSize` — the three sizes the chrome uses, all in `icon_manager.h` |
-| Whether the icon set is visually consistent | not testable in `kites_test`, which links no `.qrc`. An out-of-tree harness renders every SVG with `QSvgRenderer` and compares the ink extents; every icon is a 24-unit viewBox at a uniform rendered stroke, filling the same fraction of its canvas |
+| Whether the icon set is visually consistent | not testable in `atlas_test`, which links no `.qrc`. An out-of-tree harness renders every SVG with `QSvgRenderer` and compares the ink extents; every icon is a 24-unit viewBox at a uniform rendered stroke, filling the same fraction of its canvas |
 | Whether the ribbon actually *draws* anything | an out-of-tree ink check, part of the standing verification list. It grabs the ribbon panel for every page, at 1366/1200/1000/849 px, in all four themes, and requires every button of every non-hidden group to (a) put ink inside its own rectangle and (b) be at least as wide as its `sizeHint()` — and each of the six content tabs not to be a flat colour. Geometry and visibility checks cannot see a widget that is laid out correctly and painting nothing, nor one squeezed until its label elides away; this can. Height is deliberately not checked: stacked buttons are given a cell shorter than their hint on purpose. Run it before calling any ribbon work done |
 | The interface's text size | `baseFontPixelSize` in `src/ui/theme/type_scale.h`, substituted into the stylesheet as `{{fontSize}}`, `{{fontSizeSmall}}` and `{{fontSizeTable}}`. The code editor's font is separate and comes from `FontManager` |
-| Theme colours | `resources/themes/*.json` — `tokyo_night.json`, `tokyo_night_storm.json`, `kites_dark.json`, `kites_light.json` |
+| Theme colours | `resources/themes/*.json` — `tokyo_night.json`, `tokyo_night_storm.json`, `atlas_dark.json`, `atlas_light.json` |
 | The stylesheet template | `resources/themes/template.qss` |
 | Theme loading / token substitution | `src/ui/theme/theme_manager.cpp` |
 | Instruction metadata (autocomplete, help) | `resources/instructions/instructions.json` |
@@ -183,7 +183,7 @@ cmake -S . -B build-tests -G Ninja -DENABLE_TESTS=ON && cmake --build build-test
 ctest --test-dir build-tests --output-on-failure
 ```
 
-Binaries: `build/Kites` (GUI) and `build/kites-cli` (CLI).
+Binaries: `build/Atlas` (GUI) and `build/atlas-cli` (CLI).
 
 Tests must be run through CTest, not by invoking the test binary directly:
 they open example programs by relative path and CTest sets the working

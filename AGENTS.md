@@ -1,7 +1,7 @@
 # Atlas Agent Context & Guidelines
 
 ## Project Overview
-- **Project**: Atlas — RISC-V computer architecture teaching platform built on Kites simulator (upstream commit `7ddb6f3`, v1.1.8).
+- **Project**: Atlas — RISC-V computer architecture teaching platform forked from an upstream simulator at v1.1.8 (commit `7ddb6f3`); see `NOTICE.md`.
 - **Tech Stack**: C++20, Qt6 (Qt 6.11), CMake, Ninja.
 - **Platform**: Fedora Linux (Workstation Edition).
 
@@ -12,7 +12,7 @@
   # Or use the helper script:
   ./scripts/build.sh
   ```
-  Binaries generated: `build/Kites` (GUI) and `build/kites-cli` (CLI).
+  Binaries generated: `build/Atlas` (GUI) and `build/atlas-cli` (CLI).
 
 - **Test Build and Execution**:
   ```bash
@@ -20,8 +20,8 @@
   # Or use the helper script (prints: total / passed / failed):
   ./scripts/test.sh
   ```
-  Test binary: `build-tests/test/kites_test`.
-  > **Note**: Run tests via `ctest --test-dir build-tests` (or `./scripts/test.sh`). Do not run `kites_test` directly from the repo root because tests load files via relative path `"../examples/..."` (~100 occurrences); CTest properly executes them with working directory `test/` configured by `gtest_discover_tests`.
+  Test binary: `build-tests/test/atlas_test`.
+  > **Note**: Run tests via `ctest --test-dir build-tests` (or `./scripts/test.sh`). Do not run `atlas_test` directly from the repo root because tests load files via relative path `"../examples/..."` (~100 occurrences); CTest properly executes them with working directory `test/` configured by `gtest_discover_tests`.
 
 ## Development Rules & Constraints
 1. **One feature per branch**: Keep logical changes isolated on designated topic branches.
@@ -29,14 +29,14 @@
 3. **Continuous verification**: Build and run tests via `ctest --test-dir build-tests` after every change.
 4. **Core logic isolation**: Do NOT modify simulator core logic (RVSS/RV5S models, cache hierarchy, assembler semantics) during UI tasks unless explicitly requested.
 5. **Clean compiler output**: New code must be warning-free under `-Wall -Wextra`.
-6. **No premature renaming**: Do not rename existing `Kites` identifiers, namespaces, or files until an explicit dedicated rename commit.
+6. **Naming**: The project was renamed to Atlas in the `final/atlas` rebrand. Use `Atlas` for namespaces, identifiers, targets and user-facing text; the upstream name may appear only in `LICENSE.md`, `NOTICE.md`, the changes document that `NOTICE.md` links to, and `docs/audit/**`.
 7. **Dependency discipline**: Always ask the user before introducing any new external dependencies or libraries.
 8. **Safety & Non-destructive operations**: Never execute destructive git commands (`git push`, `git reset --hard`, `git clean`) or delete files outside build directories without explicit user confirmation.
 
 ## Known Baseline Issues & Verified Facts
 1. **Test Suite Status & Harness Resolution**:
-   - Total registered tests: **4,134** (T5; 158 at the original audit).
-   - Test execution result: **4,134/4,134 pass** under serial `ctest --test-dir build-tests`. Do not use `ctest -j`: the GUI tests share `test/vm_state/temp.asm` and flake in parallel (known_issues 150, `docs/TESTING.md`).
+   - Total registered tests: **4,172** (final/atlas; 158 at the original audit).
+   - Test execution result: **4,172/4,172 pass** under serial `ctest --test-dir build-tests`. Do not use `ctest -j`: the GUI tests share `test/vm_state/temp.asm` and flake in parallel (known_issues 150, `docs/TESTING.md`).
    - *Harness Root Cause 1*: `test/test_main.cpp` originally lacked a `QApplication`. Constructing any RVSS/RV5S processor builds a `QGraphicsScene`, which crashed with `SIGSEGV` when uninitialized in headless environments. Fixed with an offscreen headless `QApplication` in `test_main.cpp`.
    - *Harness Root Cause 2*: Tests open `"../examples/..."` (~100 occurrences), requiring execution with working directory set to `test/`. CTest sets this automatically via `gtest_discover_tests` `WORKING_DIRECTORY`.
    - Earlier "43 pass / 115 fail" figures were due to running without QApplication / wrong working directory, not simulator logic bugs.

@@ -1,6 +1,6 @@
 # Themes
 
-Atlas ships ten themes. Four are its own: Kites Dark, Kites Light, Tokyo
+Atlas ships ten themes. Four are its own: Atlas Dark, Atlas Light, Tokyo
 Night and Tokyo Night Storm. Six are ports of Visual Studio Code colour
 themes (added in T8). The ports translate each theme's colours into Atlas's
 tokens (`resources/themes/*.json`). They contain no code from the original
@@ -88,7 +88,7 @@ listed below, from the generator's log.
   - cell text is dark on pale cells in light themes, and light on dark
     cells in dark themes;
   - the flush cross is 3:1 on every tint, and the bubble hatching 1.5:1;
-  - the five stage colours differ (ΔE76 ≥ 15). Known exception: Kites
+  - the five stage colours differ (ΔE76 ≥ 15). Known exception: Atlas
     Light, Tokyo Night and Tokyo Night Storm give ID and MEM the same
     colour (`success` = `cacheHit`).
 - **Syntax colours (new themes):** 3:1 on the editor background and the

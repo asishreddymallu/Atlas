@@ -12,7 +12,7 @@ nothing moved yet.
 
 ```
 .                         14   main.cpp, CMakeLists.txt, 4 agent/doc files, Doxyfile, presets, "100"
-├── cli                    3   kites-cli entry point + repl
+├── cli                    3   atlas-cli entry point + repl
 ├── docs                   4   coding_convention, TESTING, CLI, CUSTOM_REPLACEMENT_POLICY
 │   ├── audit              4   BASELINE_AUDIT, known_issues, disabled_tests, baseline_warnings
 │   └── design             1   editor_ui_exploration
@@ -61,8 +61,8 @@ Total tracked: **434 files**.
 | `SRC_DIR` | `"src"` (relative), `EXTERNAL_DIR` `"external"` |
 | Source discovery | `file(GLOB_RECURSE SRC_FILES "${SRC_DIR}/*.cpp")`, same for `*.h` and `*.ui` — **no `CONFIGURE_DEPENDS`**, so adding/moving files needs a manual re-configure |
 | Lua | `file(GLOB … CONFIGURE_DEPENDS "${EXTERNAL_DIR}/lua-5.5.0/src/*.c")`, excluding `lua.c`/`luac.c`, compiled with `-Wno-pedantic` |
-| Include path | `target_include_directories(kites_core PUBLIC "${PROJECT_BINARY_DIR}/${PROJECT_NAME}_autogen/include" ${SRC_DIR} ${EXTERNAL_DIR}/lua-5.5.0/src)` — **`src/` is the include root** |
-| Targets | `kites_core` (STATIC), `Kites` (OUTPUT_NAME `Kites`), `kites_cli` (OUTPUT_NAME `kites-cli`) |
+| Include path | `target_include_directories(atlas_core PUBLIC "${PROJECT_BINARY_DIR}/${PROJECT_NAME}_autogen/include" ${SRC_DIR} ${EXTERNAL_DIR}/lua-5.5.0/src)` — **`src/` is the include root** |
+| Targets | `atlas_core` (STATIC), `Atlas` (OUTPUT_NAME `Atlas`), `atlas_cli` (OUTPUT_NAME `atlas-cli`) |
 | Tests | `test/CMakeLists.txt`, `file(GLOB_RECURSE TEST_FILES CONFIGURE_DEPENDS "*.cpp")`, `gtest_discover_tests(... WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/test)` |
 | Qt | `CMAKE_AUTOMOC ON`, `CMAKE_AUTOUIC ON`, `CMAKE_AUTOUIC_SEARCH_PATHS = src/ui`. AUTORCC is **not** used; `.qrc` go through `qt6_add_resources` |
 
@@ -92,18 +92,18 @@ header name and the `#include` in its `.cpp`.** All twelve, with the class each 
 
 | .ui | generates | class | included by |
 |---|---|---|---|
-| `cache_tab/cacheconfigwidget.ui` | `ui_cacheconfigwidget.h` | `Kites::CacheConfigWidget` | `cacheconfigwidget.cpp` |
-| `cache_tab/cachetab.ui` | `ui_cachetab.h` | `Kites::CacheTab` | `cachetab.cpp` |
-| `compiler_tab/compilertab.ui` | `ui_compilertab.h` | `Kites::CompilerTab` | `compilertab.cpp` |
-| `dialogs/addpseudo_dialog.ui` | `ui_addpseudo_dialog.h` | `Kites::AddPseudoDialog` | `addpseudo_dialog.cpp` |
-| `dialogs/processor_dialog.ui` | `ui_processor_dialog.h` | `Kites::ProcessorDialog` | `processor_dialog.cpp` |
-| `dialogs/settings_dialog.ui` | `ui_settings_dialog.h` | `Kites::SettingsDialog` | `settings_dialog.cpp` |
-| `editor_tab/editortab.ui` | `ui_editortab.h` | `Kites::EditorTab` | `editortab.cpp` |
+| `cache_tab/cacheconfigwidget.ui` | `ui_cacheconfigwidget.h` | `Atlas::CacheConfigWidget` | `cacheconfigwidget.cpp` |
+| `cache_tab/cachetab.ui` | `ui_cachetab.h` | `Atlas::CacheTab` | `cachetab.cpp` |
+| `compiler_tab/compilertab.ui` | `ui_compilertab.h` | `Atlas::CompilerTab` | `compilertab.cpp` |
+| `dialogs/addpseudo_dialog.ui` | `ui_addpseudo_dialog.h` | `Atlas::AddPseudoDialog` | `addpseudo_dialog.cpp` |
+| `dialogs/processor_dialog.ui` | `ui_processor_dialog.h` | `Atlas::ProcessorDialog` | `processor_dialog.cpp` |
+| `dialogs/settings_dialog.ui` | `ui_settings_dialog.h` | `Atlas::SettingsDialog` | `settings_dialog.cpp` |
+| `editor_tab/editortab.ui` | `ui_editortab.h` | `Atlas::EditorTab` | `editortab.cpp` |
 | `mainwindow/mainwindow.ui` | `ui_mainwindow.h` | `MainWindow` | `mainwindow.cpp` |
-| `memory_tab/memorytab.ui` | `ui_memorytab.h` | `Kites::MemoryTab` | `memorytab.cpp` |
-| `processor_tab/processortab.ui` | `ui_processortab.h` | `Kites::ProcessorTab` | `processortab.cpp` |
-| `profiler_tab/profilertab.ui` | `ui_profilertab.h` | `Kites::ProfilerTab` | `profilertab.cpp` |
-| `register_table/registercontainer.ui` | `ui_registercontainer.h` | `Kites::RegisterContainer` | `registercontainer.cpp` |
+| `memory_tab/memorytab.ui` | `ui_memorytab.h` | `Atlas::MemoryTab` | `memorytab.cpp` |
+| `processor_tab/processortab.ui` | `ui_processortab.h` | `Atlas::ProcessorTab` | `processortab.cpp` |
+| `profiler_tab/profilertab.ui` | `ui_profilertab.h` | `Atlas::ProfilerTab` | `profilertab.cpp` |
+| `register_table/registercontainer.ui` | `ui_registercontainer.h` | `Atlas::RegisterContainer` | `registercontainer.cpp` |
 
 `docs/coding_convention.md` opens with: **"DO NOT REFORMAT THE UI FILES IT WILL
 BREAK THINGS UNEXPECTEDLY."** A `git mv` does not reformat, but any `.ui` rename
@@ -127,7 +127,7 @@ Moving either `test/` or `examples/` changes that relationship.
 
 ### Scripts, CI, packaging, docs
 - `scripts/build.sh`, `scripts/test.sh`: `cd` to repo root, then `cmake -S . -B build[-tests]`. **No source paths** — immune to the reorg.
-- `.github/workflows/release.yml`: references `build/Kites`, `build/Kites.exe`, `build/Kites.app` — **build outputs only**, immune.
+- `.github/workflows/release.yml`: references `build/Atlas`, `build/Atlas.exe`, `build/Atlas.app` — **build outputs only**, immune.
 - `Doxyfile`: `INPUT`, `OUTPUT_DIRECTORY`, `STRIP_FROM_PATH` are all **empty** — immune.
 - `CMakePresets.json`: only Qt/MinGW paths — immune.
 - `.clangd`: `CompilationDatabase: build/` — immune.
@@ -150,7 +150,7 @@ instead of `snake_case`. No file uses uppercase. Full list:
 | Directory | Files violating `snake_case` |
 |---|---|
 | `src/ui/cache_tab` | `cacheconfigwidget.{cpp,h,ui}`, `cachemodel.{cpp,h}`, `cachetab.{cpp,h,ui}` |
-| `src/ui/common` | `kitestab.{cpp,h}` |
+| `src/ui/common` | `atlastab.{cpp,h}` |
 | `src/ui/compiler_tab` | `compilertab.{cpp,h,ui}` |
 | `src/ui/editor_tab` | `editortab.{cpp,h,ui}` |
 | `src/ui/mainwindow` | `mainwindow.{cpp,h,ui}` + the directory itself |
@@ -210,7 +210,7 @@ edits in the same commit. No pure moves are proposed.
 | 1-3 | `src/ui/cache_tab/cacheconfigwidget.{cpp,h,ui}` | `cache_config_widget.{cpp,h,ui}` | rename + generated-name change | `#include "ui_cacheconfigwidget.h"`, `#include "cacheconfigwidget.h"` in `cachetab.cpp` |
 | 4-5 | `src/ui/cache_tab/cachemodel.{cpp,h}` | `cache_model.{cpp,h}` | rename | includes in `cachetab.cpp`, `cache_grid_delegate.h` |
 | 6-8 | `src/ui/cache_tab/cachetab.{cpp,h,ui}` | `cache_tab.{cpp,h,ui}` | rename + generated-name change | `ui_cachetab.h`; `mainwindow.cpp` include |
-| 9-10 | `src/ui/common/kitestab.{cpp,h}` | `kites_tab.{cpp,h}` | rename | 7 rooted includes across tabs |
+| 9-10 | `src/ui/common/atlastab.{cpp,h}` | `atlas_tab.{cpp,h}` | rename | 7 rooted includes across tabs |
 | 11-13 | `src/ui/compiler_tab/compilertab.{cpp,h,ui}` | `compiler_tab.{cpp,h,ui}` | rename + generated-name change | `ui_compilertab.h`; `mainwindow.cpp` |
 | 14-16 | `src/ui/editor_tab/editortab.{cpp,h,ui}` | `editor_tab.{cpp,h,ui}` | rename + generated-name change | `ui_editortab.h`; `mainwindow.cpp`, 2 test files |
 | 17-19 | `src/ui/mainwindow/mainwindow.{cpp,h,ui}` | `src/ui/main_window/main_window.{cpp,h,ui}` | dir rename + file rename + generated-name change | `ui_mainwindow.h`; `main.cpp`, 3 scratch harnesses (untracked) |
@@ -229,14 +229,14 @@ edits in the same commit. No pure moves are proposed.
 ## 6. Risks specific to this repository
 
 **R1 — Upstream merges (the dominant risk).** `upstream` points at
-`hghit-harshit/Kites`. **348 of 434 tracked files are byte-identical to
+the original project (see `NOTICE.md`). **348 of 434 tracked files are byte-identical to
 `v1.1.8`**, including `src/processor` (53/53), `src/ui/dialogs` (9/9),
 `src/ui/processor_tab` (24/26), `cli` (3/3), `examples` (45/45) and `external`
 (75/75). Git 2.56 does rename detection on merge by default and the counts here
 are far below any rename limit, so a *pure* move is usually followed correctly.
 It stops being free when upstream edits the same file, where the conflict is
 then reported against the old path and must be resolved by hand.
-**Recommendation: do not move or rename any Kites-origin file.** Every row in
+**Recommendation: do not move or rename any upstream-origin file.** Every row in
 §5 is a file Atlas already owns or barely touches — the proposal deliberately
 avoids `src/processor`, `src/ui/dialogs`, `cli/`, `examples/` and `external/`.
 `src/ui/mainwindow` is 2/3 Atlas-modified, and `processortab.*` is Atlas-modified,
@@ -287,7 +287,7 @@ Each phase is independently buildable and testable, smallest risk first.
 | Phase | Content | Rows | Risk |
 |---|---|---|---|
 | **1** | Docs and agent files: add `docs/audit/path_mapping.md`, update path citations in `AGENTS.md`, `GEMINI.md`, `docs/CLI.md`, `docs/audit/*` | 0 code | none — no build input |
-| **2** | `src/ui/common/kitestab.{cpp,h}` → `kites_tab.{cpp,h}` | 9-10 | low; 7 includes, no `.ui` |
+| **2** | `src/ui/common/atlastab.{cpp,h}` → `atlas_tab.{cpp,h}` | 9-10 | low; 7 includes, no `.ui` |
 | **3** | Leaf models: `cachemodel`, `memorymodel`, `registermodel` | 4-5, 20-21, 34-35 | low; no `.ui` |
 | **4** | Tabs with `.ui`: cache, compiler, memory, processor, profiler, register, editor | 1-8, 11-16, 22-33 | medium; 8 generated-header changes |
 | **5** | `src/ui/mainwindow` → `src/ui/main_window` + file rename | 17-19 | highest; touches `main.cpp` and every tab include |
@@ -335,5 +335,5 @@ What does not match is 35 file names. So this is a *rename* refactor, not a
 
 If you want a deeper reorganisation (for example splitting `src/processor` or
 introducing `src/core/`), say so — but note that **every such file is
-Kites-origin**, and the trade is explicit: tidier tree now, manual conflict
+upstream-origin**, and the trade is explicit: tidier tree now, manual conflict
 resolution on every upstream merge later.
