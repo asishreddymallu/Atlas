@@ -34,6 +34,13 @@ public:
      */
     void setDiagnostics(const QVector<Diagnostic> &diagnostics, int sourceLineCount = 0);
 
+    /// Floats the dock where it was left floating last time, if it was
+    /// (final/polish). Call once it is in the window.
+    void restoreFloatingState();
+    /// The smallest size it can be resized to while floating.
+    static constexpr int kFloatingMinWidth  = 320;
+    static constexpr int kFloatingMinHeight = 140;
+
     /// Rows currently listed, after deduplication.
     int problemCount() const;
 
@@ -43,7 +50,13 @@ signals:
     /// A navigable row was activated. Rows with no usable line never emit.
     void diagnosticActivated(const Diagnostic &diagnostic);
 
+protected:
+    void moveEvent(QMoveEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
+    void saveFloatingGeometry();
+    bool m_restoring = false;
     void activateRow(int row);
     void updateTitle();
 

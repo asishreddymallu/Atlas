@@ -244,6 +244,10 @@ void MainWindow::setUpProblemsDock()
     m_outputDock = new OutputDock(this);
     addDockWidget(Qt::BottomDockWidgetArea, m_outputDock);
     tabifyDockWidget(m_problemsDock, m_outputDock);
+    // After the tabify, which would pull a floating dock back in: floating
+    // where it was left, if it was (final/polish).
+    m_problemsDock->restoreFloatingState();
+    m_problemsDock->hide();
     m_outputDock->hide(); // shown when the program prints or reads
     QAction *outputToggle = m_outputDock->toggleViewAction();
     outputToggle->setText("Output");

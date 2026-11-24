@@ -1,9 +1,12 @@
 #include "problems_dock.h"
 #include "problems_model.h"
+#include "config/app_settings.h"
 #include "ui/common/data_table_style.h"
 
 #include <QHeaderView>
 #include <QKeyEvent>
+#include <QMoveEvent>
+#include <QResizeEvent>
 #include <QLabel>
 #include <QStackedWidget>
 #include <QTableView>
@@ -16,6 +19,21 @@ ProblemsDock::ProblemsDock(QWidget *parent)
 {
     setObjectName(QStringLiteral("problemsDock"));
     setAllowedAreas(Qt::BottomDockWidgetArea | Qt::TopDockWidgetArea);
+    // Close, move and float: the float button in the title bar (final/polish).
+    setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable |
+                QDockWidget::DockWidgetFloatable);
+    // Floating, it is its own resizable window, remembered between runs;
+    // docked, it takes the bottom area's size as before.
+    connect(this, &QDockWidget::topLevelChanged, this,
+            [this](bool floating)
+            {
+                setMinimumSize(floating ? QSize(kFloatingMinWidth, kFloatingMinHeight) : QSize(0, 0));
+                if (m_restoring)
+                    return;
+                AppSettings::getInstance().setProblemsDockFloating(floating);
+                if (floating)
+                    saveFloatingGeometry();
+            });
 
     m_model = new ProblemsModel(this);
 
@@ -87,5 +105,35 @@ void ProblemsDock::updateTitle()
 {
     const int count = m_model->problemCount();
     setWindowTitle(count > 0 ? tr("Problems (%1)").arg(count) : tr("Problems"));
+}
+void ProblemsDock::restoreFloatingState()
+{
+    const AppSettings &settings = AppSettings::getInstance();
+    if (!settings.problemsDockFloating())
+        return;
+    m_restoring = true;
+    setFloating(true);
+    const QRect saved = settings.problemsDockGeometry();
+    if (saved.isValid())
+        setGeometry(saved);
+    m_restoring = false;
+}
+
+void ProblemsDock::saveFloatingGeometry()
+{
+    if (isFloating() && !m_restoring)
+        AppSettings::getInstance().setProblemsDockGeometry(geometry());
+}
+
+void ProblemsDock::moveEvent(QMoveEvent *event)
+{
+    QDockWidget::moveEvent(event);
+    saveFloatingGeometry();
+}
+
+void ProblemsDock::resizeEvent(QResizeEvent *event)
+{
+    QDockWidget::resizeEvent(event);
+    saveFloatingGeometry();
 }
 } // namespace Atlas

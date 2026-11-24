@@ -11,6 +11,8 @@ constexpr const char *kEditorFontFamilyKey = "editor/fontFamily";
 constexpr const char *kEditorFontSizeKey = "editor/fontSize";
 constexpr const char *kCompilerOutputBorderStyleKey = "compilerOutput/borderStyle";
 constexpr const char *kTimingOverlayHeightKey = "timingOverlay/height";
+constexpr const char *kProblemsDockFloatingKey = "problemsDock/floating";
+constexpr const char *kProblemsDockGeometryKey = "problemsDock/geometry";
 
 constexpr int kDefaultEditorFontSize = 11;
 } // namespace
@@ -73,6 +75,26 @@ int AppSettings::timingOverlayHeight() const
 void AppSettings::setTimingOverlayHeight(int height)
 {
     m_settings.setValue(kTimingOverlayHeightKey, height);
+}
+
+bool AppSettings::problemsDockFloating() const
+{
+    return m_settings.value(kProblemsDockFloatingKey, false).toBool();
+}
+
+void AppSettings::setProblemsDockFloating(bool floating)
+{
+    m_settings.setValue(kProblemsDockFloatingKey, floating);
+}
+
+QRect AppSettings::problemsDockGeometry() const
+{
+    return m_settings.value(kProblemsDockGeometryKey, QRect()).toRect();
+}
+
+void AppSettings::setProblemsDockGeometry(const QRect &geometry)
+{
+    m_settings.setValue(kProblemsDockGeometryKey, geometry);
 }
 
 BorderStyle AppSettings::compilerOutputBorderStyle() const
