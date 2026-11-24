@@ -122,18 +122,27 @@ Entries that record a deliberate trade-off rather than a defect are marked *(des
 | Records, corrections or intended changes, not defects | 31, 32, 34, 35, 36, 42, 43, 44, 47, 67, 156 |
 | Headed FIXED, WITHDRAWN, DONE or Resolved | all others |
 
+## Delivered since the plan
+
+- **Standalone packages (final/package).**
+  - `scripts/package_linux.sh` writes an AppImage and a tar.gz, and `scripts/package_windows.ps1` writes a zip.
+  - `scripts/check_package.sh` / `.ps1` are the smoke checks.
+  - The workflow `.github/workflows/release.yml` builds and checks the packages, and publishes them to a GitHub Release for a version tag.
+
+  What was verified:
+  - CI run 45406566957 on `final/package` (commit 92534aa) built, packaged and smoke-checked the AppImage and the tar.gz on ubuntu-22.04, and the Windows zip on windows-latest.
+  - By hand on Fedora 44, the Linux artifacts of that run passed `check_package.sh` (AppImage and tar.gz). The AppImage was opened, `examples/scheduler/load_use_original.s` ran on the 5-stage forwarding model in 11 cycles, and the Processor tab, the Profiler tab and Help > About were looked at.
+  - The Windows zip was built and checked by CI only.
+
+  Building the package on Fedora 44 itself needs a newer patchelf (see the comment in `scripts/package_linux.sh`). The CI package is not affected.
+
 ## Not delivered from the original scope
 
-- **A verified standalone package.** What exists (final/package):
-  - `scripts/package_linux.sh` writes an AppImage and a tar.gz; `scripts/package_windows.ps1` writes a zip;
-  - `scripts/check_package.sh` / `.ps1` are the smoke checks;
-  - the workflow `.github/workflows/release.yml` builds and checks both on ubuntu-22.04 and windows-latest, and publishes them for a version tag.
-
-  Not verified:
-  - On Fedora 44 the script runs end to end, but the package crashes on start. linuxdeploy's bundled patchelf 0.15 corrupts libraries linked with DT_RELR, Fedora's default, so the check reports FAIL. The check passes on the same binaries unbundled, so the checks themselves work.
-  - The workflow had not run when this was written. So no Linux package has passed its check, and the Windows zip has never been built.
-  - Neither package has been run by hand on another machine.
-  - There is no installer (MSI, .deb or .rpm).
+- **Packaging beyond the AppImage, tar.gz and zip:**
+  - an installer (MSI, .deb or .rpm);
+  - a macOS build;
+  - code signing (the Windows executable is not signed);
+  - a hand run of the Windows zip.
 - **The rest of the Profiler metrics on the roadmap.** A first set was built on `final/metrics` ([profiler_metrics.md](profiler_metrics.md)): the instruction mix, branch statistics, speed-up over single-cycle, forwarding events, the hottest loops, and misses by cause. None of the six was skipped. Not built:
   - stage occupancy;
   - estimated run time;
