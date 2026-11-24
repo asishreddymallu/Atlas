@@ -10,6 +10,8 @@
  */
 #pragma once
 
+#include "common/version.h" // atlasVersion(), which the record carries
+
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -55,8 +57,4 @@ struct LabRecordInput
 
 /// The record as a JSON document (pretty-printed, newline-terminated).
 [[nodiscard]] std::string buildLabRecordJson(const LabRecordInput &input);
-
-/// The Atlas version compiled in: `git describe` at configure time, or
-/// "unknown" when the build had no git.
-[[nodiscard]] std::string atlasVersion();
 } // namespace Atlas

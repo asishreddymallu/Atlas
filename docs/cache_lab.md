@@ -121,7 +121,7 @@ run, schema `atlas.lab-record/1`, built by `buildLabRecordJson()` in
 ```json
 {
   "schema": "atlas.lab-record/1",
-  "atlasVersion": "demo-candidate-5-22-gabc1234",
+  "atlasVersion": "1.0.0+abc1234",
   "timestamp": "2026-11-24T10:15:30Z",
   "program": { "name": "matmul_ijk.s", "sha256": "<64 hex digits>" },
   "processor": "Single-cycle",
@@ -151,7 +151,7 @@ run, schema `atlas.lab-record/1`, built by `buildLabRecordJson()` in
 
 | Field | Meaning |
 | --- | --- |
-| `atlasVersion` | `git describe --always --dirty` when the build was configured, or `unknown`. |
+| `atlasVersion` | The Atlas version, as in Help > About: `1.0.0`, plus `+<short commit>` when the build was configured in a git checkout (`src/common/version.cpp`). |
 | `timestamp` | When the record was exported, ISO 8601 UTC. |
 | `program.name` | The opened file's name (`untitled.s` if none was opened). |
 | `program.sha256` | SHA-256 of the source the last successful load assembled. |

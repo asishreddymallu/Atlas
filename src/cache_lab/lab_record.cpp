@@ -5,10 +5,6 @@
 #include <iomanip>
 #include <sstream>
 
-#ifndef ATLAS_VERSION
-#define ATLAS_VERSION "unknown"
-#endif
-
 namespace Atlas
 {
 namespace
@@ -26,11 +22,6 @@ std::string hitRate(uint64_t hits, uint64_t accesses)
     return out.str();
 }
 } // namespace
-
-std::string atlasVersion()
-{
-    return ATLAS_VERSION;
-}
 
 std::string buildLabRecordJson(const LabRecordInput &in)
 {

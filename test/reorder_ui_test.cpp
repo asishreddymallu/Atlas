@@ -7,6 +7,7 @@
  */
 #include "scheduler_test_support.h"
 
+#include "common/version.h"
 #include "scheduler_gate/reorder_gate.h"
 #include "ui/dialogs/about_dialog.h"
 #include "ui/dialogs/reorder_dialog.h"
@@ -87,6 +88,7 @@ TEST(ReorderUi, TheAboutDialogNamesTheCreditAndTheLicenceFiles)
 {
     EXPECT_EQ(AboutDialog::lines(),
               (QStringList{QStringLiteral("Atlas: a RISC-V assembly simulator"),
+                           QStringLiteral("Version ") + QString::fromStdString(atlasVersion()),
                            QStringLiteral("Reordering scheduler by Nandan Nihal (CS25BTECH11014)"),
                            QStringLiteral("Licence and origin: see NOTICE.md and LICENSE.md")}));
     AboutDialog dialog;

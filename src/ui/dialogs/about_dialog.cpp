@@ -1,5 +1,6 @@
 #include "ui/dialogs/about_dialog.h"
 
+#include "common/version.h"
 #include "ui/dialogs/reorder_dialog.h"
 
 #include <QDialogButtonBox>
@@ -10,7 +11,9 @@ namespace Atlas
 {
 QStringList AboutDialog::lines()
 {
-    return {QStringLiteral("Atlas: a RISC-V assembly simulator"), reorderSchedulerCredit(),
+    return {QStringLiteral("Atlas: a RISC-V assembly simulator"),
+            QStringLiteral("Version %1").arg(QString::fromStdString(atlasVersion())),
+            reorderSchedulerCredit(),
             QStringLiteral("Licence and origin: see NOTICE.md and LICENSE.md")};
 }
 

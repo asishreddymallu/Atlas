@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(Atlas LANGUAGES CXX C)
+project(Atlas VERSION 1.0.0 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -61,23 +61,48 @@ list(FILTER HEADER_FILES EXCLUDE REGEX ".*/src/scheduler/.*")
 file(GLOB SCHEDULER_SRC_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.cpp")
 file(GLOB SCHEDULER_HEADER_FILES CONFIGURE_DEPENDS "${SRC_DIR}/scheduler/*.h")
 
-# ATLAS_VERSION for the cache lab record: `git describe` at configure time,
-# "unknown" without git. Given to one source file, so a new commit rebuilds
-# only that file (after a re-configure).
-set(ATLAS_VERSION "unknown")
+# ATLAS_VERSION (common/version.cpp, shown in About and written in the cache
+# lab record): the project version, plus "+<short commit>" in a git checkout.
+# Only the commit is asked of git - never `describe`, so tags (old demo tags
+# included) cannot leak into it. Git's HEAD and the branch it points at are
+# configure dependencies, so a new commit re-configures and the hash stays
+# current; the definition is on one source file, so only it rebuilds.
+set(ATLAS_VERSION "${PROJECT_VERSION}")
 find_package(Git QUIET)
 if(GIT_FOUND)
-    execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --dirty
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
                     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                    OUTPUT_VARIABLE ATLAS_GIT_DESCRIBE
+                    OUTPUT_VARIABLE ATLAS_GIT_COMMIT
                     OUTPUT_STRIP_TRAILING_WHITESPACE
                     ERROR_QUIET
                     RESULT_VARIABLE ATLAS_GIT_RESULT)
-    if(ATLAS_GIT_RESULT EQUAL 0 AND ATLAS_GIT_DESCRIBE)
-        set(ATLAS_VERSION "${ATLAS_GIT_DESCRIBE}")
+    if(ATLAS_GIT_RESULT EQUAL 0 AND ATLAS_GIT_COMMIT)
+        set(ATLAS_VERSION "${PROJECT_VERSION}+${ATLAS_GIT_COMMIT}")
+        execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --path-format=absolute --git-path HEAD
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        OUTPUT_VARIABLE ATLAS_GIT_HEAD_FILE
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        execute_process(COMMAND ${GIT_EXECUTABLE} symbolic-ref -q HEAD
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                        OUTPUT_VARIABLE ATLAS_GIT_REF
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        set(ATLAS_GIT_WATCH ${ATLAS_GIT_HEAD_FILE})
+        if(ATLAS_GIT_REF)
+            execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --path-format=absolute --git-path ${ATLAS_GIT_REF}
+                            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                            OUTPUT_VARIABLE ATLAS_GIT_REF_FILE
+                            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+            list(APPEND ATLAS_GIT_WATCH ${ATLAS_GIT_REF_FILE})
+        endif()
+        foreach(atlas_git_file IN LISTS ATLAS_GIT_WATCH)
+            if(EXISTS "${atlas_git_file}")
+                set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${atlas_git_file}")
+            endif()
+        endforeach()
     endif()
 endif()
-set_source_files_properties(${SRC_DIR}/cache_lab/lab_record.cpp PROPERTIES
+message(STATUS "Atlas version ${ATLAS_VERSION}")
+set_source_files_properties(${SRC_DIR}/common/version.cpp PROPERTIES
     COMPILE_DEFINITIONS "ATLAS_VERSION=\"${ATLAS_VERSION}\"")
 
 list(APPEND SRC_FILES ${LUA_SRC_FILES})
