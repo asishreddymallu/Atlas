@@ -225,6 +225,27 @@ void MoreMetricsPanel::refresh()
                                   : QStringLiteral(". ") + why) +
                       QStringLiteral(" Note: ") + QString::fromLatin1(kSpeedupCaveat) + QStringLiteral("."));
 
+    // Forwarding: only the two models with a forwarding unit.
+    const bool forwarding = s.processor == ProcessorType::RV5Stage_NH_F ||
+                            s.processor == ProcessorType::RV5Stage_H_F;
+    const QString noForwarding =
+        QStringLiteral("n/a: this processor has no forwarding unit, so every operand comes from the "
+                       "register file.");
+    const auto fwd = [&](uint64_t n) { return forwarding ? QString::number(n) : QStringLiteral("n/a"); };
+    addSummaryRow(QStringLiteral("Forwarded operands"), fwd(s.forwardsExMem + s.forwardsMemWb), true,
+                  forwarding ? QStringLiteral("Operand values the instruction in EX took from a later "
+                                              "pipeline register instead of the register file, counted "
+                                              "for the whole run.") + incomplete
+                             : noForwarding);
+    addSummaryRow(QStringLiteral("Forwarded from EX/MEM"), fwd(s.forwardsExMem), true,
+                  forwarding ? QStringLiteral("The value was the result of the instruction one ahead, "
+                                              "in the EX/MEM register.")
+                             : noForwarding);
+    addSummaryRow(QStringLiteral("Forwarded from MEM/WB"), fwd(s.forwardsMemWb), true,
+                  forwarding ? QStringLiteral("The value was in the MEM/WB register: an instruction two "
+                                              "ahead, or a load one ahead after its stall.")
+                             : noForwarding);
+
     m_types->removeRows(0, m_types->rowCount());
     for (size_t t = 0; t < mix.byType.size(); ++t)
     {
