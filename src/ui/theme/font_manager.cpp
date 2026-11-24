@@ -22,17 +22,6 @@ QString bundledPlexMonoFamily()
     }();
     return family;
 }
-
-QString bundledMonacoFamily()
-{
-    static const QString family = []() -> QString
-    {
-        const int id = QFontDatabase::addApplicationFont(":/fonts/Monaco.ttf");
-        const QStringList families = QFontDatabase::applicationFontFamilies(id);
-        return families.isEmpty() ? QString() : families.at(0);
-    }();
-    return family;
-}
 } // namespace
 
 FontManager::FontManager() = default;
@@ -51,13 +40,11 @@ QString FontManager::resolveFamily() const
     if (!configured.isEmpty() && systemFamilies.contains(configured))
         return configured;
 
+    // The only bundled face is IBM Plex Mono (OFL, resources/fonts). If it
+    // cannot be loaded, the platform's own fixed-width font.
     const QString plexMono = bundledPlexMonoFamily();
     if (!plexMono.isEmpty())
         return plexMono;
-
-    const QString monaco = bundledMonacoFamily();
-    if (!monaco.isEmpty())
-        return monaco;
 
     return QFontDatabase::systemFont(QFontDatabase::FixedFont).family();
 }
@@ -99,10 +86,6 @@ QStringList FontManager::recommendedFamilies() const
     const QString plexMono = bundledPlexMonoFamily();
     if (!plexMono.isEmpty())
         result << plexMono;
-
-    const QString monaco = bundledMonacoFamily();
-    if (!monaco.isEmpty())
-        result << monaco;
 
     for (const QString &family : systemFamilies)
     {

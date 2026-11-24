@@ -83,10 +83,10 @@ QVariant RegisterModel::data(const QModelIndex &index, int role) const
         // whole row would compete with the tint and make the panel noisy
         // during a run.
         //
-        // Safe for both bundled fonts - neither reflows the column. IBM Plex
-        // Mono ships a real Bold face; Monaco has none, so Qt synthesises it,
-        // and a render test showed the synthesised bold adds 41.9% ink while
-        // shifting the right edge by 0 px.
+        // Safe with the bundled font: IBM Plex Mono ships a real Bold face,
+        // so the column does not reflow. (A synthesised bold, measured on a
+        // font without one, added 41.9% ink and moved the right edge by 0 px,
+        // so a system fallback font is safe too.)
         if (index.column() == 2 &&
             static_cast<size_t>(index.row()) == m_highlightedRegisterIndex)
         {

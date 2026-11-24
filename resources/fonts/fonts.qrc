@@ -1,6 +1,5 @@
 <RCC>
     <qresource prefix="/fonts">
-       <file>Monaco.ttf</file>
        <file>IBMPlexMono-Regular.ttf</file>
        <file>IBMPlexMono-Bold.ttf</file>
        <file>IBMPlexMono-Italic.ttf</file>

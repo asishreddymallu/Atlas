@@ -23,7 +23,7 @@ nothing moved yet.
 ├── .github/workflows      1   release.yml
 ├── resources              1   resources.qrc
 │   ├── circuit_designs    9   processor diagram JSON
-│   ├── fonts              7   IBM Plex Mono, Monaco
+│   ├── fonts              7   IBM Plex Mono, Monaco (Monaco removed in final/tidy)
 │   ├── icons             22   svg/png + app_icon.rc
 │   ├── instructions       2   instructions.json
 │   └── themes             6   template.qss + 4 theme JSON
