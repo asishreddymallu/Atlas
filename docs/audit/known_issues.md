@@ -4804,6 +4804,10 @@ holds `H_NF_Processor copy.json`, `NH_NF_Processor - Copy.json` and an
 unused `SSE.json`, so whoever picks this up should start by working out
 which file is authoritative.
 
+(final/tidy: the two copies were in no `.qrc`, no source and no test, and
+were deleted. `SSE.json` is still listed in `circuit_designs.qrc` and was
+left alone. The authoritative files are the ones the `.qrc` lists.)
+
 ---
 
 ## 95. FIXED: the MEM/WB forwarding wires light one instruction too late - and so did most of the diagram
