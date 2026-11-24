@@ -5,7 +5,7 @@ The first set of extra Profiler metrics (the 21 Nov roadmap). They are additive 
 - no simulator logic changed: nothing under `src/processor` or `src/assembler`.
 
 Where they appear:
-- **Profiler tab, "More metrics"**, below the two existing tables. Its tabs are Summary, By type, By mnemonic and Hottest loops, with a caption underneath.
+- **Profiler tab, "More metrics"**, below the two existing tables. Its tabs are Summary, By type, By mnemonic and Hottest loops, with a caption underneath. Since final/polish the Profiler tab also holds everything the Processor tab used to show under the diagram: the counters were already its own rows, and the Summary gains **Program counter** [Measured], in hex. The source and the numbers share the tab 55 / 45, so every table is whole at the default window width (known_issues 147).
 - **Cache tab:** misses by cause, in each cache's live view.
 
 Every number is labelled like the existing counters:

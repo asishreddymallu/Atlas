@@ -15,11 +15,12 @@ watch what the hardware does:
 
 - **Five processor models.** Single-cycle, and a five-stage pipeline in four variants: with or without hazard detection, and with or without forwarding. Choose with the ribbon's **Processor** button, or `--vm` on the CLI.
 - **Hazards and forwarding, shown.** The Processor tab draws the datapath and lights the wires each cycle uses, including the hazard unit and the forwarding unit. The pipeline timing grid shows each instruction's stages per cycle, marks stalls and flushes, and explains a selected cell. Undo, Redo and a jump to any cycle step back through a run.
+- **Zoom.** The processor diagram fits the window by default and zooms from 25 % to 400 % with Ctrl + mouse wheel, a touchpad pinch, Ctrl+plus / Ctrl+minus / Ctrl+0 (Fit), or the buttons at its bottom right; drag to pan when zoomed.
 - **Caches and the Cache Lab.** An instruction cache, an L1 data cache and an L2, each configurable (sets, ways, line size, write policies, LRU, FIFO or a Lua script). The Cache Lab adds:
   - a live set × way view of every line during a run;
   - one-click lab presets;
   - an exported JSON lab record per run.
-- **Profiler.** Cycles, instructions, CPI, IPC, stall and flush breakdowns, branch mispredictions, per-line execution counts and instruction-type counts. Under "More metrics":
+- **Profiler.** The program counter, cycles, instructions, CPI, IPC, stall and flush breakdowns, branch mispredictions, per-line execution counts and instruction-type counts. Under "More metrics":
   - the retired-instruction mix (per type, per mnemonic, loads and stores);
   - branch statistics (taken rate, misprediction rate);
   - speed-up over the single-cycle processor (cycle counts only);
@@ -34,7 +35,7 @@ watch what the hardware does:
   - a command-line simulator;
   - ten themes.
 
-| Five-stage pipeline, mid-run | Cache Lab live view during `stride_1` |
+| Five-stage pipeline (Fit; zoom buttons at the bottom right) | Cache Lab live view during `stride_1` |
 | --- | --- |
 | ![Processor tab](docs/images/processor_pipeline.png) | ![Cache tab](docs/images/cache_live_view.png) |
 
@@ -79,7 +80,7 @@ Write or open a `.s` file in the Editor tab and press **Run** (or **Debug Run**,
 cmake --preset linux-test && cmake --build --preset linux-test && ctest --preset linux-test
 ```
 
-There are 4,326 tests, all passing; a serial run takes about 10 minutes. **Run them serially, never `ctest -j`**: the GUI tests share a scratch file. See [docs/TESTING.md](docs/TESTING.md).
+There are 4,363 tests, all passing; a serial run takes about 10 minutes. **Run them serially, never `ctest -j`**: the GUI tests share a scratch file. See [docs/TESTING.md](docs/TESTING.md).
 
 ## Command line
 
@@ -111,7 +112,7 @@ The lab's expected hit, miss and eviction counts are measured and pinned by the 
 | `src/` | The simulator and the application: assembler, processor models, caches, scheduler, UI. |
 | `cli/` | The command-line simulator, `atlas-cli`. |
 | `main.cpp` | The application's entry point. |
-| `test/` | The GoogleTest suite (4,326 tests). |
+| `test/` | The GoogleTest suite (4,363 tests). |
 | `examples/` | Example programs: hazards, F/D, cache lab, scheduler demos, Lua replacement policies. |
 | `resources/` | Compiled-in resources: themes, icons, fonts, processor diagrams, instruction data. |
 | `external/` | Vendored Lua 5.5.0, for custom cache replacement policies. |
