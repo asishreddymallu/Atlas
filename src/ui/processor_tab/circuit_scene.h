@@ -87,6 +87,10 @@ class CircuitScene : public QGraphicsScene
 
     QTimer *m_timer;                            // well use it to make the wire blink
     QTableWidget *m_instructionTable = nullptr; // the table that shows the instructions
+    /// The instruction row in the diagram's own colours, not the app's
+    /// palette (final/polish: it was white on the black diagram in the light
+    /// themes).
+    void styleInstructionTable();
     bool m_stayActive = false;                  // whether to keep the wires active or not
     QStringList m_columnKeys;
 

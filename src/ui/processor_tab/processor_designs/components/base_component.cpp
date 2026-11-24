@@ -80,6 +80,16 @@ void BaseComponent::setName(const QString &name)
     }
 }
 
+QString BaseComponent::takeInsideName()
+{
+    if (!m_label)
+        return QString();
+    const QString name = m_name;
+    delete m_label;
+    m_label = nullptr;
+    return name;
+}
+
 QRectF BaseComponent::insideNameRect() const
 {
     if (!m_label)

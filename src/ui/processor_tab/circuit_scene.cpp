@@ -17,6 +17,7 @@
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
 #include <QGraphicsSimpleTextItem>
+#include <QPainterPathStroker>
 #include <algorithm>
 #include <cmath>
 #include <QGraphicsProxyWidget>
@@ -48,6 +49,7 @@ CircuitScene::CircuitScene(QObject *parent) : QGraphicsScene(parent)
             else if (auto *component = dynamic_cast<BaseComponent *>(item))
                 component->applyThemeColors();
         }
+        styleInstructionTable();
         fillInstructionTable();
         buildDecorations(); // names and legend in the new theme's colours
         update();
@@ -76,6 +78,7 @@ void CircuitScene::setUpInstructionTable()
     m_instructionTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     // Add the table to the scene so fitTableToCircuit can locate and position it
+    styleInstructionTable();
     QGraphicsProxyWidget *proxy = addWidget(m_instructionTable);
     proxy->setZValue(1000); // keep table on top of circuit items
     proxy->setPos(0, 0);
@@ -496,12 +499,37 @@ void CircuitScene::readComponentLabels(const QString &designFile, const QList<Ba
         const QJsonObject e         = entries[i].toObject();
         if (!component)
             continue;
-        const QString shortName = e.value("label").toString();
+        QString       shortName = e.value("label").toString();
         const QString fullName  = e.value("title").toString();
+        // One rule for every label (final/polish): a name the design draws
+        // inside its box (Instr Mem, Reg File, Data Mem, HDU, Fwd Unit, and
+        // Control on the single-cycle diagram) becomes a caption like PC, Mux
+        // or ALU - same font, colour and placement - instead of larger text
+        // that overflowed the box.
+        const QString inside = component->takeInsideName();
+        if (shortName.isEmpty())
+            shortName = inside;
         component->setToolTip(fullName.isEmpty() ? shortName : fullName);
-        if (component->insideName().isEmpty() && !shortName.isEmpty())
+        if (!shortName.isEmpty())
             m_captionSpecs.push_back({component, shortName, fullName});
     }
+}
+
+void CircuitScene::styleInstructionTable()
+{
+    if (!m_instructionTable)
+        return;
+    const DiagramColors d    = ThemeManager::getInstance().diagramColors();
+    const QColor        ink  = captionColorFor(d);
+    // The header a step lighter (or darker) than the diagram, towards the ink.
+    const QColor header = QColor::fromRgbF(d.background.redF() * 0.88 + ink.redF() * 0.12,
+                                           d.background.greenF() * 0.88 + ink.greenF() * 0.12,
+                                           d.background.blueF() * 0.88 + ink.blueF() * 0.12);
+    m_instructionTable->setStyleSheet(
+        QStringLiteral("QTableWidget { background: %1; color: %2; gridline-color: %3; border: 1px solid %3; }"
+                       "QHeaderView::section { background: %4; color: %2; border: none;"
+                       " border-bottom: 1px solid %3; }")
+            .arg(d.background.name(), ink.name(), d.wire.name(), header.name()));
 }
 
 QColor CircuitScene::captionColorFor(const DiagramColors &colors)
@@ -575,6 +603,23 @@ void CircuitScene::buildDecorations()
                 return false;
         return true;
     };
+    // The wires, as scene shapes: a name is placed off every wire if it can
+    // be, so its chip never hides a wire; only when no such place exists
+    // does it fall back to a place that is merely off the components.
+    // The stroke, not the path: QPainterPath::intersects treats an open
+    // polyline as the area it encloses.
+    QList<QPainterPath> wirePaths;
+    QPainterPathStroker stroker;
+    stroker.setWidth(2);
+    for (QGraphicsItem *item : items())
+        if (auto *w = dynamic_cast<WireItem *>(item))
+            wirePaths << stroker.createStroke(w->mapToScene(w->path()));
+    auto crossesWire = [&](const QRectF &r) {
+        for (const QPainterPath &p : wirePaths)
+            if (p.intersects(r))
+                return true;
+        return false;
+    };
 
     // Names: just outside the component, the first free place among above,
     // below, right and left, then the corners, then a little further out.
@@ -584,17 +629,26 @@ void CircuitScene::buildDecorations()
         const QRectF comp = spec.component->mapRectToScene(spec.component->boundingRect());
         const QSizeF size(fm.horizontalAdvance(spec.shortName) + 2 * pad, fm.height());
         QRectF       chosen;
-        for (qreal gap : {2.0, 6.0, 12.0, 20.0})
+        for (const bool avoidWires : {true, false})
+        for (qreal gap : {2.0, 6.0, 12.0, 20.0, 30.0, 42.0, 55.0})
         {
+            if (!chosen.isNull())
+                break; // found in the wire-free pass
             const qreal w = size.width(), h = size.height();
             const QPointF candidates[] = {
                 {comp.center().x() - w / 2, comp.top() - h - gap},  {comp.center().x() - w / 2, comp.bottom() + gap},
+                {comp.left(), comp.top() - h - gap},                {comp.right() - w, comp.top() - h - gap},
                 {comp.right() + gap, comp.center().y() - h / 2},    {comp.left() - gap - w, comp.center().y() - h / 2},
                 {comp.right() + gap, comp.top() - h - gap},         {comp.left() - gap - w, comp.top() - h - gap},
                 {comp.right() + gap, comp.bottom() + gap},          {comp.left() - gap - w, comp.bottom() + gap},
             };
+            // A pipeline register's name always goes above its bar, so the
+            // four line up under the stage headers like a row.
+            const bool register_ = dynamic_cast<PipelineReg *>(spec.component) != nullptr;
             for (const QPointF &p : candidates)
-                if (isFree(QRectF(p, size)))
+                if (register_ && p != candidates[0])
+                    continue;
+                else if (isFree(QRectF(p, size)) && !(avoidWires && crossesWire(QRectF(p, size))))
                 {
                     chosen = QRectF(p, size);
                     break;

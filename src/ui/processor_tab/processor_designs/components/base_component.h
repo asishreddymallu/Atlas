@@ -17,6 +17,10 @@ class BaseComponent : public QGraphicsPathItem
     /// scene rectangle its text covers (T9).
     QString insideName() const { return m_label ? m_name : QString(); }
     QRectF  insideNameRect() const;
+    /// Removes the name drawn inside the component and returns it, so the
+    /// scene can draw it as an ordinary caption like every other component's
+    /// (final/polish: one label rule for the whole diagram).
+    QString takeInsideName();
     /// The colour of a name inside a component: the theme's diagram label
     /// colour, else black or white, whichever reads better on the fill (T9:
     /// the app's text colour read at 1.4:1 on the grey in the dark themes).
