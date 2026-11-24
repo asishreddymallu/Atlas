@@ -1,0 +1,44 @@
+number,status,title,fix_commits,how_linked,non_test_files_changed,source_files_changed,source_lines_added,source_lines_removed,test_lines_added,all_non_test_files_in_baseline,flag
+7,fixed,"Two lexer column-accounting bugs, fixed",cabe69cc0,entry text cites the commit hash,1,1,10,1,77,yes,SMALL
+15,Resolved,ribbon page groups were laid out but not painted,6c56f71ee,entry text cites the commit hash,6,6,229,67,123,no,LARGE
+52,FIXED (fclass),"`fence`, `fence_i`, `fclass.s` and `fclass.d` have no code-generator path",f945be2cf,commit subject names the entry,3,3,6,8,0,no,MEDIUM
+57,FIXED,`fcvt.s.d` and `fcvt.d.s` were never mapped to an ALU operation,bffe212c1 3e23f7825,entry text cites the commit hash,3,3,32,3,536,yes,MEDIUM
+58,FIXED,"float literals lost precision, the locale, and sometimes threw",8e1dbc7fc f3666e827,entry text cites the commit hash,2,2,94,8,327,yes,MEDIUM
+60,FIXED,"`fcvt.d.lu` wrote zero, because the ALU case was labelled `FCVT_S_LU`",981ebf7c3 3e23f7825,entry text cites the commit hash,1,1,1,1,536,yes,SMALL
+61,FIXED,the eight fused multiply-adds never wrote their destination,3e23f7825 07c756ab7,entry text cites the commit hash,4,4,71,69,536,yes,MEDIUM
+62,FIXED,`Reset()` ran on the UI thread while the processor thread was still executing,6eb54122b ed07da302,commit subject names the entry,5,5,154,5,129,yes,LARGE
+66,FIXED,only one of the four rv5s variants handled `ecall` at all,03e4c9d27,commit subject names the entry,10,10,51,54,506,yes,LARGE
+68,FIXED,a glob scanned the whole filesystem on every build (and not from the file this entry first blamed),52e202a64,entry text cites the commit hash,1,1,5,0,0,yes,SMALL
+70,FIXED,a NaN result carried the input's payload and sign,ad36904e5 45a287135,entry text cites the commit hash,1,1,79,1,613,yes,MEDIUM
+72,FIXED,"`fflags` is never written, and the flags it would hold are not RISC-V's",5940e0fae,commit subject names the entry,4,4,95,48,18,yes,MEDIUM
+73,FIXED,"`fcvt.w.s` saturates the wrong way for NaN, and has a boundary UB",1b1bba5d2,commit subject names the entry,1,1,93,115,0,yes,LARGE
+74,FIXED,rv5s sign-extended a loaded single; rvss zero-extends it,7de4932cf,commit subject names the entry,1,1,7,2,112,yes,SMALL
+75,FIXED,"`fdiv` by zero returns a NaN, not an infinity",d8d9e41ec,commit subject names the entry,1,1,8,18,0,yes,MEDIUM
+76,FIXED,an FP instruction's integer source did not see the instruction before it,9ce7f6164 6912b0cfb,entry text cites the commit hash,10,10,276,92,343,no,LARGE
+78,FIXED,"The hazard unit reads every instruction's rs1 as an f index too, and stalls on a bare index match",06c90348c,commit subject names the entry,9,9,117,46,0,yes,LARGE
+79,FIXED,an FP result reached a plain integer consumer,f8870d5d7,entry text cites the commit hash,2,2,20,4,108,yes,MEDIUM
+81,FIXED,the circuit view lit a forwarding wire that was not forwarding,0e491878b,commit subject names the entry,2,2,24,7,0,yes,MEDIUM
+85,FIXED,"The Profiler's own counters are dead: one is never written, one only grows, and nothing resets either",be73b3472,commit subject names the entry,9,9,133,44,5,yes,LARGE
+86,partly fixed (body: final/tidy; heading unmarked),"A pipelined `Run()` stops dead on a breakpoint `LoadProgram` planted, and the GUI only escapes it by accident",9bb534d71,commit subject names the entry,2,2,22,2,111,yes,MEDIUM
+87,FIXED,`kites-cli` segmentation-faults on startup: a QCoreApplication cannot hold a QGraphicsScene,9bb534d71,commit subject names the entry,2,2,22,2,111,yes,MEDIUM
+95,FIXED,the MEM/WB forwarding wires light one instruction too late - and so did most of the diagram,83aef6c09,commit subject names the entry,6,6,235,79,427,yes,LARGE
+96,FIXED,"`RVSSProcessor::SetActiveWireNames` never truncates, so Undo and Redo leave stale wires lit",68aaa3e39,commit subject names the entry,1,1,5,5,175,yes,SMALL
+101,FIXED,rvss's exit service ended the whole process,e2eeacf8f,entry text cites the commit hash,4,4,305,227,0,yes,LARGE
+102,FIXED,stepping onto an exit `ecall` deadlocked the UI thread,e2eeacf8f 03e4c9d27,entry text cites the commit hash,13,13,356,281,506,yes,LARGE
+103,FIXED,rv5s computed `auipc` (and so `la`) without the PC,579122896,commit subject names the entry,5,5,28,0,0,yes,MEDIUM
+104,FIXED,rv5-nh-nf drops a CSR instruction without latching EX/MEM (and the pipelines ignore CSR instructions),c6934ac08 2de270b05,commit subject names the entry,13,13,330,31,9,no,LARGE
+105,FIXED,"The hazard unit stalls lui, auipc and jal on their immediate bits",06c90348c,commit subject names the entry,9,9,117,46,0,yes,LARGE
+106,FIXED,rv5s executed `srai` with a shift of 32 or more as `srli`,c53dc4d69,commit subject names the entry,1,1,6,2,0,yes,SMALL
+107,FIXED,rvss rounded double-precision ops in whatever mode the last FP load left,224cccb28,commit subject names the entry,2,2,30,0,0,yes,MEDIUM
+108,FIXED,rvss does not write `fcsr` after a double-precision op; the pipelines do,3fe85ea6d,commit subject names the entry,1,1,5,0,0,yes,SMALL
+109,FIXED,the base RV64 W instructions did not assemble (and their immediates read as 0),f43ed4fee,commit subject names the entry,5,5,41,29,0,no,MEDIUM
+110,FIXED,`li` of 0x7FFFF800..0x7FFFFFFF loaded 0xFFFFFFFF7FFFFxxx,fb99a32e5,commit subject names the entry,1,1,21,1,0,yes,MEDIUM
+111,"FIXED (call, tail)",`call` and `tail` did not assemble; `la` takes only `.data` labels,50a3ec4f6,commit subject names the entry,3,3,18,8,0,no,MEDIUM
+114,FIXED,the explicit rounding-mode forms of eight D conversions did not assemble,56aaa97e4,commit subject names the entry,1,1,11,8,0,yes,MEDIUM
+115,FIXED,Undo did not restore the flags an FP op wrote,773ffcc61,commit subject names the entry,2,2,14,1,0,yes,SMALL
+116,FIXED,FP loads and stores clear `fflags`,5940e0fae,commit subject names the entry,4,4,95,48,18,yes,MEDIUM
+121,FIXED,an FP store claimed to write the f register named by its imm[4:0],5e93ccf05 a439f33a7,entry text cites the commit hash,1,1,8,1,307,no,SMALL
+140,FIXED,The window has no way to give an ecall read its input,b2bc0cd98,commit subject names the entry,9,9,307,5,0,no,LARGE
+142,FIXED,Stepping the last instruction resets the processor in the same step,205c42ebf,commit subject names the entry,9,9,111,4,0,no,LARGE
+144,FIXED,Stepping onto an ecall read froze the window,b2bc0cd98,commit subject names the entry,9,9,307,5,0,no,LARGE
+147,FIXED (final/polish),The Profiler's counter names elide in its narrow pane,fbc6549d8,commit subject names the entry,2,2,11,5,132,no,MEDIUM
