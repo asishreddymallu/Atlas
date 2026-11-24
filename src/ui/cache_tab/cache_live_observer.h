@@ -18,6 +18,7 @@
  */
 #pragma once
 
+#include "cache_lab/miss_classifier.h"
 #include "processor/cache/cache.h"
 
 #include <QObject>
@@ -48,6 +49,7 @@ class CacheLiveObserver : public QObject
         CacheSnapshot snapshot;
         std::deque<CacheAccessRecord> log; ///< oldest first, at most kLogSize
         uint64_t version{0};               ///< changes whenever anything above does
+        MissCauses causes;                 ///< misses by cause since the cache's Reset (metric 6)
     };
     /// A consistent copy, safe from any thread.
     State state() const;
@@ -66,6 +68,10 @@ class CacheLiveObserver : public QObject
     // with its cache, so a resync then sees no cache rather than a freed one.
     QPointer<Cache> m_cache;
     QMetaObject::Connection m_hit, m_miss;
+    MissClassifier m_classifier; ///< fed in onAccess, under m_mutex
+    /// Re-reads the geometry; restarts the classifier if it changed or the
+    /// cache's counters went back (a Reset). Caller holds m_mutex.
+    void checkClassifier(bool beforeAccess);
     mutable std::mutex m_mutex;
     State m_state;
 };

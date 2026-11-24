@@ -35,7 +35,36 @@ void CacheLiveObserver::resync()
     if (geometryChanged)
         m_state.log.clear(); // records for another geometry would point at the wrong rows
     m_state.snapshot = std::move(snapshot);
+    checkClassifier(false);
+    m_state.causes = m_classifier.causes();
     ++m_state.version;
+}
+
+void CacheLiveObserver::checkClassifier(bool beforeAccess)
+{
+    if (!m_cache)
+    {
+        m_classifier.reset();
+        return;
+    }
+    const size_t sets = m_cache->getSetCount();
+    const size_t ways = m_cache->getWayCount();
+    const size_t line = m_cache->getLineSizeInBytes();
+    const bool   writeAllocate =
+        m_cache->getConfig().allocationPolicy == AllocationPolicy::WriteAllocate;
+    if (!m_classifier.configuredFor(sets, ways, line, writeAllocate))
+    {
+        m_classifier.configure(sets, ways, line, writeAllocate);
+        return;
+    }
+    // The cache's own counters went back (Reset, reconfigure): start again.
+    // In onAccess they already include this access, so "not ahead" means a
+    // reset happened since the last one. Undo does not move them (known
+    // issue 83), and so does not restart the classifier either.
+    const uint64_t total = m_cache->getHitCount() + m_cache->getMissCount();
+    const uint64_t seen  = m_classifier.causes().accesses;
+    if (beforeAccess ? total <= seen : total < seen || total == 0)
+        m_classifier.reset();
 }
 
 void CacheLiveObserver::copySet(size_t setIndex)
@@ -70,6 +99,9 @@ void CacheLiveObserver::onAccess()
     m_state.log.push_back(record);
     while (m_state.log.size() > kLogSize)
         m_state.log.pop_front();
+    checkClassifier(true);
+    m_classifier.access(record.address, record.isWrite, record.hit);
+    m_state.causes = m_classifier.causes();
     ++m_state.version;
 }
 
