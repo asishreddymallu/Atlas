@@ -86,6 +86,7 @@ MetricsCollector::Snapshot MetricsCollector::snapshot() const
     s.mispredictions = m_manager->metrics().mispredictions;
     s.programEnded   = m_manager->programEnded();
     s.cycles         = m_manager->getCycles();
+    s.programCounter = m_manager->getProgramCounter();
     return s;
 }
 

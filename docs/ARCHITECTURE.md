@@ -106,7 +106,7 @@ The source lists are `file(GLOB_RECURSE ...)` over `${SRC_DIR}` **without**
 | `src/ui/memory_tab/` | Memory view: `memory_model.*`, `memory_table_view.*`, `memory_tab.*`. |
 | `src/ui/register_table/` | Register panel: `register_model.*` and `register_container.*`. |
 | `src/ui/cache_tab/` | Cache view: `cache_model.*`, `cache_grid_delegate.h`, `cache_config_widget.*` (one per cache level) and `cache_tab.*` (with the Lab setup bar and Export lab record). The live cache-line view: `cache_live_observer.*` (follows every access on the accessing thread; never reads the cache from the GUI during a run), `cache_set_model.*` (set x way table) and `cache_live_view.*`. See `docs/cache_lab.md`. |
-| `src/ui/processor_tab/` | Datapath view: `circuit_scene.*`, `circuit_view.*`, `vm_state_table_model.*`, and `processor_designs/` holding the per-model scene definitions and the drawable components (`alu_item.h`, `mux_item.h`, `wire_item.*`, …). |
+| `src/ui/processor_tab/` | Datapath view: `circuit_scene.*`, `circuit_view.*` (with zoom), and `processor_designs/` holding the per-model scene definitions and the drawable components (`alu_item.h`, `mux_item.h`, `wire_item.*`, …). |
 | `src/ui/profiler_tab/` | Profiler view: `profiler_editor.*`, `instruction_type_count_model.*`, and the execution-count / instruction-type gutter columns. |
 | `src/ui/compiler_tab/` | C-to-assembly compiler front end (`compiler_tab.*`) and its read-only `compiler_editor.h`. |
 | `src/ui/problems_panel/` | `ProblemsModel` and `ProblemsDock` — the diagnostics list, with double-click navigation back into the editor. |

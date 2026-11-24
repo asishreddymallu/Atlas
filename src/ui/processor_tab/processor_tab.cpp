@@ -1,5 +1,4 @@
 #include "processor_tab.h"
-#include "ui/common/data_table_style.h"
 #include "circuit_scene.h"
 #include "circuit_view.h"
 #include "ui_processor_tab.h"
@@ -12,16 +11,11 @@ ProcessorTab::ProcessorTab(QWidget *parent, ProcessorManager *vmManager)
     : AtlasTab(parent), ui(new Ui::ProcessorTab), m_vmManager(vmManager)
 {
     ui->setupUi(this);
-    m_vmStateTableModel = new VMStateTableModel(this, m_vmManager);
+    // The diagram has the whole tab (final/polish). The run counters that
+    // used to sit under it (PC, cycles, retired, CPI, IPC, stalls,
+    // mispredictions) are all in the Profiler tab, with their labels.
+    ui->gridLayout->setContentsMargins(0, 0, 0, 0);
     ui->graphicsView->showScene(m_vmManager->getCircuitScene());
-    ui->tableView->setModel(m_vmStateTableModel);
-    // Every clock, Undo, Redo, load and processor switch.
-    connect(m_vmManager, &ProcessorManager::processorStateChangedSignal, m_vmStateTableModel,
-            &VMStateTableModel::refresh);
-    ui->tableView->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    // this was the only table still showing its vertical header, leaving an
-    // empty stub column down the left; the other five already hid theirs
-    applyDataTableStyle(ui->tableView);
 }
 
 void ProcessorTab::setWiresStayActive(bool stayActive)

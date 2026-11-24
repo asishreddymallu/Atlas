@@ -42,6 +42,7 @@ class MetricsCollector : public QObject
         std::optional<unsigned int> mispredictions; ///< the model's own counter, if it has one
         bool           programEnded{false};
         unsigned int   cycles{0};
+        uint64_t       programCounter{0}; ///< the processor's PC (shown in the Profiler since final/polish)
         uint32_t       lastCycle{0}; ///< the last trace cycle the stream has seen
         uint64_t       generation{0}; ///< changes on every reset (new program or processor)
     };

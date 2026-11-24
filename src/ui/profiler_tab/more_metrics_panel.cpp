@@ -165,7 +165,8 @@ QString MoreMetricsPanel::summarySource(const QString &label) const
 void MoreMetricsPanel::refresh()
 {
     const MetricsCollector::Snapshot s = m_collector->snapshot();
-    const QString key = QStringLiteral("%1/%2/%3/%4/%5/%6")
+    const QString key = QStringLiteral("%1/%2/%3/%4/%5/%6/%7")
+                            .arg(s.programCounter)
                             .arg(s.lastCycle)
                             .arg(s.mix.retired)
                             .arg(static_cast<int>(s.processor))
@@ -192,6 +193,11 @@ void MoreMetricsPanel::refresh()
                                                            "totals are incomplete.");
 
     m_summary->removeRows(0, m_summary->rowCount());
+    // From the Processor tab, which no longer shows counters (final/polish).
+    addSummaryRow(QStringLiteral("Program counter"),
+                  QStringLiteral("0x%1").arg(s.programCounter, 8, 16, QLatin1Char('0')), true,
+                  QStringLiteral("The processor's program counter: the address of the next "
+                                 "instruction to fetch."));
     addSummaryRow(QStringLiteral("Instructions retired (mix total)"), QString::number(mix.retired), true,
                   QStringLiteral("Machine instructions retired so far, counted from the execution "
                                  "trace. A pseudo-instruction counts as the instructions it "

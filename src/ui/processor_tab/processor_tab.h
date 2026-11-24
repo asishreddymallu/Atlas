@@ -3,7 +3,6 @@
 
 #include "processor/processor_manager.h"
 #include "ui/common/atlas_tab.h"
-#include "vm_state_table_model.h"
 
 namespace Atlas
 {
@@ -27,7 +26,6 @@ class ProcessorTab : public AtlasTab
   private:
     Ui::ProcessorTab *ui;
     ProcessorManager *m_vmManager = nullptr;
-    VMStateTableModel *m_vmStateTableModel;
 
   public slots:
     void onVMChanged();
