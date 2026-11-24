@@ -126,5 +126,13 @@ Entries that record a deliberate trade-off rather than a defect are marked *(des
 ## Not delivered from the original scope
 
 - **A standalone installable package.** Atlas is built from source with CMake. There is no installer or distribution package. The release workflow (`.github/workflows/release.yml`) runs only on version tags and was not exercised for this submission.
-- **Extra Profiler metrics.** The Profiler shows the counters it has today: cycles, instructions, CPI, IPC, stall and flush breakdowns, branch mispredictions, and instruction-type counts. The further metrics in the original scope were not added.
+- **The rest of the Profiler metrics on the roadmap.** A first set was built on `final/metrics` ([profiler_metrics.md](profiler_metrics.md)): the instruction mix, branch statistics, speed-up over single-cycle, forwarding events, the hottest loops, and misses by cause. None of the six was skipped. Not built:
+  - stage occupancy;
+  - estimated run time;
+  - stalls per source line;
+  - dependence distance;
+  - average memory access time;
+  - register usage;
+  - static versus dynamic instruction count;
+  - critical path.
 - **Hardware boards.** Running programs on, or comparing against, physical RISC-V boards was not done. Atlas is a simulator only.

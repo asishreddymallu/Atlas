@@ -19,7 +19,14 @@ watch what the hardware does:
   - a live set × way view of every line during a run;
   - one-click lab presets;
   - an exported JSON lab record per run.
-- **Profiler.** Cycles, instructions, CPI, IPC, stall and flush breakdowns, branch mispredictions, per-line execution counts and instruction-type counts.
+- **Profiler.** Cycles, instructions, CPI, IPC, stall and flush breakdowns, branch mispredictions, per-line execution counts and instruction-type counts. Under "More metrics":
+  - the retired-instruction mix (per type, per mnemonic, loads and stores);
+  - branch statistics (taken rate, misprediction rate);
+  - speed-up over the single-cycle processor (cycle counts only);
+  - forwarding events;
+  - the hottest loops.
+
+  The Cache tab splits misses into compulsory, capacity and conflict. Each number is labelled Measured or Modelled; see [docs/profiler_metrics.md](docs/profiler_metrics.md).
 - **Suggest reordering.** Proposes a faster order for independent instructions, offered only when a measured run on the selected five-stage processor gives the same result in fewer cycles.
 - **Also:**
   - an editor with completion, diagnostics, find and replace, and breakpoints;
@@ -72,7 +79,7 @@ Write or open a `.s` file in the Editor tab and press **Run** (or **Debug Run**,
 cmake --preset linux-test && cmake --build --preset linux-test && ctest --preset linux-test
 ```
 
-There are 4,279 tests, all passing; a serial run takes about 8 minutes. **Run them serially, never `ctest -j`**: the GUI tests share a scratch file. See [docs/TESTING.md](docs/TESTING.md).
+There are 4,326 tests, all passing; a serial run takes about 10 minutes. **Run them serially, never `ctest -j`**: the GUI tests share a scratch file. See [docs/TESTING.md](docs/TESTING.md).
 
 ## Command line
 
@@ -104,7 +111,7 @@ The lab's expected hit, miss and eviction counts are measured and pinned by the 
 | `src/` | The simulator and the application: assembler, processor models, caches, scheduler, UI. |
 | `cli/` | The command-line simulator, `atlas-cli`. |
 | `main.cpp` | The application's entry point. |
-| `test/` | The GoogleTest suite (4,279 tests). |
+| `test/` | The GoogleTest suite (4,326 tests). |
 | `examples/` | Example programs: hazards, F/D, cache lab, scheduler demos, Lua replacement policies. |
 | `resources/` | Compiled-in resources: themes, icons, fonts, processor diagrams, instruction data. |
 | `external/` | Vendored Lua 5.5.0, for custom cache replacement policies. |

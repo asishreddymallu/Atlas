@@ -33,8 +33,8 @@ This builds and runs `atlas_test` only — the fast path for everyday local test
 
 ## Run ctest serially
 
-Run the suite one test at a time (plain `ctest`, no `-j`). The suite has 4,279 tests and
-takes about 8 minutes serially (473 s on final/tidy); all of them pass.
+Run the suite one test at a time (plain `ctest`, no `-j`). The suite has 4,326 tests and
+takes about 10 minutes serially (608 s on final/metrics); all of them pass.
 
 Under `ctest -j` the GUI tests flake (`Pipelines/TimingGridGui.*`, `Models/TimingGridJump.*` and the other GUI suites).
 Every test process runs in `test/` and shares `test/vm_state/temp.asm`: a Run writes the

@@ -13,6 +13,7 @@ Every file in `docs/`, with who it is for:
 | [CLI.md](CLI.md) | user | `atlas-cli`: batch runs and the REPL, `--vm` names, output files, exit codes. |
 | [cache_lab.md](cache_lab.md) | student, user | The Cache Lab: the live cache-line view, the 11 lab setup presets, the measured results table, and the exported lab record (`atlas.lab-record/1`). |
 | [scheduler.md](scheduler.md) | student, user | Suggest reordering: what it proposes, when it offers a change, the demo programs and their cycle counts. |
+| [profiler_metrics.md](profiler_metrics.md) | student, user, developer | The Profiler's extra metrics and the Cache tab's misses by cause: each definition, its Measured/Modelled label, when it is n/a, and what it does not measure. |
 | [CUSTOM_REPLACEMENT_POLICY.md](CUSTOM_REPLACEMENT_POLICY.md) | student, developer | Writing a cache replacement policy as a Lua script: the hooks, the cache state a script sees, and examples. |
 | [THEMES.md](THEMES.md) | user, developer | The ten themes: how the six VS Code ports' colours were mapped, the readability rules the `ThemeCatalogue` tests enforce, and the ports' licences. |
 
