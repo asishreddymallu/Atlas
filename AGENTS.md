@@ -29,7 +29,7 @@
 3. **Continuous verification**: Build and run tests via `ctest --test-dir build-tests` after every change.
 4. **Core logic isolation**: Do NOT modify simulator core logic (RVSS/RV5S models, cache hierarchy, assembler semantics) during UI tasks unless explicitly requested.
 5. **Clean compiler output**: New code must be warning-free under `-Wall -Wextra`.
-6. **Naming**: The project was renamed to Atlas in the `final/atlas` rebrand. Use `Atlas` for namespaces, identifiers, targets and user-facing text; the upstream name may appear only in `LICENSE.md`, `NOTICE.md`, the changes document that `NOTICE.md` links to, and `docs/audit/**`.
+6. **Naming**: The project was renamed to Atlas in the `final/atlas` rebrand. Use `Atlas` for namespaces, identifiers, targets and user-facing text; the upstream name may appear only in `LICENSE.md`, `NOTICE.md`, the changes document that `NOTICE.md` links to, and `docs/audit/**`. The changes document's filename (`CHANGES_FROM_KITES.md`, as a filename only) may also appear in `scripts/make_submission.sh`, `scripts/verify_submission.sh`, the `README_SUBMISSION.md` they generate, and `docs/README.md`.
 7. **Dependency discipline**: Always ask the user before introducing any new external dependencies or libraries.
 8. **Safety & Non-destructive operations**: Never execute destructive git commands (`git push`, `git reset --hard`, `git clean`) or delete files outside build directories without explicit user confirmation.
 

@@ -13,10 +13,8 @@ Until `final/tidy` the CLI crashed on startup (known issue 87: it made a
 last instruction; the CLI now clears it after every load, as the window does).
 `test/cli_smoke_test.cpp` runs the built `atlas-cli` on every processor.
 
-> **Status:** the CLI assembles and runs a program end-to-end and dumps
-> register/disassembly/memory state. It does not yet support interactive
-> debugging (breakpoints, step, undo/redo) from the command line — those are
-> driven through `command_handler`, whose `ExecuteCommand` is currently a stub.
+It has two modes: **batch** (assemble, run to the end, dump the state; below)
+and an interactive **REPL** (see [The REPL](#the-repl)).
 
 ## Building
 
@@ -34,8 +32,12 @@ The resulting binary is `atlas-cli` (`build/atlas-cli`, or
 ## Usage
 
 ```
-atlas-cli <assembly-file> [--vm <name>] [--mem-dump <hex_addr> <row_count>]...
+atlas-cli [assembly-file] [--vm <name>] [--mem-dump <hex_addr> <row_count>]... [--repl|-i]
 ```
+
+Given an assembly file and no `--repl`, it runs in batch mode. With `--repl`
+(or `-i`), or with no file at all, it starts the REPL; a file given with
+`--repl` is loaded before the prompt.
 
 | Argument       | Description                                                                          |
 |----------------|---------------------------------------------------------------------------------------|
@@ -94,6 +96,23 @@ Dumping a region of memory in the same run:
 adds a `Memory -> .../vm_state/memory_dump.json` line and writes both
 requested regions (4 rows starting at address `0x0`, then 2 rows starting at
 `0x100`) to that file.
+
+## The REPL
+
+```bash
+./build/atlas-cli --repl            # or: ./build/atlas-cli
+atlas> load examples/scheduler/load_use_original.s --vm rv5-h-f
+atlas> run
+atlas> info                          # PC, cycles, CPI, IPC, stalls
+atlas> exit
+```
+
+`help` prints the full command list: `load`, `run`, `run_debug`, `step`,
+`stop`, `undo`, `redo`, `reset`, `add_breakpoint`, `remove_breakpoint`,
+`breakpoints`, `modify_register`, `print_mem`, `dump_mem`, `vm_stdin`, `regs`,
+`disas`, `info`, `help` and `exit`. The session above (load, run on rv5-h-f,
+`info` reporting 11 cycles) is what `CliSmoke.TheReplLoadsAndRunsOnAPipeline`
+checks.
 
 ## Program output during the run
 
