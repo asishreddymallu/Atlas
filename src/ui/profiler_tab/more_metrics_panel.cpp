@@ -1,6 +1,7 @@
 #include "ui/profiler_tab/more_metrics_panel.h"
 
 #include "processor/processor_manager.h"
+#include "profiler_metrics/branch_stats.h"
 #include "ui/common/data_table_style.h"
 #include "ui/common/processor_metrics_model.h"
 
@@ -147,6 +148,22 @@ void MoreMetricsPanel::refresh()
                   QStringLiteral("sb, sh, sw, sd, fsw and fsd retired."));
     addSummaryRow(QStringLiteral("Stores share"), percent(shareOf(mix.stores, mix.retired)), false,
                   QStringLiteral("Stores retired / instructions retired."));
+
+    const std::optional<uint64_t> mispredictions =
+        s.mispredictions ? std::optional<uint64_t>(*s.mispredictions) : std::nullopt;
+    const BranchStats branches = computeBranchStats(s.branches, s.taken, mispredictions);
+    addSummaryRow(QStringLiteral("Branches retired"), QString::number(branches.branches), true,
+                  QStringLiteral("B-type instructions retired (beq, bne, blt, bge, bltu, bgeu)."));
+    addSummaryRow(QStringLiteral("Taken branches"), QString::number(branches.taken), true,
+                  QStringLiteral("Retired branches after which the next instruction to retire was "
+                                 "not the one at branch address + 4."));
+    addSummaryRow(QStringLiteral("Taken rate"), percent(branches.takenRate), false,
+                  QStringLiteral("Taken branches / branches retired."));
+    addSummaryRow(QStringLiteral("Misprediction rate"), percent(branches.mispredictionRate), false,
+                  s.mispredictions
+                      ? QStringLiteral("Branch mispredictions (the counter above) / branches retired.")
+                      : QStringLiteral("n/a: this model keeps no misprediction counter (the "
+                                       "single-cycle processor predicts nothing)."));
 
     m_types->removeRows(0, m_types->rowCount());
     for (size_t t = 0; t < mix.byType.size(); ++t)

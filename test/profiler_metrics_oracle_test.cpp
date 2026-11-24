@@ -70,3 +70,15 @@ TEST(ProfilerMetricsOracle, TheMixMatchesTheMiniIssOnEveryModel)
             EXPECT_EQ(got, parseMnemonics(c.mnemonics)) << where;
         }
 }
+
+TEST(ProfilerMetricsOracle, BranchesAndTakenMatchTheMiniIssOnEveryModel)
+{
+    for (const MetricsMixCase &c : kMixCases)
+        for (const auto &[name, type] : allModels())
+        {
+            const MetricsRun  run   = runFile(path(c.program), type);
+            const std::string where = std::string(c.program) + " on " + name;
+            EXPECT_EQ(run.stream.branches(), c.branches) << where;
+            EXPECT_EQ(run.stream.branchesTaken(), c.taken) << where;
+        }
+}
