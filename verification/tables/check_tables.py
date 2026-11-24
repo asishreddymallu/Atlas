@@ -24,6 +24,7 @@ ROOT = os.path.dirname(VERIFY)
 
 TABLES = [  # (generator, committed file)
     ("cache/gen_cases.py", "test/cache_lab_cases.inc"),
+    ("metrics/gen_metrics_cases.py", "test/profiler_metrics_cases.inc"),
     ("timing/gen_timing.py", "test/timing_cases.inc"),
     ("timing/gen_hdu.py", "test/hdu_false_stall_test.cpp"),
     ("hazard/gen_tables.py", "test/hazard_tables_test.cpp"),

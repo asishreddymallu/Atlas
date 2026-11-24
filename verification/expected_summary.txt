@@ -31,10 +31,11 @@ li-run: now nh-f: 6161 values, 0 wrong
 cache: rows 315 mismatches 12
 asm: programs: 58, dumps: 174
 asm: asm: differing 0, missing 0, unexpected 0
-tables: tables 18, matching 18
+tables: tables 19, matching 19
 negative-controls: CAUGHT  ISA: rvss p0 x5 flipped: problems 0 -> 1
 negative-controls: CAUGHT  hazard: h-f p0 cycles+1: problems 0 -> 1
 negative-controls: CAUGHT  cache: rvss stride_1 dm256 L1 hits+1: problems 12 -> 13
 negative-controls: CAUGHT  asm: one word in code_examples_ex_mem_fwd.s.txt: problems 0 -> 1
 negative-controls: CAUGHT  tables: one L1 hit in cache_lab_cases.inc: problems 0 -> 1
-negative-controls: controls 5, caught 5
+negative-controls: CAUGHT  tables: stride_1 retired 10256 -> 10257 in profiler_metrics_cases.inc: problems 0 -> 1
+negative-controls: controls 6, caught 6

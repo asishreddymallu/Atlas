@@ -122,9 +122,27 @@ def table_value(tmp):
     return "tables: one L1 hit in cache_lab_cases.inc", before, after
 
 
+def metrics_table_value(tmp):
+    """One expected count in a copy of the Profiler metrics table is changed."""
+    import check_tables
+    target = os.path.join(vpaths.ROOT, "test", "profiler_metrics_cases.inc")
+    gen = "metrics/gen_metrics_cases.py"
+    before = 0 if check_tables.check(gen, target)[0] == "MATCH" else 1
+    copy = os.path.join(tmp, "profiler_metrics_cases.inc")
+    text = open(target).read()
+    planted = text.replace('{"cache_lab/stride_1.s", 10256,', '{"cache_lab/stride_1.s", 10257,', 1)
+    assert planted != text, "the planted value was not found"
+    open(copy, "w").write(planted)
+    after = 0 if check_tables.check(gen, copy)[0] == "MATCH" else 1
+    return "tables: stride_1 retired 10256 -> 10257 in profiler_metrics_cases.inc", before, after
+
+
 def main():
     caught = 0
-    controls = [isa_oracle, hazard_cycles, cache_hits, asm_word, table_value]
+    controls = [isa_oracle, hazard_cycles, cache_hits, asm_word, table_value, metrics_table_value]
+    # Optional names on the command line run only those controls.
+    if len(sys.argv) > 1:
+        controls = [c for c in controls if c.__name__ in sys.argv[1:]]
     for control in controls:
         with tempfile.TemporaryDirectory(prefix="atlas-negctl-") as tmp:
             try:

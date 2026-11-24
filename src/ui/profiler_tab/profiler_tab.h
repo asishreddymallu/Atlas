@@ -15,6 +15,7 @@ namespace Atlas
 class Profiler; // Forward declaration to avoid including profiler header
 class ProcessorManager;
 class ProcessorMetricsModel;
+class MoreMetricsPanel;
 
 namespace Ui
 {
@@ -34,6 +35,10 @@ public:
     /// manager's metrics() and refreshed on every state change.
     void setProcessorManager(ProcessorManager *manager);
 
+    /// The "More metrics" group below the two tables (nullptr until
+    /// setProcessorManager).
+    MoreMetricsPanel *moreMetrics() const { return m_moreMetrics; }
+
 public slots:
     void setSourceText(const QString &sourceText);
     void updateLineExecutionCount(const std::map<int, int> &lineExecutionCounts);
@@ -45,6 +50,7 @@ private:
     Ui::ProfilerTab *ui;
     const Profiler *m_profiler = nullptr;
     ProcessorMetricsModel *m_metricsModel = nullptr;
+    MoreMetricsPanel *m_moreMetrics = nullptr;
 };
 } // namespace Atlas
 #endif // PROFILERTAB_H

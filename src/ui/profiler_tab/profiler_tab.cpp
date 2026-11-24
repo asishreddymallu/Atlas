@@ -6,6 +6,7 @@
 #include "instruction_type_count_model.h"
 #include "processor/processor_manager.h"
 #include "ui/common/processor_metrics_model.h"
+#include "ui/profiler_tab/more_metrics_panel.h"
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QTableView>
@@ -68,6 +69,11 @@ void ProfilerTab::setProcessorManager(ProcessorManager *manager)
     ui->verticalLayout_3->insertWidget(0, view);
     connect(manager, &ProcessorManager::processorStateChangedSignal, m_metricsModel,
             &ProcessorMetricsModel::refresh);
+
+    // The extra metrics go in their own group, below both existing tables;
+    // nothing above them moves or changes.
+    m_moreMetrics = new MoreMetricsPanel(manager, this);
+    ui->verticalLayout_3->addWidget(m_moreMetrics);
 }
 
 ProfilerTab::~ProfilerTab()

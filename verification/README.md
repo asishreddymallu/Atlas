@@ -132,15 +132,29 @@ That is 174 dumps, compared against `asm/expected.sha256`. Any assembler change 
 
 ### 7. Committed tables (`tables/check_tables.py`, ~1 s)
 
-**Proves:** the 18 expectation tables committed under `test/` are exactly what their generators print today. The generators are:
+**Proves:** the 19 expectation tables committed under `test/` are exactly what their generators print today. The generators are:
 - `tables/`, `timing/`, `hazard/gen_tables.py` and `gen_subset.py`;
-- `cache/gen_cases.py`.
+- `cache/gen_cases.py`;
+- `metrics/gen_metrics_cases.py`: the Profiler metrics' independent values (see below).
 
 Each computes expected values from the spec or a model, never from the simulator. So the suite's expectations are reproducible, and none was edited by hand.
 
 **Method:** each blank-line-separated block of the generator's output must appear in the target file. Comment lines and indentation are ignored.
 
-**Expected:** `tables 18, matching 18`.
+**Expected:** `tables 19, matching 19`.
+
+**The Profiler metrics table.** `metrics/gen_metrics_cases.py` runs 13 programs in the mini ISS (`cache/miniiss.py`): the 9 cache-lab programs and the 4 scheduler demos. It writes `test/profiler_metrics_cases.inc` with:
+- retired instructions by mnemonic, loads and stores;
+- branches and taken branches;
+- the three hottest loops (iterations and dynamic instructions);
+- for every cache-lab program × lab configuration, the L1 misses split into compulsory, capacity and conflict, from `cache/cachemodel.py` with a fully associative LRU shadow.
+
+`test/profiler_metrics_oracle_test.cpp` compares the Profiler's numbers with it on all five models. Run alone, with its control:
+
+```bash
+python3 verification/tables/check_tables.py
+python3 verification/negative_controls.py metrics_table_value
+```
 
 ### 8. Negative controls (`negative_controls.py`, ~50 s)
 
@@ -153,8 +167,9 @@ Each computes expected values from the spec or a model, never from the simulator
 | Cache | one L1 hit +1 |
 | Assembler | one machine word changed in one dump |
 | Tables | one expected hit changed in a copy of `test/cache_lab_cases.inc` |
+| Metrics table | one retired count changed in a copy of `test/profiler_metrics_cases.inc` |
 
-**Expected:** five `CAUGHT` lines and `controls 5, caught 5`.
+**Expected:** six `CAUGHT` lines and `controls 6, caught 6`. Names on the command line run only those controls (for example `negative_controls.py metrics_table_value`).
 
 ## Layout
 
@@ -163,6 +178,7 @@ Each computes expected values from the spec or a model, never from the simulator
 | `lib/` | Shared code, not specific to one checker:<br>- `common.py`: RV64IM ALU, encoders, padded-program builder;<br>- `fpo.py`: IEEE/RISC-V F+D with flags;<br>- `p6_oracle.py`: exact binary32 rounding;<br>- `selftest.py`;<br>- `vpaths.py`: paths;<br>- `probeio.py`: probe output parser;<br>- `run_hermetic.sh`, `hermetic_guard.h`. |
 | `probes/` | The three probes and `probes.cmake`, which the root `CMakeLists.txt` includes under `ATLAS_BUILD_VERIFICATION`. |
 | `isa/`, `hazard/`, `cache/`, `asm/` | The sweeps. |
+| `metrics/` | `gen_metrics_cases.py`: the Profiler metrics' independent values. |
 | `timing/` | `gen_timing.py` (the pipeline timing cases) and `gen_hdu.py` (the hazard unit's false stalls). |
 | `tables/` | The generators of the committed test tables, `li_audit.py`, `gen_pcrel.py`, `part0_expect.py`, and `check_tables.py`. `data/li_words_before.txt` is a pinned record of the `li` expansion lengths the assembler emitted before the known_issues 110 fix: `gen_li.py` keeps every expansion that long. It cannot be regenerated, because the old assembler is gone. |
 | `negative_controls.py` | Section 8. |
