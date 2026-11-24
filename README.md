@@ -49,12 +49,16 @@ The release workflow (`.github/workflows/release.yml`) builds three packages, ea
 | `Atlas-<version>-linux-x86_64.tar.gz` (for machines without FUSE) | `tar xzf Atlas-*-linux-x86_64.tar.gz`, then `./Atlas-*/atlas` (the command line: `./Atlas-*/atlas-cli`) |
 | `Atlas-<version>-windows-x64.zip` | Unzip, then run `bin\Atlas.exe` |
 
-The packages appear on a GitHub Release for each version tag, and as artifacts of every workflow run.
+The packages appear on [the Releases page](https://github.com/asishreddymallu/Atlas/releases) for each version tag. They are also artifacts of every run of the workflow (the Actions tab).
 
 **What has been tested:**
-- **Linux:** the workflow builds on Ubuntu 22.04, so the package needs glibc 2.35 or newer. The workflow had not run yet when this was written. A package built locally on Fedora 44 crashes on start: linuxdeploy's patchelf breaks Fedora's packed-relocation libraries (`scripts/package_linux.sh` explains). So no Linux package has been run successfully yet.
-- **Windows:** built and checked only by the workflow. It runs `atlas-cli` on an example and starts the window offscreen for 5 s. Nobody has run it by hand.
-- `scripts/check_package.sh` and `scripts/check_package.ps1` are the checks the workflow runs; run them on a downloaded package to repeat them.
+- **CI:** run 45406566957 on `final/package` (commit 92534aa) built, packaged and smoke-checked (`check_package`) the AppImage and the tar.gz on ubuntu-22.04, and the Windows zip on windows-latest.
+- **By hand, on Fedora 44:** the Linux artifacts of that run passed `scripts/check_package.sh` (AppImage and tar.gz). The AppImage was opened, `examples/scheduler/load_use_original.s` ran on the 5-stage forwarding model in 11 cycles, and the Processor tab, the Profiler tab and Help > About were looked at.
+- **Windows:** the zip was built and checked by CI only; nobody has run it by hand. The executable is not code-signed, so Windows may show a warning on first run.
+- There is no installer and no macOS build.
+- Building the package on Fedora 44 itself needs a newer patchelf (see the comment in `scripts/package_linux.sh`). The CI package is not affected.
+
+`scripts/check_package.sh` and `scripts/check_package.ps1` are the checks the workflow runs; run them on a downloaded package to repeat them.
 
 To build the packages yourself: `scripts/package_linux.sh` (Linux) or `scripts/package_windows.ps1` (Windows, Qt 6 with MinGW on PATH). They write into `dist/`.
 
