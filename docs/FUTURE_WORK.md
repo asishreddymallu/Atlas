@@ -124,7 +124,16 @@ Entries that record a deliberate trade-off rather than a defect are marked *(des
 
 ## Not delivered from the original scope
 
-- **A standalone installable package.** Atlas is built from source with CMake. There is no installer or distribution package. The release workflow (`.github/workflows/release.yml`) runs only on version tags and was not exercised for this submission.
+- **A verified standalone package.** What exists (final/package):
+  - `scripts/package_linux.sh` writes an AppImage and a tar.gz; `scripts/package_windows.ps1` writes a zip;
+  - `scripts/check_package.sh` / `.ps1` are the smoke checks;
+  - the workflow `.github/workflows/release.yml` builds and checks both on ubuntu-22.04 and windows-latest, and publishes them for a version tag.
+
+  Not verified:
+  - On Fedora 44 the script runs end to end, but the package crashes on start. linuxdeploy's bundled patchelf 0.15 corrupts libraries linked with DT_RELR, Fedora's default, so the check reports FAIL. The check passes on the same binaries unbundled, so the checks themselves work.
+  - The workflow had not run when this was written. So no Linux package has passed its check, and the Windows zip has never been built.
+  - Neither package has been run by hand on another machine.
+  - There is no installer (MSI, .deb or .rpm).
 - **The rest of the Profiler metrics on the roadmap.** A first set was built on `final/metrics` ([profiler_metrics.md](profiler_metrics.md)): the instruction mix, branch statistics, speed-up over single-cycle, forwarding events, the hottest loops, and misses by cause. None of the six was skipped. Not built:
   - stage occupancy;
   - estimated run time;

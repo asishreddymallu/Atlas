@@ -39,6 +39,25 @@ watch what the hardware does:
 | --- | --- |
 | ![Processor tab](docs/images/processor_pipeline.png) | ![Cache tab](docs/images/cache_live_view.png) |
 
+## Download and run
+
+The release workflow (`.github/workflows/release.yml`) builds three packages, each with the application, `atlas-cli` and `examples/`:
+
+| Package | Run |
+| --- | --- |
+| `Atlas-<version>-x86_64.AppImage` | `chmod +x Atlas-*.AppImage && ./Atlas-*.AppImage` (without FUSE, add `--appimage-extract-and-run`) |
+| `Atlas-<version>-linux-x86_64.tar.gz` (for machines without FUSE) | `tar xzf Atlas-*-linux-x86_64.tar.gz`, then `./Atlas-*/atlas` (the command line: `./Atlas-*/atlas-cli`) |
+| `Atlas-<version>-windows-x64.zip` | Unzip, then run `bin\Atlas.exe` |
+
+The packages appear on a GitHub Release for each version tag, and as artifacts of every workflow run.
+
+**What has been tested:**
+- **Linux:** the workflow builds on Ubuntu 22.04, so the package needs glibc 2.35 or newer. The workflow had not run yet when this was written. A package built locally on Fedora 44 crashes on start: linuxdeploy's patchelf breaks Fedora's packed-relocation libraries (`scripts/package_linux.sh` explains). So no Linux package has been run successfully yet.
+- **Windows:** built and checked only by the workflow. It runs `atlas-cli` on an example and starts the window offscreen for 5 s. Nobody has run it by hand.
+- `scripts/check_package.sh` and `scripts/check_package.ps1` are the checks the workflow runs; run them on a downloaded package to repeat them.
+
+To build the packages yourself: `scripts/package_linux.sh` (Linux) or `scripts/package_windows.ps1` (Windows, Qt 6 with MinGW on PATH). They write into `dist/`.
+
 ## Requirements
 
 - CMake 3.19 or newer, Ninja, and a C++20 compiler;

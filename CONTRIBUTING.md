@@ -52,6 +52,24 @@ scripts/run_verification.sh --record   # after an INTENDED change: accept the ne
 
 Run it after any change to the assembler, the processor models or the caches. Use `--record` only after reading `verification/out/summary.diff` and being sure the change is intended. Never use it to make a failure go away. See [verification/README.md](verification/README.md) for what each checker proves, and [verification/RESULTS.md](verification/RESULTS.md) for the last full run.
 
+## Cutting a release
+
+The packaging workflow (`.github/workflows/release.yml`) runs on every push to `final/package` or `final/submission`, and from the Actions tab (workflow_dispatch). Each run:
+- builds the Linux AppImage and tar.gz on ubuntu-22.04 and the Windows zip on windows-latest;
+- smoke-checks them with `scripts/check_package.sh` / `scripts/check_package.ps1`;
+- uploads them as artifacts.
+
+To publish a release:
+1. Check that the last run on the commit you want to release passed (`gh run list --workflow release.yml`).
+2. Tag that commit and push the tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+3. The tag's run builds and checks the packages again, then publishes them to a GitHub Release named after the tag.
+
+The version in the file names is `atlasVersion()`: the CMake project version plus the commit hash, with `+` written as `-`. For example, `Atlas-1.0.0-19c549e-x86_64.AppImage`. Bump `project(... VERSION ...)` in `CMakeLists.txt` before tagging a new version.
+
 ## Known issues
 
 Found a defect you are not fixing? Add a numbered entry to [docs/audit/known_issues.md](docs/audit/known_issues.md) with the file and line, the evidence, and why it is not fixed. [docs/FUTURE_WORK.md](docs/FUTURE_WORK.md) groups the open ones by area.
