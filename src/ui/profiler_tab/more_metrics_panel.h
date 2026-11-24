@@ -17,6 +17,7 @@
 
 class QStandardItemModel;
 class QTabWidget;
+class QLabel;
 class QTimer;
 
 namespace Atlas
@@ -34,6 +35,8 @@ class MoreMetricsPanel : public QGroupBox
     QStandardItemModel *summaryModel() const { return m_summary; }
     QStandardItemModel *typeModel() const { return m_types; }
     QStandardItemModel *mnemonicModel() const { return m_mnemonics; }
+    class RvssReplay   *rvssReplay() const { return m_replay; }
+    QLabel             *notes() const { return m_notes; }
 
     /// "37.50 %", or "n/a".
     static QString percent(std::optional<double> fraction);
@@ -56,5 +59,8 @@ class MoreMetricsPanel : public QGroupBox
     QStandardItemModel *m_mnemonics{nullptr};
     QTimer             *m_timer{nullptr};
     QString             m_lastKey; ///< what the tables last showed, to skip redundant redraws
+    class RvssReplay   *m_replay{nullptr};
+    uint64_t            m_replayGeneration{UINT64_MAX}; ///< the program the replay is for
+    QLabel             *m_notes{nullptr};
 };
 } // namespace Atlas

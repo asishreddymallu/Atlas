@@ -2,10 +2,13 @@
 
 #include "processor/processor_manager.h"
 #include "profiler_metrics/branch_stats.h"
+#include "profiler_metrics/speedup.h"
+#include "ui/profiler_tab/rvss_replay.h"
 #include "ui/common/data_table_style.h"
 #include "ui/common/processor_metrics_model.h"
 
 #include <QHeaderView>
+#include <QLabel>
 #include <QStandardItemModel>
 #include <QTabWidget>
 #include <QTableView>
@@ -69,9 +72,24 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
     m_tabs->addTab(makeTable(m_mnemonics, QStringLiteral("moreMetricsMnemonicView"), m_tabs),
                    QStringLiteral("By mnemonic"));
 
+    m_notes = new QLabel(this);
+    m_notes->setObjectName(QStringLiteral("moreMetricsNotes"));
+    m_notes->setWordWrap(true);
+    m_notes->setProperty("paneTitle", true); // the theme's small muted caption
+    m_notes->setText(QStringLiteral("Speed-up: ") + QString::fromLatin1(kSpeedupCaveat) + QStringLiteral("."));
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     layout->addWidget(m_tabs);
+    layout->addWidget(m_notes);
+
+    m_replay = new RvssReplay(this);
+    connect(m_replay, &RvssReplay::finishedSignal, this,
+            [this]
+            {
+                m_lastKey.clear(); // the speed-up can now be shown
+                refresh();
+            });
 
     // Redrawn at most five times a second during a run, and at once when a
     // run finishes or the state changes on the UI thread.
@@ -127,6 +145,17 @@ void MoreMetricsPanel::refresh()
                             .arg(s.programEnded)
                             .arg(s.complete)
                             .arg(s.cycles);
+    // The single-cycle replay starts once per program, when it has ended.
+    if (s.generation != m_replayGeneration)
+    {
+        m_replay->cancel();
+        m_replayGeneration = UINT64_MAX;
+    }
+    if (s.programEnded && s.processor != ProcessorType::RVSS && m_replayGeneration == UINT64_MAX)
+    {
+        m_replayGeneration = s.generation;
+        m_replay->start(m_manager->currentProgram());
+    }
     if (key == m_lastKey && m_summary->rowCount() > 0)
         return;
     m_lastKey = key;
@@ -164,6 +193,37 @@ void MoreMetricsPanel::refresh()
                       ? QStringLiteral("Branch mispredictions (the counter above) / branches retired.")
                       : QStringLiteral("n/a: this model keeps no misprediction counter (the "
                                        "single-cycle processor predicts nothing)."));
+
+    // Speed-up: only for a program that has ended; the single-cycle cycles
+    // come from a headless replay (or are this run's own on rvss).
+    std::optional<unsigned> rvssCycles;
+    QString                 why;
+    if (!s.programEnded)
+        why = QStringLiteral("n/a until the program has run to its end.");
+    else if (s.processor == ProcessorType::RVSS)
+        rvssCycles = s.cycles;
+    else
+        switch (m_replay->state())
+        {
+        case RvssReplay::State::Finished: rvssCycles = m_replay->cycles(); break;
+        case RvssReplay::State::NeedsInput:
+            why = QStringLiteral("n/a: the program needs input, so it cannot be replayed headless.");
+            break;
+        case RvssReplay::State::TooLong:
+            why = QStringLiteral("n/a: the single-cycle replay did not end within %1 cycles.")
+                      .arg(RvssReplay::kCycleCap);
+            break;
+        default: why = QStringLiteral("n/a while the single-cycle replay runs."); break;
+        }
+    const std::optional<double> speedup =
+        speedupOver(rvssCycles, s.programEnded ? std::optional<unsigned>(s.cycles) : std::nullopt);
+    addSummaryRow(QStringLiteral("Speed-up over single-cycle"),
+                  speedup ? QString::number(*speedup, 'f', 2) + QStringLiteral("x") : QStringLiteral("n/a"),
+                  false,
+                  QStringLiteral("The program's cycles on the single-cycle processor / its cycles here") +
+                      (rvssCycles ? QStringLiteral(" (%1 / %2).").arg(*rvssCycles).arg(s.cycles)
+                                  : QStringLiteral(". ") + why) +
+                      QStringLiteral(" Note: ") + QString::fromLatin1(kSpeedupCaveat) + QStringLiteral("."));
 
     m_types->removeRows(0, m_types->rowCount());
     for (size_t t = 0; t < mix.byType.size(); ++t)

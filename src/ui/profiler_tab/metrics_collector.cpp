@@ -25,6 +25,7 @@ void MetricsCollector::reset()
     std::lock_guard<std::mutex> lock(m_mutex);
     m_stream.reset();
     m_program = MetricsProgram::from(m_manager->currentProgram());
+    ++m_generation;
 }
 
 void MetricsCollector::sync()
@@ -72,6 +73,7 @@ MetricsCollector::Snapshot MetricsCollector::snapshot() const
         std::lock_guard<std::mutex> lock(m_mutex);
         s.complete         = m_stream.complete();
         s.lastCycle        = m_stream.lastCycle();
+        s.generation       = m_generation;
         s.mix              = computeInstructionMix(m_stream.retiredByPc(), m_program);
         s.branches         = m_stream.branches();
         s.branchesResolved = m_stream.branchesResolved();

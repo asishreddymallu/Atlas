@@ -41,6 +41,7 @@ class MetricsCollector : public QObject
         bool           programEnded{false};
         unsigned int   cycles{0};
         uint32_t       lastCycle{0}; ///< the last trace cycle the stream has seen
+        uint64_t       generation{0}; ///< changes on every reset (new program or processor)
     };
 
     explicit MetricsCollector(ProcessorManager *manager, QObject *parent = nullptr);
@@ -48,6 +49,7 @@ class MetricsCollector : public QObject
     /// Thread-safe copy of the current numbers.
     Snapshot snapshot() const;
     const MetricsProgram &program() const { return m_program; }
+    ProcessorManager     *manager() const { return m_manager; }
     /// The stream's retired counts by address, under the lock.
     std::map<uint64_t, uint64_t> retiredByPc() const;
 
@@ -62,5 +64,6 @@ class MetricsCollector : public QObject
     mutable std::mutex m_mutex;
     RetirementStream   m_stream;
     MetricsProgram     m_program;
+    uint64_t           m_generation{0};
 };
 } // namespace Atlas
