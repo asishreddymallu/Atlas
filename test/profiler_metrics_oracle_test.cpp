@@ -8,6 +8,8 @@
  */
 #include "profiler_metrics_test_support.h"
 
+#include "profiler_metrics/hot_loops.h"
+
 #include <gtest/gtest.h>
 
 #include <sstream>
@@ -80,5 +82,19 @@ TEST(ProfilerMetricsOracle, BranchesAndTakenMatchTheMiniIssOnEveryModel)
             const std::string where = std::string(c.program) + " on " + name;
             EXPECT_EQ(run.stream.branches(), c.branches) << where;
             EXPECT_EQ(run.stream.branchesTaken(), c.taken) << where;
+        }
+}
+
+TEST(ProfilerMetricsOracle, HottestLoopsMatchTheMiniIss)
+{
+    for (const MetricsMixCase &c : kMixCases)
+        for (const auto &[name, type] : allModels())
+        {
+            const MetricsRun run = runFile(path(c.program), type);
+            std::ostringstream got;
+            for (const HotLoop &loop : findHotLoops(run.info, run.stream.retiredByPc(), run.stream.retired()))
+                got << (got.tellp() > 0 ? " " : "") << loop.targetPc << ":" << loop.branchPc << ":"
+                    << loop.iterations << ":" << loop.dynamic;
+            EXPECT_EQ(got.str(), c.loops) << c.program << " on " << name;
         }
 }

@@ -63,6 +63,12 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
                                             QStringLiteral("Retired ") + kMeasured,
                                             QStringLiteral("Share ") + kModelled});
 
+    m_loops = new QStandardItemModel(0, 4, this);
+    m_loops->setHorizontalHeaderLabels({QStringLiteral("Loop (source lines)"),
+                                        QStringLiteral("Iterations ") + kMeasured,
+                                        QStringLiteral("Instructions executed ") + kMeasured,
+                                        QStringLiteral("Share ") + kModelled});
+
     m_tabs = new QTabWidget(this);
     m_tabs->setObjectName(QStringLiteral("moreMetricsTabs"));
     m_tabs->addTab(makeTable(m_summary, QStringLiteral("moreMetricsSummaryView"), m_tabs),
@@ -71,12 +77,16 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
                    QStringLiteral("By type"));
     m_tabs->addTab(makeTable(m_mnemonics, QStringLiteral("moreMetricsMnemonicView"), m_tabs),
                    QStringLiteral("By mnemonic"));
+    m_tabs->addTab(makeTable(m_loops, QStringLiteral("moreMetricsLoopView"), m_tabs),
+                   QStringLiteral("Hottest loops"));
 
     m_notes = new QLabel(this);
     m_notes->setObjectName(QStringLiteral("moreMetricsNotes"));
     m_notes->setWordWrap(true);
     m_notes->setProperty("paneTitle", true); // the theme's small muted caption
-    m_notes->setText(QStringLiteral("Speed-up: ") + QString::fromLatin1(kSpeedupCaveat) + QStringLiteral("."));
+    m_notes->setText(QStringLiteral("Speed-up: ") + QString::fromLatin1(kSpeedupCaveat) +
+                     QStringLiteral(". Hottest loops are ranked by instructions executed, not cycles: "
+                                    "Atlas keeps no per-line cycle counts."));
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
@@ -253,6 +263,26 @@ void MoreMetricsPanel::refresh()
         m_types->appendRow({cell(QString::fromStdString(instruction_set::instructionTypeName(type)), false),
                             cell(QString::number(mix.byType[t])),
                             cell(percent(shareOf(mix.byType[t], mix.retired)))});
+    }
+
+    m_loops->removeRows(0, m_loops->rowCount());
+    for (const HotLoop &loop : s.hotLoops)
+    {
+        QList<QStandardItem *> row{
+            cell(loop.firstLine == loop.lastLine ? QStringLiteral("line %1").arg(loop.firstLine)
+                                                 : QStringLiteral("lines %1-%2").arg(loop.firstLine).arg(loop.lastLine),
+                 false),
+            cell(QString::number(loop.iterations)), cell(QString::number(loop.dynamic)),
+            cell(percent(loop.share))};
+        const QString tip =
+            QStringLiteral("A backward branch or jump at line %1 to line %2. Iterations: times the "
+                           "first instruction of line %2 executed. Instructions executed: the per-line "
+                           "counts summed over lines %2-%1. Ranked by instructions executed, not cycles.")
+                .arg(loop.lastLine)
+                .arg(loop.firstLine);
+        for (QStandardItem *item : row)
+            item->setToolTip(tip);
+        m_loops->appendRow(row);
     }
 
     m_mnemonics->removeRows(0, m_mnemonics->rowCount());

@@ -10,6 +10,7 @@
  */
 #pragma once
 
+#include "profiler_metrics/hot_loops.h"
 #include "profiler_metrics/instruction_mix.h"
 #include "profiler_metrics/retirement_stream.h"
 #include "processor/processor_types.h"
@@ -32,6 +33,7 @@ class MetricsCollector : public QObject
         bool           complete{true};
         ProcessorType  processor{ProcessorType::RVSS};
         InstructionMix mix;
+        std::vector<HotLoop> hotLoops; ///< the top three
         uint64_t       branches{0};
         uint64_t       branchesResolved{0};
         uint64_t       taken{0};

@@ -75,6 +75,7 @@ MetricsCollector::Snapshot MetricsCollector::snapshot() const
         s.lastCycle        = m_stream.lastCycle();
         s.generation       = m_generation;
         s.mix              = computeInstructionMix(m_stream.retiredByPc(), m_program);
+        s.hotLoops         = findHotLoops(m_program, m_stream.retiredByPc(), m_stream.retired());
         s.branches         = m_stream.branches();
         s.branchesResolved = m_stream.branchesResolved();
         s.taken            = m_stream.branchesTaken();

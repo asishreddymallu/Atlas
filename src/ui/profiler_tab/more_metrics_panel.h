@@ -35,6 +35,7 @@ class MoreMetricsPanel : public QGroupBox
     QStandardItemModel *summaryModel() const { return m_summary; }
     QStandardItemModel *typeModel() const { return m_types; }
     QStandardItemModel *mnemonicModel() const { return m_mnemonics; }
+    QStandardItemModel *loopModel() const { return m_loops; }
     class RvssReplay   *rvssReplay() const { return m_replay; }
     QLabel             *notes() const { return m_notes; }
 
@@ -57,6 +58,7 @@ class MoreMetricsPanel : public QGroupBox
     QStandardItemModel *m_summary{nullptr};
     QStandardItemModel *m_types{nullptr};
     QStandardItemModel *m_mnemonics{nullptr};
+    QStandardItemModel *m_loops{nullptr};
     QTimer             *m_timer{nullptr};
     QString             m_lastKey; ///< what the tables last showed, to skip redundant redraws
     class RvssReplay   *m_replay{nullptr};
