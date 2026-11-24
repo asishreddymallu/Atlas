@@ -64,6 +64,46 @@
                 "DISABLE_GUI": "ON"
 
             }
+        },
+        {
+            "name": "linux-base",
+            "hidden": true,
+            "description": "Linux: Ninja and the system's Qt 6 (found by CMake; no hard-coded path). Tested on Fedora 44.",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-linux/${presetName}",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Debug",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "ENABLE_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Release",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "ENABLE_TESTS": "OFF"
+            }
+        },
+        {
+            "name": "linux-test",
+            "displayName": "Linux Test",
+            "description": "The test suite, configured as scripts/test.sh configures build-tests.",
+            "inherits": "linux-base",
+            "cacheVariables": {
+                "ENABLE_TESTS": "ON",
+                "DISABLE_GUI": "OFF"
+            }
         }
     ],
 
@@ -101,6 +141,21 @@
                 "PATH": "D:/Qt/Tools/mingw1310_64/bin;D:/Qt/6.9.2/mingw_64/bin;$penv{PATH}"
             },
             "targets": ["atlas_test_cov"]
+        },
+        {
+            "name": "linux-debug",
+            "displayName": "Linux Debug",
+            "configurePreset": "linux-debug"
+        },
+        {
+            "name": "linux-release",
+            "displayName": "Linux Release",
+            "configurePreset": "linux-release"
+        },
+        {
+            "name": "linux-test",
+            "displayName": "Linux Test (app, CLI and tests)",
+            "configurePreset": "linux-test"
         }
     ],
 
@@ -150,6 +205,18 @@
                 "include": {
                     "name": "^cov_"
                 }
+            }
+        },
+        {
+            "name": "linux-test",
+            "displayName": "Linux Test (serial)",
+            "description": "Serial on purpose: the GUI tests share test/vm_state/temp.asm and flake in parallel (docs/TESTING.md).",
+            "configurePreset": "linux-test",
+            "output": {
+                "outputOnFailure": true
+            },
+            "execution": {
+                "jobs": 1
             }
         }
     ]
