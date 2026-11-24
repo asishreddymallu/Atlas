@@ -56,18 +56,30 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
     m_summary->setHorizontalHeaderLabels({QStringLiteral("Metric"), QStringLiteral("Value"),
                                           QStringLiteral("Source")});
     m_types = new QStandardItemModel(0, 3, this);
-    m_types->setHorizontalHeaderLabels({QStringLiteral("Type"), QStringLiteral("Retired ") + kMeasured,
-                                        QStringLiteral("Share ") + kModelled});
+    // The tag goes on a second header line, so every column fits the
+    // Profiler's narrow pane.
+    m_types->setHorizontalHeaderLabels({QStringLiteral("Type"), QStringLiteral("Retired\n") + kMeasured,
+                                        QStringLiteral("Share\n") + kModelled});
     m_mnemonics = new QStandardItemModel(0, 3, this);
     m_mnemonics->setHorizontalHeaderLabels({QStringLiteral("Mnemonic"),
-                                            QStringLiteral("Retired ") + kMeasured,
-                                            QStringLiteral("Share ") + kModelled});
+                                            QStringLiteral("Retired\n") + kMeasured,
+                                            QStringLiteral("Share\n") + kModelled});
 
     m_loops = new QStandardItemModel(0, 4, this);
-    m_loops->setHorizontalHeaderLabels({QStringLiteral("Loop (source lines)"),
-                                        QStringLiteral("Iterations ") + kMeasured,
-                                        QStringLiteral("Instructions executed ") + kMeasured,
-                                        QStringLiteral("Share ") + kModelled});
+    // Short headers so all four columns fit the narrow pane; the full names
+    // are the header tooltips.
+    m_loops->setHorizontalHeaderLabels({QStringLiteral("Lines"), QStringLiteral("Iter.\n") + kMeasured,
+                                        QStringLiteral("Instr.\n") + kMeasured,
+                                        QStringLiteral("Share\n") + kModelled});
+    m_loops->setHeaderData(0, Qt::Horizontal, QStringLiteral("The loop's source lines: target to branch."),
+                           Qt::ToolTipRole);
+    m_loops->setHeaderData(1, Qt::Horizontal, QStringLiteral("Iterations: times the loop's first instruction executed."),
+                           Qt::ToolTipRole);
+    m_loops->setHeaderData(2, Qt::Horizontal,
+                           QStringLiteral("Instructions executed in the loop's lines (by instructions, not cycles)."),
+                           Qt::ToolTipRole);
+    m_loops->setHeaderData(3, Qt::Horizontal, QStringLiteral("Instructions executed in the loop / instructions retired."),
+                           Qt::ToolTipRole);
 
     m_tabs = new QTabWidget(this);
     m_tabs->setObjectName(QStringLiteral("moreMetricsTabs"));
@@ -77,8 +89,13 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
                    QStringLiteral("By type"));
     m_tabs->addTab(makeTable(m_mnemonics, QStringLiteral("moreMetricsMnemonicView"), m_tabs),
                    QStringLiteral("By mnemonic"));
-    m_tabs->addTab(makeTable(m_loops, QStringLiteral("moreMetricsLoopView"), m_tabs),
-                   QStringLiteral("Hottest loops"));
+    QTableView *loopView = makeTable(m_loops, QStringLiteral("moreMetricsLoopView"), m_tabs);
+    // Four columns in a narrow pane: every column sized to its contents and
+    // the last one takes what is left, rather than the first stretching.
+    loopView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    loopView->horizontalHeader()->setStretchLastSection(true);
+    loopView->horizontalHeader()->setMinimumSectionSize(20);
+    m_tabs->addTab(loopView, QStringLiteral("Hottest loops"));
 
     m_notes = new QLabel(this);
     m_notes->setObjectName(QStringLiteral("moreMetricsNotes"));
@@ -269,8 +286,8 @@ void MoreMetricsPanel::refresh()
     for (const HotLoop &loop : s.hotLoops)
     {
         QList<QStandardItem *> row{
-            cell(loop.firstLine == loop.lastLine ? QStringLiteral("line %1").arg(loop.firstLine)
-                                                 : QStringLiteral("lines %1-%2").arg(loop.firstLine).arg(loop.lastLine),
+            cell(loop.firstLine == loop.lastLine ? QString::number(loop.firstLine)
+                                                 : QStringLiteral("%1-%2").arg(loop.firstLine).arg(loop.lastLine),
                  false),
             cell(QString::number(loop.iterations)), cell(QString::number(loop.dynamic)),
             cell(percent(loop.share))};

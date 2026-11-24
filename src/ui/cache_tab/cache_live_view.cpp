@@ -48,6 +48,7 @@ CacheLiveView::CacheLiveView(QWidget *parent) : QWidget(parent)
     m_missCauses->setObjectName(QStringLiteral("cacheMissCauses"));
     m_missCauses->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_missCauses->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    m_missCauses->setWordWrap(true); // the pane is narrow; the split wraps rather than clips
     m_missCauses->setToolTip(QStringLiteral(
         "[Modelled] Each miss since the cache's Reset, classified:\n"
         "compulsory - the first access to that block;\n"
