@@ -210,6 +210,13 @@ install(TARGETS atlas_cli
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+# The verification probes (verification/README.md). Off by default: the
+# default build has no extra targets.
+option(ATLAS_BUILD_VERIFICATION "Build the verification probes in verification/probes" OFF)
+if(ATLAS_BUILD_VERIFICATION)
+    include(verification/probes/probes.cmake)
+endif()
+
 
 if(ENABLE_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)

@@ -1,0 +1,2 @@
+main:
+    jal ra, nowhere
