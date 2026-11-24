@@ -13,7 +13,7 @@ ProcessorTab::ProcessorTab(QWidget *parent, ProcessorManager *vmManager)
 {
     ui->setupUi(this);
     m_vmStateTableModel = new VMStateTableModel(this, m_vmManager);
-    ui->graphicsView->setScene(m_vmManager->getCircuitScene());
+    ui->graphicsView->showScene(m_vmManager->getCircuitScene());
     ui->tableView->setModel(m_vmStateTableModel);
     // Every clock, Undo, Redo, load and processor switch.
     connect(m_vmManager, &ProcessorManager::processorStateChangedSignal, m_vmStateTableModel,
@@ -38,7 +38,7 @@ void ProcessorTab::onVMChanged()
     // The vm has been change so we ge the circuit scene of the
     // current vm and set it to the graphics view
     bool stayActive = m_vmManager->getCircuitScene()->getWireStayActive();
-    ui->graphicsView->setScene(m_vmManager->getCircuitScene());
+    ui->graphicsView->showScene(m_vmManager->getCircuitScene()); // a new processor: back to Fit
     m_vmManager->getCircuitScene()->setWireStayActive(stayActive);
     // keep the wire stay active setting
 }
