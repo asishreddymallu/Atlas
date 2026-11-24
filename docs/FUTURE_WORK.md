@@ -88,7 +88,6 @@ Entries that record a deliberate trade-off rather than a defect are marked *(des
 | 48 | `contextAt()` keeps scanning past characters at which the lexer stops (left open as a judgement). |
 | 50 | The label index and the lexer disagree about which token is the reference on one kind of malformed line. |
 | 88 | Every theme fills a Disabled palette group that the stylesheet makes unreachable. |
-| 147 | The Profiler's counter names are cut short in its narrow pane. |
 | 151 | A long timing-grid jump takes 1.7 s; the 1 s target is not met. |
 | 10 | Ribbon buttons are not in the keyboard tab chain *(design limit)*. |
 | 11 | The window cannot be narrower than 849 px *(design limit)*. |
@@ -119,7 +118,7 @@ Entries that record a deliberate trade-off rather than a defect are marked *(des
 
 | Reason | Entries |
 | --- | --- |
-| Fixed later and recorded in a later entry | 9 (by 68), 51 (by 109), 53 (by 111), 56 and 65 (the CLI crash, fixed with 87 on final/tidy), 3 (the label now reads "Size:") |
+| Fixed later and recorded in a later entry | 9 (by 68), 51 (by 109), 53 (by 111), 56 and 65 (the CLI crash, fixed with 87 on final/tidy), 3 (the label now reads "Size:"), 147 (the Profiler pane widened on final/polish, note 147.1) |
 | Records, corrections or intended changes, not defects | 31, 32, 34, 35, 36, 42, 43, 44, 47, 67, 156 |
 | Headed FIXED, WITHDRAWN, DONE or Resolved | all others |
 

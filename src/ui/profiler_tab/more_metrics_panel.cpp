@@ -66,10 +66,10 @@ MoreMetricsPanel::MoreMetricsPanel(ProcessorManager *manager, QWidget *parent)
                                             QStringLiteral("Share\n") + kModelled});
 
     m_loops = new QStandardItemModel(0, 4, this);
-    // Short headers so all four columns fit the narrow pane; the full names
-    // are the header tooltips.
-    m_loops->setHorizontalHeaderLabels({QStringLiteral("Lines"), QStringLiteral("Iter.\n") + kMeasured,
-                                        QStringLiteral("Instr.\n") + kMeasured,
+    // Full names now the pane is wide enough (known_issues 147); the tag on
+    // a second line keeps every column narrow.
+    m_loops->setHorizontalHeaderLabels({QStringLiteral("Lines"), QStringLiteral("Iterations\n") + kMeasured,
+                                        QStringLiteral("Instructions executed\n") + kMeasured,
                                         QStringLiteral("Share\n") + kModelled});
     m_loops->setHeaderData(0, Qt::Horizontal, QStringLiteral("The loop's source lines: target to branch."),
                            Qt::ToolTipRole);

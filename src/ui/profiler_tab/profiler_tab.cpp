@@ -18,7 +18,13 @@ ProfilerTab::ProfilerTab(QWidget *parent, const Profiler *profiler)
     : AtlasTab(parent), ui(new Ui::ProfilerTab), m_profiler(profiler)
 {
     ui->setupUi(this);
-    ui->splitter->setStretchFactor(0, 1);
+    // The source with its heat map on the left, the numbers on the right:
+    // 55 / 45, kept on resize (known_issues 147, final/polish). The right
+    // pane used to get what the editor left over, about 250 px at a 1400 px
+    // window, so names elided and the new tables needed a horizontal scroll.
+    ui->splitter->setStretchFactor(0, 11);
+    ui->splitter->setStretchFactor(1, 9);
+    ui->splitter->setSizes({550, 450});
     
     ui->instructionTypeCountTableView->horizontalHeader()->
     setSectionResizeMode(QHeaderView::Stretch);

@@ -6247,7 +6247,7 @@ The Python rules count only the stalls of instructions that retire, so
 cost a cycle? The trace keeps both visible: the stalled cell of a
 squashed row is drawn stalled and then crossed out.
 
-## 147. The Profiler's counter names elide in its narrow pane
+## 147. FIXED (final/polish): The Profiler's counter names elide in its narrow pane
 
 T1 added a third column to the Profiler's counter table: Source, with
 [Measured] or [Modelled] (WP-05). The table sits in a pane about 250 px
@@ -6262,6 +6262,19 @@ Seen in the T1 offscreen shots (`~/atlas-shots/t1-grid/profiler_*.png`).
 **Open:** widening the pane (the splitter's start sizes) or moving the
 tag into a tooltip are layout decisions left to the user. Every row's
 tooltip starts with its tag and says what the number is.
+
+**147.1 (final/polish), the pane widened.** The user decided: after the
+Processor tab's counters moved to the Profiler, the Profiler pane must fit
+at the default window width. `ProfilerTab` now splits the source and the
+numbers 55 / 45 (splitter start sizes 550 / 450, stretch 11 / 9, so the
+proportion holds on resize); the right pane was about 284 px of 1,046 and is
+now about 461. At a 1400 x 900 window every column of the counter table,
+the instruction-type table and the four "More metrics" tables is shown
+whole, with no horizontal scroll: the names no longer elide, and the
+Hottest loops table shows Share again with its full headers. The window's
+minimum size is unchanged (762 x 616). Pinned by
+`ProfilerLayout.EveryTableFitsAtTheDefaultWindowWidth` and
+`ProfilerLayout.TheWindowsMinimumSizeIsNoLargerThanBefore`.
 
 ## 148. FIXED: Jumping forward on the timing grid after Run or Undo stopped dead
 
