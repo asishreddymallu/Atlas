@@ -11,7 +11,7 @@
 #include "repl.h"
 #include "utils/utils.h"
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QObject>
 #include <QString>
 
@@ -48,7 +48,14 @@ const std::unordered_map<std::string, Atlas::ProcessorType> processorTypes = {
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication app(argc, argv);
+    // Every processor builds its circuit diagram (a QGraphicsScene) when it
+    // is constructed, and a QGraphicsScene needs a QApplication: under a
+    // QCoreApplication the CLI crashed before reading a command (known issue
+    // 87). The CLI never shows a window, so it runs on the offscreen platform
+    // and needs no display. An explicit QT_QPA_PLATFORM is respected.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+        qputenv("QT_QPA_PLATFORM", "offscreen");
+    QApplication app(argc, argv);
 
     Atlas::setupVmStateDirectory();
 
@@ -123,6 +130,7 @@ int main(int argc, char *argv[])
             {
                 Atlas::AssembledProgram program = Atlas::assemble(assemblyFile);
                 manager.loadProgram(program);
+                manager.setBreakpoints({}); // known issue 86, as after a REPL load
                 state.currentProgram = program;
                 state.programLoaded = true;
                 std::cout << "Loaded '" << assemblyFile << "': " << program.text_buffer.size()
@@ -165,6 +173,11 @@ int main(int argc, char *argv[])
     // program takes N seconds to run.
     manager.setStepDelay(0);
     manager.loadProgram(program);
+    // LoadProgram plants a breakpoint one past the last instruction, and a
+    // pipelined Run stops on it while the pipeline drains, so the run never
+    // ends (known issue 86). The window clears it by setting the editor's
+    // breakpoints after every load; batch mode has none.
+    manager.setBreakpoints({});
 
     // Known limitation: a program hitting a blocking read syscall will hang here
     // forever, since nothing in this CLI feeds terminal stdin into the VM's input
@@ -194,6 +207,7 @@ int main(int argc, char *argv[])
     std::cout << "Assembled '" << assemblyFile << "': " << program.text_buffer.size()
                << " instruction word(s), " << program.data_buffer.size() << " data item(s).\n"
                << "Run " << (runFailed ? "failed" : "completed") << ".\n"
+               << "Cycles      -> " << manager.getCycles() << "\n"
                << "Registers   -> " << Atlas::globals::registers_dump_file_path.string() << "\n"
                << "Disassembly -> " << Atlas::globals::disassembly_file_path.string() << "\n"
                << "Errors      -> " << Atlas::globals::errors_dump_file_path.string();

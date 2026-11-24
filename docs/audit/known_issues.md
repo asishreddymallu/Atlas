@@ -4425,9 +4425,15 @@ knowing what the planted breakpoint is for: stop planting it and let the
 loop condition end the run, or have the rv5s loop ignore a breakpoint at
 `program_size_` while draining.
 
+**final/tidy:** once 87 was fixed the CLI hit this exactly as predicted. The
+CLI now does what the window does - `setBreakpoints` after every load (batch
+mode, the REPL's initial load and its `load` command) - which wipes the
+planted breakpoint. The core is unchanged: `LoadProgram` still plants it, and
+any other caller of `run()` after `loadProgram` must still clear it.
+
 ---
 
-## 87. `kites-cli` segmentation-faults on startup: a QCoreApplication cannot hold a QGraphicsScene
+## 87. FIXED: `kites-cli` segmentation-faults on startup: a QCoreApplication cannot hold a QGraphicsScene
 
 `cli/main.cpp` constructs a **`QCoreApplication`**
 (`cli/main.cpp:51`, included at `:14`), not a `QGuiApplication`. `ProcessorManager`'s
@@ -4465,6 +4471,15 @@ holds a `std::unique_ptr<CircuitScene>` unconditionally.
 gives exit 139 on `experiments/post-ribbon` as well. Not fixed here -
 the cheap fix is an offscreen `QApplication` in `cli/main.cpp`, the
 honest fix is to stop making the simulator own a widget.
+
+**Fixed (final/tidy), the cheap way.** `cli/main.cpp` sets
+`QT_QPA_PLATFORM=offscreen` when it is unset and makes a `QApplication`.
+With that, entry 86 became reachable from the CLI and was hit at once (every
+rv5s batch run hung), so the CLI now also pushes an empty breakpoint list
+after each load, as the window does - see 86. The simulator still owns a
+widget. `test/cli_smoke_test.cpp` runs the built `atlas-cli` on
+`examples/scheduler/load_use_original.s`: 11 cycles on rv5-h-f, 14 on
+rv5-h-nf, and a REPL load/run.
 
 ---
 

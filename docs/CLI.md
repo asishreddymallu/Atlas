@@ -2,9 +2,16 @@
 
 `atlas-cli` is a headless build of the Atlas simulator: it assembles a RISC-V
 `.s` file, runs it on the chosen VM, and writes the results (registers,
-disassembly, and optionally a memory dump) to disk. It needs no display and no
-`QApplication` — it links the same `atlas_core` the GUI uses, built with
-`DISABLE_GUI` defined.
+disassembly, and optionally a memory dump) to disk. It needs no display: it
+links the same `atlas_core` the GUI uses, and because every processor builds
+its circuit diagram (a `QGraphicsScene`) it starts a `QApplication` on Qt's
+`offscreen` platform (unless `QT_QPA_PLATFORM` is already set).
+
+Until `final/tidy` the CLI crashed on startup (known issue 87: it made a
+`QCoreApplication`), and a batch run on any five-stage processor never ended
+(known issue 86: it stopped on the breakpoint `LoadProgram` plants past the
+last instruction; the CLI now clears it after every load, as the window does).
+`test/cli_smoke_test.cpp` runs the built `atlas-cli` on every processor.
 
 > **Status:** the CLI assembles and runs a program end-to-end and dumps
 > register/disassembly/memory state. It does not yet support interactive
@@ -72,6 +79,7 @@ Sample output:
 Exited with exit code: 0
 Assembled '/tmp/hello.s': 4 instruction word(s), 0 data item(s).
 Run completed.
+Cycles      -> 11
 Registers   -> /tmp/vm_state/registers_dump.json
 Disassembly -> /tmp/vm_state/disassembly.txt
 Errors      -> /tmp/vm_state/errors_dump.json

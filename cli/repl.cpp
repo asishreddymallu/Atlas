@@ -198,6 +198,12 @@ int RunRepl(ProcessorManager &manager, command_handler::ReplState &state)
         try
         {
             command_handler::ExecuteCommand(command, manager, state);
+            // As the window does after every load: push the (now empty)
+            // breakpoint list, which also clears the one LoadProgram plants
+            // past the last instruction. A pipelined run stops on that one
+            // while draining and never finishes (known issue 86).
+            if (command.type == command_handler::CommandType::LOAD)
+                manager.setBreakpoints(state.breakpoints);
         }
         catch (const std::exception &e)
         {

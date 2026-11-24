@@ -21,6 +21,10 @@ if(DISABLE_GUI)
     target_compile_definitions(atlas_test PRIVATE DISABLE_GUI)
 endif()
 
+# test/cli_smoke_test.cpp starts the built atlas-cli.
+add_dependencies(atlas_test atlas_cli)
+target_compile_definitions(atlas_test PRIVATE ATLAS_CLI_PATH="$<TARGET_FILE:atlas_cli>")
+
 if(VM_DEBUG_PRINTS)
     target_compile_definitions(atlas_test PRIVATE VM_DEBUG_PRINTS)
 endif()
