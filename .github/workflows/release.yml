@@ -141,5 +141,16 @@ jobs:
       - name: Publish the GitHub Release
         uses: softprops/action-gh-release@v3.0.4
         with:
+          name: Atlas ${{ github.ref_name }}
+          body: |
+            Atlas, a RISC-V assembly simulator for learning programming and microarchitecture.
+            Each package holds the application, the command line `atlas-cli` and `examples/`.
+
+            - `Atlas-<version>-x86_64.AppImage` (Linux x86_64): `chmod +x Atlas-*.AppImage`, then run it.
+            - `Atlas-<version>-linux-x86_64.tar.gz` (Linux x86_64, for machines without FUSE): extract it, then run `./atlas` in the extracted folder.
+            - `Atlas-<version>-windows-x64.zip` (Windows x64): unzip it, then run `bin\Atlas.exe`. The executable is not code-signed, so Windows may show a warning on first run.
+
+            These files were built and smoke-checked by this repository's Packages workflow (`.github/workflows/release.yml`): the packaged `atlas-cli` runs an example, and the application starts.
+            See "Download and run" in the README: https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/README.md#download-and-run
           files: dist/*
           fail_on_unmatched_files: true
