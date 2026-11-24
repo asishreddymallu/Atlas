@@ -54,19 +54,25 @@ Run it after any change to the assembler, the processor models or the caches. Us
 
 ## Cutting a release
 
-The packaging workflow (`.github/workflows/release.yml`) runs on every push to `final/package` or `final/submission`, and from the Actions tab (workflow_dispatch). Each run:
-- builds the Linux AppImage and tar.gz on ubuntu-22.04 and the Windows zip on windows-latest;
-- smoke-checks them with `scripts/check_package.sh` / `scripts/check_package.ps1`;
-- uploads them as artifacts.
+The packaging workflow is **Packages** (`.github/workflows/release.yml`). It runs on every push to `final/package` or `final/submission`, on every `v*` tag, and from the Actions tab (workflow_dispatch). It has three jobs:
+- **linux** (ubuntu-22.04): builds the AppImage and the tar.gz, checks both with `scripts/check_package.sh`, and uploads them as artifacts.
+- **windows** (windows-latest): builds the zip, checks it with `scripts/check_package.ps1`, and uploads it.
+- **release**: runs only for a `v*` tag, after both other jobs pass.
 
 To publish a release:
-1. Check that the last run on the commit you want to release passed (`gh run list --workflow release.yml`).
-2. Tag that commit and push the tag:
+1. Check that the last run on the commit you want to release passed:
    ```bash
-   git tag v1.0.0
+   gh run list --workflow release.yml --limit 5
+   ```
+2. Tag that commit and push only the tag:
+   ```bash
+   git tag v1.0.0 <commit>
    git push origin v1.0.0
    ```
-3. The tag's run builds and checks the packages again, then publishes them to a GitHub Release named after the tag.
+3. The tag starts a new run. The linux and windows jobs build and check the packages again. Then the release job publishes them as the GitHub Release "Atlas v1.0.0" on https://github.com/asishreddymallu/Atlas/releases, with a short description of the files.
+4. Watch the run with `gh run watch`, then open the Release with `gh release view v1.0.0 --web`.
+
+A tag push is the only way to exercise the release job. If it fails, delete the tag on origin (`git push origin :refs/tags/v1.0.0`) and locally (`git tag -d v1.0.0`), fix the problem, and tag again.
 
 The version in the file names is `atlasVersion()`: the CMake project version plus the commit hash, with `+` written as `-`. For example, `Atlas-1.0.0-19c549e-x86_64.AppImage`. Bump `project(... VERSION ...)` in `CMakeLists.txt` before tagging a new version.
 
